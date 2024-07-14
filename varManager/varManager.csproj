@@ -1,20 +1,17 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{EA2A1B27-CA81-4DBF-8E10-97A0243B6184}</ProjectGuid>
     <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <UseWPF>false</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>varManager</RootNamespace>
     <AssemblyName>varManager</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
-    <TargetFrameworkProfile />
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
@@ -31,6 +28,12 @@
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <BootstrapperComponentsLocation>Relative</BootstrapperComponentsLocation>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+<!--    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>-->
+    <PublishProfile>FolderProfile</PublishProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>x64</PlatformTarget>
@@ -54,32 +57,24 @@
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-    <GenerateSerializationAssemblies>On</GenerateSerializationAssemblies>
+<!--    <GenerateSerializationAssemblies>On</GenerateSerializationAssemblies>-->
   </PropertyGroup>
-  <PropertyGroup />
-  <PropertyGroup>
-    <ApplicationIcon>VarManager.ico</ApplicationIcon>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="System">
-      <HintPath>C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8\System.dll</HintPath>
-    </Reference>
-    <Reference Include="System.ComponentModel.DataAnnotations" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Net.Http.WebRequest" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Deployment" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml" />
-  </ItemGroup>
+
+<!--  <ItemGroup>-->
+<!--    <Reference Include="System" />-->
+<!--    <Reference Include="System.ComponentModel.DataAnnotations" />-->
+<!--    <Reference Include="System.Core" />-->
+<!--    <Reference Include="System.Net.Http.WebRequest" />-->
+<!--    <Reference Include="System.Xml.Linq" />-->
+<!--    <Reference Include="System.Data.DataSetExtensions" />-->
+<!--    <Reference Include="Microsoft.CSharp" />-->
+<!--    <Reference Include="System.Data" />-->
+<!--    <Reference Include="System.Deployment" />-->
+<!--    <Reference Include="System.Drawing" />-->
+<!--    <Reference Include="System.Net.Http" />-->
+<!--    <Reference Include="System.Windows.Forms" />-->
+<!--    <Reference Include="System.Xml" />-->
+<!--  </ItemGroup>-->
   <ItemGroup>
     <Compile Include="Comm.cs" />
     <Content Include="Custom\Scripts\loadscene.cs">
@@ -267,18 +262,18 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
-  <ItemGroup>
-    <BootstrapperPackage Include=".NETFramework,Version=v4.8">
-      <Visible>False</Visible>
-      <ProductName>Microsoft .NET Framework 4.8 %28x86 和 x64%29</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-  </ItemGroup>
+<!--  <ItemGroup>-->
+<!--    <BootstrapperPackage Include=".NETFramework,Version=v4.8">-->
+<!--      <Visible>False</Visible>-->
+<!--      <ProductName>Microsoft .NET Framework 4.8 %28x86 和 x64%29</ProductName>-->
+<!--      <Install>true</Install>-->
+<!--    </BootstrapperPackage>-->
+<!--    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">-->
+<!--      <Visible>False</Visible>-->
+<!--      <ProductName>.NET Framework 3.5 SP1</ProductName>-->
+<!--      <Install>false</Install>-->
+<!--    </BootstrapperPackage>-->
+<!--  </ItemGroup>-->
   <ItemGroup>
     <None Include="Resources\starEmpty.png" />
     <None Include="Resources\starFull.png" />
@@ -297,9 +292,12 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="SharpZipLib">
-      <Version>1.3.3</Version>
-    </PackageReference>
+    <PackageReference Include="SharpZipLib" Version="1.3.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SQLite" Version="6.0.0" />
+    <PackageReference Include="System.Data.OleDb" Version="6.0.0" />
+    <PackageReference Include="System.Resources.Extensions" Version="5.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\DgvFilterPopup\DgvFilterPopup\DgvFilterPopup.csproj">
@@ -311,5 +309,5 @@
       <Name>DragNDrop</Name>
     </ProjectReference>
   </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
 </Project>
