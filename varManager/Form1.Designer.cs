@@ -53,6 +53,7 @@ namespace varManager
             this.buttonScenesManager = new System.Windows.Forms.Button();
             this.buttonStaleVars = new System.Windows.Forms.Button();
             this.buttonUpdDB = new System.Windows.Forms.Button();
+            this.buttonStartVam = new System.Windows.Forms.Button();
             this.tableLayoutPanel2 = new System.Windows.Forms.TableLayoutPanel();
             this.progressBar1 = new System.Windows.Forms.ProgressBar();
             this.labelProgress = new System.Windows.Forms.Label();
@@ -236,6 +237,7 @@ namespace varManager
             this.panel1.Controls.Add(this.buttonScenesManager);
             this.panel1.Controls.Add(this.buttonStaleVars);
             this.panel1.Controls.Add(this.buttonUpdDB);
+            this.panel1.Controls.Add(this.buttonStartVam);
             this.panel1.Controls.Add(this.buttonSetting);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panel1.Location = new System.Drawing.Point(1384, 3);
@@ -447,12 +449,27 @@ namespace varManager
             this.buttonUpdDB.ForeColor = System.Drawing.Color.RoyalBlue;
             this.buttonUpdDB.Location = new System.Drawing.Point(33, 164);
             this.buttonUpdDB.Name = "buttonUpdDB";
-            this.buttonUpdDB.Size = new System.Drawing.Size(89, 45);
+            this.buttonUpdDB.Size = new System.Drawing.Size(44, 45);
             this.buttonUpdDB.TabIndex = 0;
             this.buttonUpdDB.Text = "UPD_DB";
             this.toolTip1.SetToolTip(this.buttonUpdDB, "Organize vars, extract preview images,update DB.");
             this.buttonUpdDB.UseVisualStyleBackColor = true;
             this.buttonUpdDB.Click += new System.EventHandler(this.buttonUpdDB_Click);
+            // 
+            // buttonStartVam
+            // 
+            this.buttonStartVam.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.buttonStartVam.Font = new System.Drawing.Font("Cambria", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.buttonStartVam.ForeColor = System.Drawing.Color.RoyalBlue;
+            this.buttonStartVam.Location = new System.Drawing.Point(89, 164);
+            this.buttonStartVam.Name = "buttonStartVam";
+            this.buttonStartVam.Size = new System.Drawing.Size(44, 45);
+            this.buttonStartVam.TabIndex = 7; // 设置Tab顺序，根据需要调整
+            this.buttonStartVam.Text = "Start VAM"; // 设置按钮文本
+            this.toolTip1.SetToolTip(this.buttonStartVam, "Start VAM application"); // 设置工具提示文本
+            this.buttonStartVam.UseVisualStyleBackColor = true;
+            this.buttonStartVam.Click += new System.EventHandler(this.buttonStartVam_Click); // 添加点击事件处理器
+
             // 
             // tableLayoutPanel2
             // 
@@ -1602,6 +1619,7 @@ namespace varManager
         private System.Windows.Forms.ListBox listBoxLog;
         private System.Windows.Forms.Panel panel1;
         private System.Windows.Forms.Button buttonUpdDB;
+        private System.Windows.Forms.Button buttonStartVam;
         private System.Windows.Forms.Button buttonFixRebuildLink;
         private System.ComponentModel.BackgroundWorker backgroundWorkerInstall;
         private System.Windows.Forms.ComboBox comboBoxCreater;

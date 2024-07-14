@@ -674,20 +674,24 @@ namespace varManager
                 Comm.CreateSymbolicLink(packpath, Path.Combine(packsSwitchpath, "default"), Comm.SYMBOLIC_LINK_FLAG.Directory);
             }
 
-            DirectoryInfo diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
-            if (!diswitch.Exists)
+            try
             {
-                dipackpath.Delete();
-                Comm.CreateSymbolicLink(packpath, Path.Combine(packsSwitchpath, "default"), Comm.SYMBOLIC_LINK_FLAG.Directory);
+                DirectoryInfo diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
+                if (!diswitch.Exists)
+                {
+                    dipackpath.Delete();
+                    Comm.CreateSymbolicLink(packpath, Path.Combine(packsSwitchpath, "default"), Comm.SYMBOLIC_LINK_FLAG.Directory);
+                }
+                diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
+                if (comboBoxPacksSwitch.Items.IndexOf(diswitch.Name) >= 0)
+                {
+                    comboBoxPacksSwitch.SelectedItem = diswitch.Name;
+                }
             }
-            diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
-            if (comboBoxPacksSwitch.Items.IndexOf(diswitch.Name) >= 0)
+            catch (Exception ex)
             {
-                comboBoxPacksSwitch.SelectedItem = diswitch.Name;
+                this.BeginInvoke(addlog, new Object[] { $"Warning: {ex.Message}", LogLevel.INFO });
             }
-            //TimeSpan ts5 = DateTime.Now - dtstart;
-            //dtstart = DateTime.Now;
-            //string[] packswitchdirs = Directory.GetDirectories(packsSwitchpath, "*", SearchOption.TopDirectoryOnly);
 
             UpdateVarsInstalled();
             comboBoxCreater.Items.Add("____ALL");
@@ -807,6 +811,34 @@ namespace varManager
                                          MessageBoxDefaultButton.Button1);
             if (result == DialogResult.Yes)
                 backgroundWorkerInstall.RunWorkerAsync("UpdDB");
+        }
+        
+        private void buttonStartVam_Click(object sender, EventArgs e)
+        {
+            string message = "Will start the VAM application. Do you want to continue?";
+            const string caption = "Start VAM";
+            var result = MessageBox.Show(message, caption,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1);
+            
+            if (result == DialogResult.Yes)
+            {
+                string execPath = Path.Combine(Settings.Default.vampath, Settings.Default.defaultVamExec);
+                try
+                {
+                    var startInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = execPath,
+                        WorkingDirectory = Settings.Default.vampath
+                    };
+                    System.Diagnostics.Process.Start(startInfo);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to start application. Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
 
         private void UpdDB(string destvarfilename)
