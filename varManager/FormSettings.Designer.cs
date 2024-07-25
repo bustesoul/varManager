@@ -40,6 +40,10 @@ namespace varManager
             this.textBoxVamPath = new System.Windows.Forms.TextBox();
             this.buttonVamPath = new System.Windows.Forms.Button();
             this.folderBrowserDialogVam = new System.Windows.Forms.FolderBrowserDialog();
+            this.labelExec = new System.Windows.Forms.Label();
+            this.textBoxExec = new System.Windows.Forms.TextBox();
+            this.buttonExec = new System.Windows.Forms.Button();
+            this.openFileDialogExec = new System.Windows.Forms.OpenFileDialog();
             label3 = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
@@ -81,6 +85,33 @@ namespace varManager
             this.buttonVarspath.Text = "..";
             this.buttonVarspath.UseVisualStyleBackColor = true;
             this.buttonVarspath.Click += new System.EventHandler(this.buttonVarspath_Click);
+            // 
+            // labelExec
+            // 
+            this.labelExec.AutoSize = true;
+            this.labelExec.Location = new System.Drawing.Point(32, 154);
+            this.labelExec.Name = "labelExec";
+            this.labelExec.Size = new System.Drawing.Size(118, 17);
+            this.labelExec.TabIndex = 6;
+            this.labelExec.Text = "defaultVamExec:";
+            // 
+            // textBoxExec
+            // 
+            this.textBoxExec.Location = new System.Drawing.Point(173, 148);
+            this.textBoxExec.Name = "textBoxExec";
+            this.textBoxExec.Size = new System.Drawing.Size(574, 25);
+            this.textBoxExec.TabIndex = 7;
+            this.textBoxExec.Text = "VaM (Desktop Mode).bat";
+            // 
+            // buttonExec
+            // 
+            this.buttonExec.Location = new System.Drawing.Point(753, 148);
+            this.buttonExec.Name = "buttonExec";
+            this.buttonExec.Size = new System.Drawing.Size(35, 29);
+            this.buttonExec.TabIndex = 8;
+            this.buttonExec.Text = "..";
+            this.buttonExec.UseVisualStyleBackColor = true;
+            this.buttonExec.Click += new System.EventHandler(this.buttonExec_Click);
             // 
             // buttonSave
             // 
@@ -149,6 +180,9 @@ namespace varManager
             this.CancelButton = this.buttonCancel;
             this.ClientSize = new System.Drawing.Size(800, 510);
             this.ControlBox = false;
+            this.Controls.Add(this.buttonExec);
+            this.Controls.Add(this.textBoxExec);
+            this.Controls.Add(this.labelExec);
             this.Controls.Add(label3);
             this.Controls.Add(this.buttonCancel);
             this.Controls.Add(this.buttonSave);
@@ -182,5 +216,9 @@ namespace varManager
         private System.Windows.Forms.TextBox textBoxVamPath;
         private System.Windows.Forms.Button buttonVamPath;
         private System.Windows.Forms.FolderBrowserDialog folderBrowserDialogVam;
+        private System.Windows.Forms.Label labelExec;
+        private System.Windows.Forms.TextBox textBoxExec;
+        private System.Windows.Forms.Button buttonExec;
+        private System.Windows.Forms.OpenFileDialog openFileDialogExec;
     }
 }
