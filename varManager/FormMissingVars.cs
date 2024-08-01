@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -34,6 +35,27 @@ namespace varManager
             toolStripComboBoxIgnoreVersion.SelectedIndex = 0;
             FillMissVarGridView();
         }
+        
+        private void toolStripButtonFillDownloadText_Click(object sender, EventArgs e)
+        {
+            FillColumnDownloadText();
+        }
+        
+        private void FillColumnDownloadText()
+        {
+            Random random = new Random();
+            foreach (DataGridViewRow row in dataGridViewMissingVars.Rows)
+            {
+                if (random.Next(2) == 0) // 50% chance to set the text
+                {
+                    row.Cells["ColumnDownload"].Value = "下载";
+                }
+                else
+                {
+                    row.Cells["ColumnDownload"].Value = "";
+                }
+            }
+        }
 
         private void FillMissVarGridView()
         {
@@ -59,11 +81,11 @@ namespace varManager
                         searchPattern = missingvarname.Substring(0, missingvarname.LastIndexOf('.') + 1) + "*.var";
                     var files = Directory.GetFiles(Path.Combine(Settings.Default.vampath, "AddonPackages", missingVarLinkDirName), searchPattern, SearchOption.AllDirectories).OrderByDescending(q => Path.GetFileNameWithoutExtension(q)).ToArray();
                     if (files.Length == 0)
-                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, "", "UnLink", "Google" });
+                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, "", "UnLink", "Google", "" });
                     else
                     {
                         string destfilename = Path.GetFileNameWithoutExtension(Comm.ReparsePoint(files[0]));
-                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, destfilename, "UnLink", "Google" });
+                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, destfilename, "UnLink", "Google", "" });
                     }
 
                 }
@@ -160,7 +182,26 @@ namespace varManager
             if (e.ColumnIndex == 3)
             {
                 string varname = dataGridViewMissingVars.Rows[e.RowIndex].Cells[0].Value.ToString().Replace(".latest", ".1");
-                System.Diagnostics.Process.Start("https://www.google.com/search?q=" + varname + " var");
+                string url = "https://www.google.com/search?q=" + varname + " var";
+
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    };
+                    Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("An error occurred trying to start process: " + ex.Message);
+                }
+            }
+            if (e.ColumnIndex == 4)
+            {
+                string varname = dataGridViewMissingVars.Rows[e.RowIndex].Cells[0].Value.ToString();
+                MessageBox.Show("Missing var: " + varname);
             }
         }
 

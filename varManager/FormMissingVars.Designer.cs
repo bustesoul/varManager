@@ -55,6 +55,7 @@ namespace varManager
             this.ColumnLinkto = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.ColumnUnLink = new System.Windows.Forms.DataGridViewButtonColumn();
             this.ColumnGoogle = new System.Windows.Forms.DataGridViewButtonColumn();
+            this.ColumnDownload = new System.Windows.Forms.DataGridViewButtonColumn();
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
             this.panel1 = new System.Windows.Forms.Panel();
             this.buttonSaveTxt = new System.Windows.Forms.Button();
@@ -74,6 +75,8 @@ namespace varManager
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.toolStripComboBoxIgnoreVersion = new System.Windows.Forms.ToolStripComboBox();
             this.toolStripSeparator2 = new System.Windows.Forms.ToolStripSeparator();
+            this.toolStripSeparator3 = new System.Windows.Forms.ToolStripSeparator();
+            this.toolStripButtonFetchDownload = new System.Windows.Forms.ToolStripButton();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.groupBox3 = new System.Windows.Forms.GroupBox();
@@ -237,7 +240,8 @@ namespace varManager
             this.ColumnVarname,
             this.ColumnLinkto,
             this.ColumnUnLink,
-            this.ColumnGoogle});
+            this.ColumnGoogle,
+            this.ColumnDownload});
             dataGridViewCellStyle5.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
             dataGridViewCellStyle5.BackColor = System.Drawing.SystemColors.Window;
             dataGridViewCellStyle5.Font = new System.Drawing.Font("Cambria", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
@@ -299,6 +303,15 @@ namespace varManager
             this.ColumnGoogle.Name = "ColumnGoogle";
             this.ColumnGoogle.ReadOnly = true;
             this.ColumnGoogle.Width = 125;
+            // 
+            // ColumnDownload Download from vam hub
+            // 
+            this.ColumnDownload.HeaderText = "Download";
+            this.ColumnDownload.MinimumWidth = 6;
+            this.ColumnDownload.Name = "ColumnDownload";
+            this.ColumnDownload.ReadOnly = true;
+            this.ColumnDownload.Width = 125;
+            this.ColumnDownload.UseColumnTextForButtonValue = false;
             // 
             // tableLayoutPanel1
             // 
@@ -426,7 +439,10 @@ namespace varManager
             this.bindingNavigatorMoveLastItem,
             this.toolStripSeparator1,
             this.toolStripComboBoxIgnoreVersion,
-            this.toolStripSeparator2});
+            this.toolStripSeparator2,
+            this.toolStripSeparator3,
+            this.toolStripButtonFetchDownload
+            });
             this.toolStrip1.Location = new System.Drawing.Point(0, 0);
             this.toolStrip1.Name = "toolStrip1";
             this.toolStrip1.Size = new System.Drawing.Size(664, 28);
@@ -508,6 +524,19 @@ namespace varManager
             // 
             this.toolStripSeparator2.Name = "toolStripSeparator2";
             this.toolStripSeparator2.Size = new System.Drawing.Size(6, 28);
+            
+            // 
+            // toolStripButtonFillDownloadText
+            // 
+            this.toolStripButtonFetchDownload.Alignment = System.Windows.Forms.ToolStripItemAlignment.Right; // 设置按钮靠右
+            this.toolStripButtonFetchDownload.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+            this.toolStripButtonFetchDownload.Name = "toolStripButtonFetchDownload";
+            this.toolStripButtonFetchDownload.Size = new System.Drawing.Size(200, 24);
+            this.toolStripButtonFetchDownload.Text = "Fetch Download From Hub";
+            this.toolStripButtonFetchDownload.BackColor = Color.Aquamarine;
+            this.toolStripButtonFetchDownload.Click += new System.EventHandler(this.toolStripButtonFillDownloadText_Click);
+
+
             // 
             // groupBox1
             // 
@@ -708,6 +737,7 @@ namespace varManager
         private System.Windows.Forms.DataGridViewTextBoxColumn ColumnLinkto;
         private System.Windows.Forms.DataGridViewButtonColumn ColumnUnLink;
         private System.Windows.Forms.DataGridViewButtonColumn ColumnGoogle;
+        private System.Windows.Forms.DataGridViewButtonColumn ColumnDownload;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
         private System.Windows.Forms.Panel panel1;
         private System.Windows.Forms.Button buttonLinkto;
@@ -729,6 +759,8 @@ namespace varManager
         private System.Windows.Forms.ToolStripComboBox toolStripComboBoxIgnoreVersion;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator3;
+        private System.Windows.Forms.ToolStripButton toolStripButtonFetchDownload;
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.GroupBox groupBox2;
         private System.Windows.Forms.GroupBox groupBox3;
