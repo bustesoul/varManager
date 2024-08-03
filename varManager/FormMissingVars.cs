@@ -286,9 +286,22 @@ namespace varManager
                         {
                             FileName = execPath,
                             Arguments = arguments,
-                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
+                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = false
                         };
-                        System.Diagnostics.Process.Start(startInfo);
+
+                        using (var process = System.Diagnostics.Process.Start(startInfo))
+                        {
+                            process.WaitForExit();
+
+                            if (process.ExitCode != 0)
+                            {
+                                MessageBox.Show($"Download {varname} from:\n{var_url}\nto {vam_download_save_path} failed with exit code: {process.ExitCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -309,9 +322,22 @@ namespace varManager
                         {
                             FileName = execPath,
                             Arguments = arguments,
-                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
+                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = false
                         };
-                        System.Diagnostics.Process.Start(startInfo);
+
+                        using (var process = System.Diagnostics.Process.Start(startInfo))
+                        {
+                            process.WaitForExit();
+
+                            if (process.ExitCode != 0)
+                            {
+                                MessageBox.Show($"Download {varnameNoVersion} from:\n{var_noversion_url}\nto {vam_download_save_path} failed with exit code: {process.ExitCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -321,10 +347,10 @@ namespace varManager
                 else
                 {
                     // For Debug
-                    var allUrls = string.Join("\n", downloadUrls.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
-                    var allUrlsNoVersion = string.Join("\n", downloadUrlsNoVersion.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
-                    MessageBox.Show("Download URLs:\n" + allUrls + "\n" + allUrlsNoVersion);
-                    // MessageBox.Show("No download url found for " + varname);
+                    // var allUrls = string.Join("\n", downloadUrls.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
+                    // var allUrlsNoVersion = string.Join("\n", downloadUrlsNoVersion.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
+                    // MessageBox.Show("Download URLs:\n" + allUrls + "\n" + allUrlsNoVersion);
+                    MessageBox.Show("No download url found for " + varname);
                 }
             }
         }
