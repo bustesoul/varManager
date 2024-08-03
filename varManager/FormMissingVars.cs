@@ -100,6 +100,7 @@ namespace varManager
                     row.Cells["ColumnDownload"].Value = "";
                 }
             }
+            MessageBox.Show("Fetch Download From Hub Complete!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         
         private static async Task<string> FindPackages(string packages)
@@ -287,10 +288,10 @@ namespace varManager
                             FileName = execPath,
                             Arguments = arguments,
                             WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = false
+                            // RedirectStandardOutput = true,
+                            // RedirectStandardError = true,
+                            // UseShellExecute = false,
+                            // CreateNoWindow = false
                         };
 
                         using (var process = System.Diagnostics.Process.Start(startInfo))
@@ -323,10 +324,10 @@ namespace varManager
                             FileName = execPath,
                             Arguments = arguments,
                             WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = false
+                            // RedirectStandardOutput = true,
+                            // RedirectStandardError = true,
+                            // UseShellExecute = false,
+                            // CreateNoWindow = false
                         };
 
                         using (var process = System.Diagnostics.Process.Start(startInfo))
