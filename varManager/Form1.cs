@@ -772,6 +772,11 @@ namespace varManager
             listBoxLog.TopIndex = listBoxLog.Items.Count - 1;
         }
 
+        private void buttonClearLog_Click(object sender, EventArgs e)
+        {
+            listBoxLog.Items.Clear();
+        }
+        
         public delegate void InvokeProgress(int cur, int total);
 
         public void UpdateProgress(int cur, int total)

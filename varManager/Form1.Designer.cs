@@ -89,6 +89,7 @@ namespace varManager
             this.buttonExpInsted = new System.Windows.Forms.Button();
             this.buttonInstFormTxt = new System.Windows.Forms.Button();
             this.buttonHub = new System.Windows.Forms.Button();
+            this.buttonClearLog = new System.Windows.Forms.Button();
             this.flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             this.varsBindingNavigator = new System.Windows.Forms.BindingNavigator(this.components);
             this.bindingNavigatorCountItem = new System.Windows.Forms.ToolStripLabel();
@@ -267,7 +268,7 @@ namespace varManager
             this.groupBoxSwitch.Controls.Add(this.buttonPacksAdd);
             this.groupBoxSwitch.Location = new System.Drawing.Point(9, 10);
             this.groupBoxSwitch.Name = "groupBoxSwitch";
-            this.groupBoxSwitch.Size = new System.Drawing.Size(135, 149);
+            this.groupBoxSwitch.Size = new System.Drawing.Size(235, 149);
             this.groupBoxSwitch.TabIndex = 6;
             this.groupBoxSwitch.TabStop = false;
             this.groupBoxSwitch.Text = "AddonPacks Switch";
@@ -349,7 +350,7 @@ namespace varManager
             this.groupBox1.ForeColor = System.Drawing.Color.SaddleBrown;
             this.groupBox1.Location = new System.Drawing.Point(9, 214);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(135, 233);
+            this.groupBox1.Size = new System.Drawing.Size(235, 233);
             this.groupBox1.TabIndex = 5;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Depends Analysis";
@@ -444,31 +445,31 @@ namespace varManager
             // 
             // buttonUpdDB
             // 
-            this.buttonUpdDB.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.buttonUpdDB.Font = new System.Drawing.Font("Cambria", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.buttonUpdDB.ForeColor = System.Drawing.Color.RoyalBlue;
-            this.buttonUpdDB.Location = new System.Drawing.Point(33, 164);
-            this.buttonUpdDB.Name = "buttonUpdDB";
-            this.buttonUpdDB.Size = new System.Drawing.Size(44, 45);
-            this.buttonUpdDB.TabIndex = 0;
-            this.buttonUpdDB.Text = "UPD_DB";
-            this.toolTip1.SetToolTip(this.buttonUpdDB, "Organize vars, extract preview images,update DB.");
-            this.buttonUpdDB.UseVisualStyleBackColor = true;
-            this.buttonUpdDB.Click += new System.EventHandler(this.buttonUpdDB_Click);
+            buttonUpdDB.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonUpdDB.Font = new Font("Cambria", 9F, FontStyle.Bold, GraphicsUnit.Point);
+            buttonUpdDB.ForeColor = Color.RoyalBlue;
+            buttonUpdDB.Location = new Point(17, 164);
+            buttonUpdDB.Name = "buttonUpdDB";
+            buttonUpdDB.Size = new Size(55, 47);
+            buttonUpdDB.TabIndex = 0;
+            buttonUpdDB.Text = "UPD_DB";
+            toolTip1.SetToolTip(buttonUpdDB, "Organize vars, extract preview images,update DB.");
+            buttonUpdDB.UseVisualStyleBackColor = true;
+            buttonUpdDB.Click += buttonUpdDB_Click;
             // 
             // buttonStartVam
             // 
-            this.buttonStartVam.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.buttonStartVam.Font = new System.Drawing.Font("Cambria", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.buttonStartVam.ForeColor = System.Drawing.Color.RoyalBlue;
-            this.buttonStartVam.Location = new System.Drawing.Point(89, 164);
-            this.buttonStartVam.Name = "buttonStartVam";
-            this.buttonStartVam.Size = new System.Drawing.Size(44, 45);
-            this.buttonStartVam.TabIndex = 7; // 设置Tab顺序，根据需要调整
-            this.buttonStartVam.Text = "Start VAM"; // 设置按钮文本
-            this.toolTip1.SetToolTip(this.buttonStartVam, "Start VAM application"); // 设置工具提示文本
-            this.buttonStartVam.UseVisualStyleBackColor = true;
-            this.buttonStartVam.Click += new System.EventHandler(this.buttonStartVam_Click); // 添加点击事件处理器
+            buttonStartVam.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonStartVam.Font = new Font("Cambria", 9F, FontStyle.Bold, GraphicsUnit.Point);
+            buttonStartVam.ForeColor = Color.RoyalBlue;
+            buttonStartVam.Location = new Point(78, 164);
+            buttonStartVam.Name = "buttonStartVam";
+            buttonStartVam.Size = new Size(66, 47);
+            buttonStartVam.TabIndex = 7;
+            buttonStartVam.Text = "Start VAM";
+            toolTip1.SetToolTip(buttonStartVam, "Start VAM application");
+            buttonStartVam.UseVisualStyleBackColor = true;
+            buttonStartVam.Click += buttonStartVam_Click;
 
             // 
             // tableLayoutPanel2
@@ -780,6 +781,7 @@ namespace varManager
             this.flowLayoutPanel2.Controls.Add(this.buttonExpInsted);
             this.flowLayoutPanel2.Controls.Add(this.buttonInstFormTxt);
             this.flowLayoutPanel2.Controls.Add(this.buttonHub);
+            this.flowLayoutPanel2.Controls.Add(this.buttonClearLog);
             this.flowLayoutPanel2.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.flowLayoutPanel2.ForeColor = System.Drawing.SystemColors.ActiveCaptionText;
             this.flowLayoutPanel2.Location = new System.Drawing.Point(0, 504);
@@ -832,7 +834,7 @@ namespace varManager
             this.buttonMove.Font = new System.Drawing.Font("Cambria", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.buttonMove.Location = new System.Drawing.Point(231, 3);
             this.buttonMove.Name = "buttonMove";
-            this.buttonMove.Size = new System.Drawing.Size(113, 42);
+            this.buttonMove.Size = new System.Drawing.Size(70, 42);
             this.buttonMove.TabIndex = 3;
             this.buttonMove.Text = "Move SeleLinks To SubDir";
             this.buttonMove.UseVisualStyleBackColor = false;
@@ -878,6 +880,18 @@ namespace varManager
             this.toolTip1.SetToolTip(this.buttonHub, "Hub browsing, combined with analysis of all the var files you have.");
             this.buttonHub.UseVisualStyleBackColor = false;
             this.buttonHub.Click += new System.EventHandler(this.buttonHub_Click);
+            // 
+            // buttonClearLog
+            // 
+            this.buttonClearLog.Font = new System.Drawing.Font("Cambria", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.buttonClearLog.Location = new System.Drawing.Point(626, 3);
+            this.buttonClearLog.Name = "buttonClearLog";
+            this.buttonClearLog.Size = new System.Drawing.Size(90, 42);
+            this.buttonClearLog.TabIndex = 6;
+            this.buttonClearLog.Text = "ClearLog";
+            this.toolTip1.SetToolTip(this.buttonClearLog, "Clear the log list.");
+            this.buttonClearLog.UseVisualStyleBackColor = true;
+            this.buttonClearLog.Click += new System.EventHandler(this.buttonClearLog_Click);
             // 
             // flowLayoutPanel1
             // 
@@ -1704,6 +1718,7 @@ namespace varManager
         private System.Windows.Forms.Button buttonFixPreview;
         private System.Windows.Forms.Button buttonAllMissingDepends;
         private System.Windows.Forms.Button buttonHub;
+        private System.Windows.Forms.Button buttonClearLog;
         private System.Windows.Forms.DataGridViewButtonColumn ColumnDetail;
         private System.Windows.Forms.DataGridViewTextBoxColumn fsize;
         private System.Windows.Forms.DataGridViewTextBoxColumn morphs;
