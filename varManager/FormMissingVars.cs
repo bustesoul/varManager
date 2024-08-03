@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -18,6 +19,13 @@ namespace varManager
         private static string missingVarLinkDirName = "___MissingVarLink___";
         private List<string> missingVars;
         public Form1 form1;
+        Dictionary<string, string> downloadUrls = new Dictionary<string, string>();
+        Dictionary<string, string> downloadUrlsNoVersion = new Dictionary<string, string>();
+        
+        static string vam_download_exe = "vam_downloader.exe";
+        static string vam_download_path = Path.Combine(".\\plugin\\", vam_download_exe);
+        static string vam_download_save_path = Path.Combine(Settings.Default.vampath, "AddonPackages");
+        
         public FormMissingVars()
         {
             InitializeComponent();
@@ -33,6 +41,83 @@ namespace varManager
             this.varsTableAdapter.Fill(this.varManagerDataSet.vars);
             toolStripComboBoxIgnoreVersion.SelectedIndex = 0;
             FillMissVarGridView();
+        }
+        
+        private void toolStripButtonFillDownloadText_Click(object sender, EventArgs e)
+        {
+            FillColumnDownloadText();
+        }
+        
+        private async void FillColumnDownloadText()
+        {
+            string packages = string.Join(",", missingVars);
+            var reponse = await FindPackages(packages);
+            JSONNode jsonResult = JSON.Parse(reponse);
+            JSONClass packageArray = jsonResult["packages"] as JSONClass;
+            if (packageArray.Count > 0)
+            {
+                foreach (var package in packageArray.Childs)
+                {
+                    string downloadurl = package["downloadUrl"];
+                    string filename = package["filename"];
+                    if (!string.IsNullOrEmpty(downloadurl) && downloadurl != "null")
+                    {
+                        int fileIndex = downloadurl.IndexOf("?file=");
+                        if (fileIndex == -1 || (fileIndex != -1 && downloadurl.Length > fileIndex + 6))
+                        {
+                            if (!string.IsNullOrEmpty(filename) && filename != "null")
+                            {
+                                filename = filename.Substring(0, filename.IndexOf(".var"));
+                                if (!form1.FindByvarName(filename))
+                                {
+                                    //if (!downloadUrls.ContainsKey(filename))
+                                    downloadUrls[filename] = downloadurl;
+                                    downloadUrlsNoVersion[filename.Substring(0, filename.LastIndexOf('.'))] = downloadurl;
+                                }
+                            }
+                        }
+                    }
+                }
+                //downloadurls = downloadurls.Distinct();
+            }
+            foreach (DataGridViewRow row in dataGridViewMissingVars.Rows)
+            {
+                string rowVarName = row.Cells["ColumnVarName"].Value.ToString();
+                if (downloadUrls.ContainsKey(rowVarName))
+                {
+                    row.Cells["ColumnDownload"].Value = rowVarName;
+                    row.Cells["ColumnDownload"].Style.SelectionBackColor = Color.LightGreen;
+                    row.Cells["ColumnDownload"].Style.BackColor = Color.SkyBlue;
+                }
+                else if (downloadUrlsNoVersion.ContainsKey(rowVarName.Substring(0, rowVarName.LastIndexOf('.'))))
+                {
+                    row.Cells["ColumnDownload"].Value = rowVarName;
+                    row.Cells["ColumnDownload"].Style.SelectionBackColor = Color.Orange;
+                    row.Cells["ColumnDownload"].Style.BackColor = Color.Yellow;
+                }
+                else
+                {
+                    row.Cells["ColumnDownload"].Value = "";
+                }
+            }
+            MessageBox.Show("Fetch Download From Hub Complete!", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        
+        private static async Task<string> FindPackages(string packages)
+        {
+            string url = "https://hub.virtamate.com/citizenx/api.php";
+            JSONClass jns = new JSONClass();
+            jns.Add("source", "VaM");
+            jns.Add("action", "findPackages");
+            jns.Add("packages", packages);
+            var data = new StringContent(jns.ToString(), Encoding.UTF8, "application/json");
+
+            using (var client = new HttpClient())
+            {
+                var response = await client.PostAsync(url, data);
+                string reponse = response.Content.ReadAsStringAsync().Result;
+                return reponse;
+            }
         }
 
         private void FillMissVarGridView()
@@ -59,11 +144,11 @@ namespace varManager
                         searchPattern = missingvarname.Substring(0, missingvarname.LastIndexOf('.') + 1) + "*.var";
                     var files = Directory.GetFiles(Path.Combine(Settings.Default.vampath, "AddonPackages", missingVarLinkDirName), searchPattern, SearchOption.AllDirectories).OrderByDescending(q => Path.GetFileNameWithoutExtension(q)).ToArray();
                     if (files.Length == 0)
-                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, "", "UnLink", "Google" });
+                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, "", "UnLink", "Google", "" });
                     else
                     {
                         string destfilename = Path.GetFileNameWithoutExtension(Comm.ReparsePoint(files[0]));
-                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, destfilename, "UnLink", "Google" });
+                        dataGridViewMissingVars.Rows.Add(new string[] { missingvarname, destfilename, "UnLink", "Google", "" });
                     }
 
                 }
@@ -160,7 +245,114 @@ namespace varManager
             if (e.ColumnIndex == 3)
             {
                 string varname = dataGridViewMissingVars.Rows[e.RowIndex].Cells[0].Value.ToString().Replace(".latest", ".1");
-                System.Diagnostics.Process.Start("https://www.google.com/search?q=" + varname + " var");
+                string url = "https://www.google.com/search?q=" + varname + " var";
+
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    };
+                    Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("An error occurred trying to start process: " + ex.Message);
+                }
+            }
+            if (e.ColumnIndex == 4)
+            {
+                string varname = dataGridViewMissingVars.Rows[e.RowIndex].Cells[0].Value.ToString();
+                string varnameNoVersion = varname.Substring(0, varname.LastIndexOf('.'));
+                string execPath = vam_download_path;
+                
+                if (!File.Exists(execPath))
+                {
+                    MessageBox.Show($"Executable not found: {execPath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                
+                if (downloadUrls.TryGetValue(varname, out var var_url))
+                {
+                    // // For Debug
+                    // MessageBox.Show("All has "+downloadUrls.Count+" Missing var, Now find this :\n" 
+                    //                 + varname + " fetch link: " + var_url);
+                    
+                    string arguments = var_url + " " + vam_download_save_path;
+
+                    try
+                    {
+                        var startInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = execPath,
+                            Arguments = arguments,
+                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                            // RedirectStandardOutput = true,
+                            // RedirectStandardError = true,
+                            // UseShellExecute = false,
+                            // CreateNoWindow = false
+                        };
+
+                        using (var process = System.Diagnostics.Process.Start(startInfo))
+                        {
+                            process.WaitForExit();
+
+                            if (process.ExitCode != 0)
+                            {
+                                MessageBox.Show($"Download {varname} from:\n{var_url}\nto {vam_download_save_path} failed with exit code: {process.ExitCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to start application. ExecPath: {execPath}, Arguments: {arguments}, Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                else if (downloadUrlsNoVersion.TryGetValue(varnameNoVersion, out var var_noversion_url))
+                {
+                    // // For Debug
+                    // MessageBox.Show("All has "+downloadUrlsNoVersion.Count+" Missing var, Now find this (version NOT same) :\n" 
+                    //                 + varnameNoVersion + " fetch link: " + var_noversion_url);
+                    
+                    string arguments = var_noversion_url + " " + vam_download_save_path;
+
+                    try
+                    {
+                        var startInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = execPath,
+                            Arguments = arguments,
+                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                            // RedirectStandardOutput = true,
+                            // RedirectStandardError = true,
+                            // UseShellExecute = false,
+                            // CreateNoWindow = false
+                        };
+
+                        using (var process = System.Diagnostics.Process.Start(startInfo))
+                        {
+                            process.WaitForExit();
+
+                            if (process.ExitCode != 0)
+                            {
+                                MessageBox.Show($"Download {varnameNoVersion} from:\n{var_noversion_url}\nto {vam_download_save_path} failed with exit code: {process.ExitCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to start application. ExecPath: {execPath}, Arguments: {arguments}, Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                else
+                {
+                    // For Debug
+                    // var allUrls = string.Join("\n", downloadUrls.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
+                    // var allUrlsNoVersion = string.Join("\n", downloadUrlsNoVersion.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
+                    // MessageBox.Show("Download URLs:\n" + allUrls + "\n" + allUrlsNoVersion);
+                    MessageBox.Show("No download url found for " + varname);
+                }
             }
         }
 
