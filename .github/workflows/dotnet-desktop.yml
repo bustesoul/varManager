@@ -15,18 +15,57 @@ jobs:
     runs-on: windows-latest
 
     env:
-      Solution_Name: varManager.sln                   # 解决方案名称
-      Project_Path: varManager/varManager.csproj      # 项目路径
+      Solution_Name: varManager.sln                    # 解决方案名称
+      Project_Path: varManager/varManager.csproj       # 项目路径
+      Project_Version: v1.0.4.10                       # 项目版本
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
+      # Clone the external project to the correct directory
+      - name: Clone DgvFilterPopup
+        run: git clone --branch main https://github.com/farosch/DgvFilterPopup.git ../DgvFilterPopup
+
+      # Install the .NET Core workload
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
+
+      # Add MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v2
+
+      # Restore the application to populate the obj folder with RuntimeIdentifiers
+      - name: Restore the application
+        run: msbuild ${{ env.Solution_Name }} /t:Restore /p:Configuration=${{ matrix.configuration }}
+
+      # Decode the base 64 encoded pfx and save the Signing_Certificate
+      - name: Decode the pfx
+        run: |
+          $pfx_cert_byte = [System.Convert]::FromBase64String("${{ secrets.Base64_Encoded_Pfx }}")
+          $certificatePath = "varManager/GitHubActionsWorkflow.pfx"
+          [IO.File]::WriteAllBytes("$certificatePath", $pfx_cert_byte)
+
+      # Build the project
+      - name: Build the project
+        run: msbuild ${{ env.Project_Path }} /p:Configuration=${{ matrix.configuration }}
+
+      # Package the application
+      - name: Package the application
+        run: |
+          msbuild ${{ env.Project_Path }} /t:Publish /p:Configuration=${{ matrix.configuration }} /p:PublishProfile=FolderProfile /p:PackageCertificateKeyFile="varManager/GitHubActionsWorkflow.pfx" /p:PackageCertificatePassword=${{ secrets.Pfx_Key }}
+
+      # Remove the pfx
+      - name: Remove the pfx
+        run: Remove-Item -path "varManager/GitHubActionsWorkflow.pfx"
+
       # Clone vam_downloader repository and build it
       - name: Clone vam_downloader
-        run: git clone --branch main https://github.com/bustesoul/vam_downloader.git ../vam_downloader
+        run: git clone --branch master https://github.com/bustesoul/vam_downloader.git ../vam_downloader
 
       - name: Build vam_downloader
         run: |
@@ -37,50 +76,12 @@ jobs:
 
       - name: Copy vam_downloader to plugin directory
         run: |
-          mkdir -p varManager/bin/plugin
-          cp ../vam_downloader/target/x86_64-pc-windows-msvc/release/vam_downloader.exe varManager/bin/plugin/
+          mkdir -p varManager/bin/${{ matrix.configuration }}/net6.0-windows/publish/plugin
+          cp ../vam_downloader/target/x86_64-pc-windows-msvc/release/vam_downloader.exe varManager/bin/${{ matrix.configuration }}/net6.0-windows/publish/plugin/
 
-      # Clone the external project to the correct directory
-      - name: Clone DgvFilterPopup
-        run: git clone --branch main https://github.com/farosch/DgvFilterPopup.git ../DgvFilterPopup
-      
-      # Install the .NET Core workload
-      - name: Install .NET Core
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 6.0.x
-      
-      # Add MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
-      - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v2
-      
-      # Restore the application to populate the obj folder with RuntimeIdentifiers
-      - name: Restore the application
-        run: msbuild ${{ env.Solution_Name }} /t:Restore /p:Configuration=${{ matrix.configuration }}
-      
-      # Decode the base 64 encoded pfx and save the Signing_Certificate
-      - name: Decode the pfx
-        run: |
-          $pfx_cert_byte = [System.Convert]::FromBase64String("${{ secrets.Base64_Encoded_Pfx }}")
-          $certificatePath = "varManager/GitHubActionsWorkflow.pfx"
-          [IO.File]::WriteAllBytes("$certificatePath", $pfx_cert_byte)
-      
-      # Build the project
-      - name: Build the project
-        run: msbuild ${{ env.Project_Path }} /p:Configuration=${{ matrix.configuration }}
-      
-      # Package the application
-      - name: Package the application
-        run: |
-          msbuild ${{ env.Project_Path }} /t:Publish /p:Configuration=${{ matrix.configuration }} /p:PublishProfile=FolderProfile /p:PackageCertificateKeyFile="varManager/GitHubActionsWorkflow.pfx" /p:PackageCertificatePassword=${{ secrets.Pfx_Key }}
-      
-      # Remove the pfx
-      - name: Remove the pfx
-        run: Remove-Item -path "varManager/GitHubActionsWorkflow.pfx"
-      
       # Upload the build artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Build Artifacts
+          name: varManager_${{ env.Project_Version }}_$.zip
           path: varManager/bin/${{ matrix.configuration }}/net6.0-windows/publish
