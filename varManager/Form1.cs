@@ -1430,6 +1430,10 @@ namespace varManager
                 InvokeShowformMissingVars showformMissingVars = new InvokeShowformMissingVars(ShowformMissingVars);
                 this.BeginInvoke(showformMissingVars, missingvars);
             }
+            else
+            {
+                MessageBox.Show("No missing dependencies found", "INFO", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
 
         }
 
