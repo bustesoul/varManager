@@ -83,5 +83,5 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: varManager_${{ env.Project_Version }}_$.zip
+          name: varManager_${{ env.Project_Version }}
           path: varManager/bin/${{ matrix.configuration }}/net6.0-windows/publish
