@@ -19,6 +19,13 @@ namespace varManager
         private static string missingVarLinkDirName = "___MissingVarLink___";
         private List<string> missingVars;
         public Form1 form1;
+        Dictionary<string, string> downloadUrls = new Dictionary<string, string>();
+        Dictionary<string, string> downloadUrlsNoVersion = new Dictionary<string, string>();
+        
+        static string vam_download_exe = "vam_downloader.exe";
+        static string vam_download_path = Path.Combine(".\\plugin\\", vam_download_exe);
+        static string vam_download_save_path = Path.Combine(Settings.Default.vampath, "AddonPackages");
+        
         public FormMissingVars()
         {
             InitializeComponent();
@@ -41,19 +48,74 @@ namespace varManager
             FillColumnDownloadText();
         }
         
-        private void FillColumnDownloadText()
+        private async void FillColumnDownloadText()
         {
-            Random random = new Random();
+            string packages = string.Join(",", missingVars);
+            var reponse = await FindPackages(packages);
+            JSONNode jsonResult = JSON.Parse(reponse);
+            JSONClass packageArray = jsonResult["packages"] as JSONClass;
+            if (packageArray.Count > 0)
+            {
+                foreach (var package in packageArray.Childs)
+                {
+                    string downloadurl = package["downloadUrl"];
+                    string filename = package["filename"];
+                    if (!string.IsNullOrEmpty(downloadurl) && downloadurl != "null")
+                    {
+                        int fileIndex = downloadurl.IndexOf("?file=");
+                        if (fileIndex == -1 || (fileIndex != -1 && downloadurl.Length > fileIndex + 6))
+                        {
+                            if (!string.IsNullOrEmpty(filename) && filename != "null")
+                            {
+                                filename = filename.Substring(0, filename.IndexOf(".var"));
+                                if (!form1.FindByvarName(filename))
+                                {
+                                    //if (!downloadUrls.ContainsKey(filename))
+                                    downloadUrls[filename] = downloadurl;
+                                    downloadUrlsNoVersion[filename.Substring(0, filename.LastIndexOf('.'))] = downloadurl;
+                                }
+                            }
+                        }
+                    }
+                }
+                //downloadurls = downloadurls.Distinct();
+            }
             foreach (DataGridViewRow row in dataGridViewMissingVars.Rows)
             {
-                if (random.Next(2) == 0) // 50% chance to set the text
+                string rowVarName = row.Cells["ColumnVarName"].Value.ToString();
+                if (downloadUrls.ContainsKey(rowVarName))
                 {
-                    row.Cells["ColumnDownload"].Value = "下载";
+                    row.Cells["ColumnDownload"].Value = rowVarName;
+                    row.Cells["ColumnDownload"].Style.SelectionBackColor = Color.LightGreen;
+                    row.Cells["ColumnDownload"].Style.BackColor = Color.SkyBlue;
+                }
+                else if (downloadUrlsNoVersion.ContainsKey(rowVarName.Substring(0, rowVarName.LastIndexOf('.'))))
+                {
+                    row.Cells["ColumnDownload"].Value = rowVarName;
+                    row.Cells["ColumnDownload"].Style.SelectionBackColor = Color.Orange;
+                    row.Cells["ColumnDownload"].Style.BackColor = Color.Yellow;
                 }
                 else
                 {
                     row.Cells["ColumnDownload"].Value = "";
                 }
+            }
+        }
+        
+        private static async Task<string> FindPackages(string packages)
+        {
+            string url = "https://hub.virtamate.com/citizenx/api.php";
+            JSONClass jns = new JSONClass();
+            jns.Add("source", "VaM");
+            jns.Add("action", "findPackages");
+            jns.Add("packages", packages);
+            var data = new StringContent(jns.ToString(), Encoding.UTF8, "application/json");
+
+            using (var client = new HttpClient())
+            {
+                var response = await client.PostAsync(url, data);
+                string reponse = response.Content.ReadAsStringAsync().Result;
+                return reponse;
             }
         }
 
@@ -201,7 +263,69 @@ namespace varManager
             if (e.ColumnIndex == 4)
             {
                 string varname = dataGridViewMissingVars.Rows[e.RowIndex].Cells[0].Value.ToString();
-                MessageBox.Show("Missing var: " + varname);
+                string varnameNoVersion = varname.Substring(0, varname.LastIndexOf('.'));
+                string execPath = vam_download_path;
+                
+                if (!File.Exists(execPath))
+                {
+                    MessageBox.Show($"Executable not found: {execPath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                
+                if (downloadUrls.TryGetValue(varname, out var var_url))
+                {
+                    // // For Debug
+                    // MessageBox.Show("All has "+downloadUrls.Count+" Missing var, Now find this :\n" 
+                    //                 + varname + " fetch link: " + var_url);
+                    
+                    string arguments = var_url + " " + vam_download_save_path;
+
+                    try
+                    {
+                        var startInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = execPath,
+                            Arguments = arguments,
+                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
+                        };
+                        System.Diagnostics.Process.Start(startInfo);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to start application. ExecPath: {execPath}, Arguments: {arguments}, Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                else if (downloadUrlsNoVersion.TryGetValue(varnameNoVersion, out var var_noversion_url))
+                {
+                    // // For Debug
+                    // MessageBox.Show("All has "+downloadUrlsNoVersion.Count+" Missing var, Now find this (version NOT same) :\n" 
+                    //                 + varnameNoVersion + " fetch link: " + var_noversion_url);
+                    
+                    string arguments = var_noversion_url + " " + vam_download_save_path;
+
+                    try
+                    {
+                        var startInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = execPath,
+                            Arguments = arguments,
+                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory
+                        };
+                        System.Diagnostics.Process.Start(startInfo);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to start application. ExecPath: {execPath}, Arguments: {arguments}, Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                else
+                {
+                    // For Debug
+                    var allUrls = string.Join("\n", downloadUrls.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
+                    var allUrlsNoVersion = string.Join("\n", downloadUrlsNoVersion.Select(kvp => $"Key: {kvp.Key}, Value: {kvp.Value}"));
+                    MessageBox.Show("Download URLs:\n" + allUrls + "\n" + allUrlsNoVersion);
+                    // MessageBox.Show("No download url found for " + varname);
+                }
             }
         }
 
