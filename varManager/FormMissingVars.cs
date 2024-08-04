@@ -278,8 +278,7 @@ namespace varManager
                     // // For Debug
                     // MessageBox.Show("All has "+downloadUrls.Count+" Missing var, Now find this :\n" 
                     //                 + varname + " fetch link: " + var_url);
-                    
-                    string arguments = var_url + " " + vam_download_save_path;
+                    string arguments = $"\"{var_url}\" \"{vam_download_save_path}\"";
 
                     try
                     {
@@ -314,8 +313,7 @@ namespace varManager
                     // // For Debug
                     // MessageBox.Show("All has "+downloadUrlsNoVersion.Count+" Missing var, Now find this (version NOT same) :\n" 
                     //                 + varnameNoVersion + " fetch link: " + var_noversion_url);
-                    
-                    string arguments = var_noversion_url + " " + vam_download_save_path;
+                    string arguments = $"\"{var_noversion_url}\" \"{vam_download_save_path}\"";
 
                     try
                     {
