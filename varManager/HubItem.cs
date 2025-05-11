@@ -222,8 +222,58 @@ namespace varManager
 
         private void pictureBoxImage_Click(object sender, EventArgs e)
         {
-            System.Diagnostics.Process.Start($"https://hub.virtamate.com/resources/{resource_id}/");
+            // Construct the URL to open based on the resource_id
+            string urlToOpen = $"https://hub.virtamate.com/resources/{resource_id}/";
+
+            try
+            {
+                // Attempt to start the process (open the URL in the default browser)
+                // Use ShellExecute=true to rely on the operating system's default action for the URL
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(urlToOpen) { UseShellExecute = true });
+            }
+            catch (System.ComponentModel.Win32Exception winEx)
+            {
+                // Catch exceptions specifically related to Win32 API calls,
+                // which is common for Process.Start failures when the system cannot find the associated program.
+
+                // Error code 2 (ERROR_FILE_NOT_FOUND) is the most likely reason
+                // when the system cannot find the program associated with the file/protocol (like a browser for http/s).
+                if (winEx.NativeErrorCode == 2)
+                {
+                    // Display a specific error message for the "file not found" case,
+                    // suggesting the user check their system's default browser settings.
+                    MessageBox.Show(
+                        $"Unable to open link: The system could not find the program associated with this link.\nPlease check your default browser settings and protocol associations.\nLink: {urlToOpen}",
+                        "Open Link Error", // Title of the message box
+                        MessageBoxButtons.OK, // Button(s) on the message box
+                        MessageBoxIcon.Error // Icon for the message box
+                    );
+                }
+                else
+                {
+                    // Handle other types of Win32Exceptions
+                    // Display a more general Win32 error message including the native error code.
+                    MessageBox.Show(
+                        $"A system error occurred while trying to open the link (Code: {winEx.NativeErrorCode}): {winEx.Message}\nLink: {urlToOpen}",
+                        "Open Link Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                // Catch any other unexpected exceptions that might occur
+                // Display a general error message for any other exception type.
+                MessageBox.Show(
+                    $"An unexpected error occurred while trying to open the link: {ex.Message}\nLink: {urlToOpen}",
+                    "Open Link Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
         }
+
         void RaiseClickFilterEvent(string filterType,string payType,string category,string  creator)
         {
             HubItemFilterEventArgs newEventArgs =

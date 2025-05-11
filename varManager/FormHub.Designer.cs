@@ -68,6 +68,7 @@
             this.panel1 = new System.Windows.Forms.Panel();
             this.button1 = new System.Windows.Forms.Button();
             this.buttonCopytoClip = new System.Windows.Forms.Button();
+            this.buttonDownloadAll = new System.Windows.Forms.Button();
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.tableLayoutPanel1.SuspendLayout();
             this.panel3.SuspendLayout();
@@ -354,7 +355,7 @@
             // 
             this.comboBoxCreator.AutoCompleteMode = System.Windows.Forms.AutoCompleteMode.Suggest;
             this.comboBoxCreator.AutoCompleteSource = System.Windows.Forms.AutoCompleteSource.ListItems;
-            this.comboBoxCreator.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBoxCreator.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDown;
             this.comboBoxCreator.FlatStyle = System.Windows.Forms.FlatStyle.System;
             this.comboBoxCreator.FormattingEnabled = true;
             this.comboBoxCreator.Location = new System.Drawing.Point(9, 249);
@@ -563,6 +564,7 @@
             // 
             this.panel1.Controls.Add(this.button1);
             this.panel1.Controls.Add(this.buttonCopytoClip);
+            this.panel1.Controls.Add(this.buttonDownloadAll);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.panel1.Location = new System.Drawing.Point(0, 514);
             this.panel1.Name = "panel1";
@@ -591,6 +593,18 @@
             this.buttonCopytoClip.UseVisualStyleBackColor = true;
             this.buttonCopytoClip.UseWaitCursor = true;
             this.buttonCopytoClip.Click += new System.EventHandler(this.buttonCopytoClip_Click);
+            // 
+            // buttonDownloadAll
+            // 
+            this.buttonDownloadAll.Location = new System.Drawing.Point(250, 4);
+            this.buttonDownloadAll.Name = "buttonDownloadAll";
+            this.buttonDownloadAll.Size = new System.Drawing.Size(100, 40);
+            this.buttonDownloadAll.TabIndex = 0;
+            this.buttonDownloadAll.Text = "Download All";
+            
+            this.buttonDownloadAll.UseVisualStyleBackColor = true;
+            this.buttonDownloadAll.UseWaitCursor = true;
+            this.buttonDownloadAll.Click += new System.EventHandler(this.buttonDownloadAll_Click);
             // 
             // FormHub
             // 
@@ -654,6 +668,7 @@
         private System.Windows.Forms.ComboBox comboBoxPages;
         private System.Windows.Forms.SplitContainer splitContainer1;
         private System.Windows.Forms.Button buttonCopytoClip;
+        private System.Windows.Forms.Button buttonDownloadAll;
         private System.Windows.Forms.Panel panel1;
         private System.Windows.Forms.Button button1;
         private System.Windows.Forms.ListView listViewDownList;
