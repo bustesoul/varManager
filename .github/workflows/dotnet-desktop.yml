@@ -17,7 +17,7 @@ jobs:
     env:
       Solution_Name: varManager.sln                    # 解决方案名称
       Project_Path: varManager/varManager.csproj       # 项目路径
-      Project_Version: v1.0.4.10                       # 项目版本
+      Project_Version: v1.0.4.11                       # 项目版本
 
     steps:
       - name: Checkout
@@ -81,7 +81,7 @@ jobs:
 
       # Upload the build artifacts
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: varManager_${{ env.Project_Version }}
           path: varManager/bin/${{ matrix.configuration }}/net6.0-windows/publish

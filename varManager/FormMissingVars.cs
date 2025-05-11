@@ -43,9 +43,130 @@ namespace varManager
             FillMissVarGridView();
         }
         
+        // Assuming these are class members, populated by FillColumnDownloadText
+        // Dictionary<string, string> downloadUrls = new Dictionary<string, string>();
+        // Dictionary<string, string> downloadUrlsNoVersion = new Dictionary<string, string>();
+        // string vam_download_path = "path_to_your_downloader.exe"; // Make sure this is set
+        // string vam_download_save_path = "path_to_save_downloads"; // Make sure this is set
+        private async void toolStripButtonDownloadAll_Click(object sender, EventArgs e)
+        {
+            // 1. Collect all unique download URLs
+            HashSet<string> allUrlsToDownload = new HashSet<string>();
+            foreach (var url in downloadUrls.Values)
+            {
+                if (!string.IsNullOrEmpty(url) && url != "null")
+                {
+                    allUrlsToDownload.Add(url);
+                }
+            }
+            foreach (var url in downloadUrlsNoVersion.Values)
+            {
+                if (!string.IsNullOrEmpty(url) && url != "null")
+                {
+                    // It's possible some URLs are already in downloadUrls, HashSet handles duplicates
+                    allUrlsToDownload.Add(url);
+                }
+            }
+            // 2. Check if there are any URLs
+            if (allUrlsToDownload.Count == 0)
+            {
+                MessageBox.Show("No download links found. Please click 'Fetch Download' try to fetch download var links.",
+                                "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            // 3. Create a temporary file to store URLs
+            string tempFilePath = string.Empty;
+            try
+            {
+                tempFilePath = Path.GetTempFileName(); // Creates a 0-byte file with a unique name
+                File.WriteAllLines(tempFilePath, allUrlsToDownload);
+                // 4. Prepare to call the external downloader
+                string execPath = vam_download_path; // Your downloader executable path
+                if (!File.Exists(execPath))
+                {
+                    MessageBox.Show($"Downloader executable not found: {execPath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                // The downloader now takes the temp file path as the "URL" argument
+                // The second argument is still the save path
+                string arguments = $"\"{tempFilePath}\" \"{vam_download_save_path}\"";
+                // 5. Execute the downloader process
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = execPath,
+                    Arguments = arguments,
+                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory, // Or specify another working directory if needed
+                    // UseShellExecute = false, // Set to true if you want to see the downloader's window and it's a GUI app
+                    // CreateNoWindow = true,  // Set to false if UseShellExecute is true or you want to see a console window
+                };
+                
+                // Decide on UseShellExecute based on your downloader.
+                // If it's a console app and you want to hide it and manage output, UseShellExecute = false.
+                // If it's a GUI app or you want Windows to handle opening it, UseShellExecute = true.
+                // For simplicity and consistency with your single download, let's assume it can run visibly or non-visibly.
+                // If your single download code has specific settings for RedirectStandardOutput etc., mirror them if appropriate.
+                // For now, let's assume a simple launch.
+                
+                using (var process = System.Diagnostics.Process.Start(startInfo))
+                {
+                    // You might want to make this asynchronous if downloads take a long time
+                    // For now, we wait synchronously
+                    process.WaitForExit(); 
+                    if (process.ExitCode == 0)
+                    {
+                        MessageBox.Show($"All {allUrlsToDownload.Count} items have been queued for download.\n" +
+                                        "Download process complete. Please click the 'UPD_DB' button to update the database after downloads finish.",
+                                        "Download All Complete, Don't Need Repeat Download", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Download All process failed with exit code: {process.ExitCode}.\n" +
+                                        $"Arguments: {arguments}",
+                                        "Download Occur Error, But there may has particular var file download success, you need manually check it !", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred during the Download All process: {ex.Message}",
+                                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                // 6. Clean up the temporary file
+                if (!string.IsNullOrEmpty(tempFilePath) && File.Exists(tempFilePath))
+                {
+                    try
+                    {
+                        File.Delete(tempFilePath);
+                    }
+                    catch (IOException ioEx)
+                    {
+                        // Log or inform user that temp file couldn't be deleted
+                        Console.WriteLine($"Warning: Could not delete temporary file {tempFilePath}: {ioEx.Message}");
+                    }
+                }
+            }
+        }
+        
         private void toolStripButtonFillDownloadText_Click(object sender, EventArgs e)
         {
-            FillColumnDownloadText();
+            // It's good practice to disable UI elements that shouldn't be clicked during an async operation
+            this.toolStripButtonFetchDownload.Enabled = false;
+            this.toolStripButtonDownloadAll.Enabled = false; 
+            try
+            {
+                FillColumnDownloadText();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error fetching download info: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.toolStripButtonFetchDownload.Enabled = true;
+                this.toolStripButtonDownloadAll.Enabled = true;
+            }
         }
         
         private async void FillColumnDownloadText()
@@ -278,8 +399,7 @@ namespace varManager
                     // // For Debug
                     // MessageBox.Show("All has "+downloadUrls.Count+" Missing var, Now find this :\n" 
                     //                 + varname + " fetch link: " + var_url);
-                    
-                    string arguments = var_url + " " + vam_download_save_path;
+                    string arguments = $"\"{var_url}\" \"{vam_download_save_path}\"";
 
                     try
                     {
@@ -314,8 +434,7 @@ namespace varManager
                     // // For Debug
                     // MessageBox.Show("All has "+downloadUrlsNoVersion.Count+" Missing var, Now find this (version NOT same) :\n" 
                     //                 + varnameNoVersion + " fetch link: " + var_noversion_url);
-                    
-                    string arguments = var_noversion_url + " " + vam_download_save_path;
+                    string arguments = $"\"{var_noversion_url}\" \"{vam_download_save_path}\"";
 
                     try
                     {

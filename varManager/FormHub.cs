@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using varManager.Properties;
 using static SimpleLogger;
 
 namespace varManager
@@ -26,6 +27,10 @@ namespace varManager
         Dictionary<string, string> downloadUrls = new Dictionary<string, string>();
         private const int intPerPage = 48;
         private InvokeAddLoglist addlog;
+        static string vam_download_exe = "vam_downloader.exe";
+        static string vam_download_path = Path.Combine(".\\plugin\\", vam_download_exe);
+        static string vam_download_save_path = Path.Combine(Settings.Default.vampath, "AddonPackages");
+        
         public FormHub()
         {
             InitializeComponent();
@@ -687,6 +692,114 @@ namespace varManager
             {
                 Clipboard.SetText(string.Join("\r\n", downloadUrls.Values));
                 MessageBox.Show("Copied to clipboard, you can paste to chrono for chrome(edge) to download");
+            }
+        }
+        
+        // Assuming downloadUrls is a member of FormHub, populated elsewhere
+        // private Dictionary<string, string> downloadUrls = new Dictionary<string, string>(); 
+        // Add the new button click event handler
+        private async void buttonDownloadAll_Click(object sender, EventArgs e)
+        {
+            // 1. Collect all unique download URLs from the downloadUrls dictionary
+            HashSet<string> allUrlsToDownload = new HashSet<string>();
+            if (downloadUrls != null) // Ensure downloadUrls is not null
+            {
+                foreach (var url in downloadUrls.Values)
+                {
+                    if (!string.IsNullOrEmpty(url) && url != "null")
+                    {
+                        allUrlsToDownload.Add(url);
+                    }
+                }
+            }
+            // 2. Check if there are any URLs
+            if (allUrlsToDownload.Count == 0)
+            {
+                MessageBox.Show("No download links available. Please ensure data has been loaded and contains download links.",
+                                "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            // 3. Create a temporary file to store URLs
+            string tempFilePath = string.Empty;
+            try
+            {
+                tempFilePath = Path.GetTempFileName(); // Creates a 0-byte file with a unique name
+                File.WriteAllLines(tempFilePath, allUrlsToDownload);
+                // 4. Prepare to call the external downloader
+                // You need to have access to these variables in FormHub.cs
+                // Make sure vam_download_path and vam_download_save_path are defined and set in FormHub
+                string execPath = vam_download_path; // Your downloader executable path
+                string savePath = vam_download_save_path; // Your download save path
+                if (string.IsNullOrEmpty(execPath) || !File.Exists(execPath))
+                {
+                    MessageBox.Show($"Downloader executable path is not set or file not found: {execPath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                 if (string.IsNullOrEmpty(savePath) || !Directory.Exists(savePath))
+                {
+                    MessageBox.Show($"Download save path is not set or directory not found: {savePath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                // The downloader now takes the temp file path as the "URL" argument
+                // The second argument is still the save path
+                string arguments = $"\"{tempFilePath}\" \"{savePath}\"";
+                // 5. Execute the downloader process
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = execPath,
+                    Arguments = arguments,
+                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory, // Or specify another working directory
+                    // Set UseShellExecute and CreateNoWindow based on your downloader type
+                    // UseShellExecute = false, 
+                    // CreateNoWindow = true,
+                };
+                
+                // Optional: Disable buttons while downloading
+                this.buttonDownloadAll.Enabled = false;
+                this.buttonCopytoClip.Enabled = false;
+                this.button1.Enabled = false; // Assuming button1 is the Clear button
+                using (var process = System.Diagnostics.Process.Start(startInfo))
+                {
+                    // Wait synchronously for the downloader to finish
+                    process.WaitForExit(); 
+                    if (process.ExitCode == 0)
+                    {
+                        MessageBox.Show($"All {allUrlsToDownload.Count} items have been queued for download.\n" +
+                                        "Download process complete.",
+                                        "Download All Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        // You might want to suggest updating something here if applicable to FormHub's context
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Download All process failed with exit code: {process.ExitCode}.\n" +
+                                        $"Arguments: {arguments}",
+                                        "Download All Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred during the Download All process: {ex.Message}",
+                                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                // 6. Clean up the temporary file
+                if (!string.IsNullOrEmpty(tempFilePath) && File.Exists(tempFilePath))
+                {
+                    try
+                    {
+                        File.Delete(tempFilePath);
+                    }
+                    catch (IOException ioEx)
+                    {
+                        Console.WriteLine($"Warning: Could not delete temporary file {tempFilePath}: {ioEx.Message}");
+                    }
+                }
+                // Re-enable buttons
+                this.buttonDownloadAll.Enabled = true;
+                this.buttonCopytoClip.Enabled = true;
+                this.button1.Enabled = true;
             }
         }
 
