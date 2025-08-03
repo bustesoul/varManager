@@ -17,7 +17,7 @@ jobs:
     env:
       Solution_Name: varManager.sln                    # 解决方案名称
       Project_Path: varManager/varManager.csproj       # 项目路径
-      Project_Version: v1.0.4.11                       # 项目版本
+      Project_Version: v1.0.4.12                       # 项目版本
 
     steps:
       - name: Checkout

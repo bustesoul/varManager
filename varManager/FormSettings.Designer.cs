@@ -1,4 +1,6 @@
 ﻿
+using System.Security.Principal;
+
 namespace varManager
 {
     partial class FormSettings
@@ -202,6 +204,13 @@ namespace varManager
             this.ResumeLayout(false);
             this.PerformLayout();
 
+            bool isAdmin = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+            if (!isAdmin)
+            {
+                MessageBox.Show("You need to run this program with administrator privileges to change the settings. " +
+                                "Please configure the settings and try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                this.Close();
+            }
         }
 
         #endregion

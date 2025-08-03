@@ -575,21 +575,44 @@ namespace varManager
             installStatusTableAdapter.DeleteAll();
             this.varManagerDataSet.installStatus.Clear();
             this.varManagerDataSet.installStatus.AcceptChanges();
-            mutex.WaitOne();
-            foreach (string varfile in GetInstalledVars().Values)
+            
+            bool mutexAcquired = false;
+            try
             {
-                string varName = Path.GetFileNameWithoutExtension(varfile);
-                if (varManagerDataSet.vars.FindByvarName(varName) != null)
+                try
                 {
-                    bool isdisable = File.Exists(varfile + ".disabled");
-                    varManagerDataSet.installStatus.AddinstallStatusRow(varName, true, isdisable);
+                    mutex.WaitOne();
+                    mutexAcquired = true;
+                }
+                catch (AbandonedMutexException ex)
+                {
+                    // Mutex was abandoned by another thread, but we still own it now
+                    mutexAcquired = true;
+                    this.BeginInvoke(addlog, new Object[] { $"Mutex was abandoned in UpdateVarsInstalled: {ex.Message}", LogLevel.WARNING });
+                }
+                
+                foreach (string varfile in GetInstalledVars().Values)
+                {
+                    string varName = Path.GetFileNameWithoutExtension(varfile);
+                    if (varManagerDataSet.vars.FindByvarName(varName) != null)
+                    {
+                        bool isdisable = File.Exists(varfile + ".disabled");
+                        varManagerDataSet.installStatus.AddinstallStatusRow(varName, true, isdisable);
+                    }
+                }
+
+                installStatusTableAdapter.Update(varManagerDataSet.installStatus);
+                this.varManagerDataSet.installStatus.AcceptChanges();
+            }
+            finally
+            {
+                if (mutexAcquired)
+                {
+                    mutex.ReleaseMutex();
                 }
             }
-
-            installStatusTableAdapter.Update(varManagerDataSet.installStatus);
-            this.varManagerDataSet.installStatus.AcceptChanges();
-            mutex.ReleaseMutex();
-            // TODO: 这行代码将数据加载到表“varManagerDataSet1.varsView”中。您可以根据需要移动或删除它。
+            
+            // TODO: 这行代码将数据加载到表"varManagerDataSet1.varsView"中。您可以根据需要移动或删除它。
 
             //varsViewBindingSource.ResetBindings(true);
             InvokeUpdateVarsViewDataGridView invokeUpdateVarsViewDataGridView = new InvokeUpdateVarsViewDataGridView(UpdateVarsViewDataGridView);
@@ -757,9 +780,31 @@ namespace varManager
             }
             varsViewDataGridView.SelectionChanged += new System.EventHandler(this.varsDataGridView_SelectionChanged);
 
-            mutex.WaitOne();
-            UpdatePreviewPics();
-            mutex.ReleaseMutex();
+            bool mutexAcquired = false;
+            try
+            {
+                try
+                {
+                    mutex.WaitOne();
+                    mutexAcquired = true;
+                }
+                catch (AbandonedMutexException ex)
+                {
+                    // Mutex was abandoned by another thread, but we still own it now
+                    mutexAcquired = true;
+                    this.BeginInvoke(addlog, new Object[] { $"Mutex was abandoned in UpdateVarsViewDataGridView: {ex.Message}", LogLevel.WARNING });
+                }
+                
+                UpdatePreviewPics();
+            }
+            finally
+            {
+                if (mutexAcquired)
+                {
+                    mutex.ReleaseMutex();
+                }
+            }
+            
             tableLayoutPanelPreview.Visible = false;
         }
 
@@ -1290,89 +1335,110 @@ namespace varManager
 
         private void backgroundWorkerInstall_DoWork(object sender, DoWorkEventArgs e)
         {
-            mutex.WaitOne();
-            if ((string)e.Argument == "FillDataTables")
+            bool mutexAcquired = false;
+            try
             {
-                /*
-                Thread thread1 = new Thread(new ThreadStart(fillscenes));
-                thread1.Start();
-                Thread thread2 = new Thread(new ThreadStart(fillvars));
-                thread2.Start();
-                Thread thread3 = new Thread(new ThreadStart(filldependencies));
-                thread3.Start();
-                thread1.Join();
-                thread2.Join();
-                thread3.Join();
-                */
-                FillDataTables();
-            } 
-            if ((string)e.Argument == "UpdDB")
-            {
-                TidyVars();
-                UpdDB();
-
-                if (varsForInstall.Count() > 0)
+                try
                 {
-                    var varNames = VarsDependencies(varsForInstall);
-                    varsForInstall.Clear();
-                    File.Delete("varsForInstall.txt");
-                    foreach (string varname in varNames)
-                    {
-                        VarInstall(varname);
-                    }
+                    mutex.WaitOne();
+                    mutexAcquired = true;
                 }
-                UpdateVarsInstalled();
-                RescanPackages();
-                //Application.Restart();
-                //Environment.Exit(0);
+                catch (AbandonedMutexException ex)
+                {
+                    // Mutex was abandoned by another thread, but we still own it now
+                    mutexAcquired = true;
+                    this.BeginInvoke(addlog, new Object[] { $"Mutex was abandoned in backgroundWorkerInstall_DoWork: {ex.Message}", LogLevel.WARNING });
+                }
+                
+                if ((string)e.Argument == "FillDataTables")
+                {
+                    /*
+                    Thread thread1 = new Thread(new ThreadStart(fillscenes));
+                    thread1.Start();
+                    Thread thread2 = new Thread(new ThreadStart(fillvars));
+                    thread2.Start();
+                    Thread thread3 = new Thread(new ThreadStart(filldependencies));
+                    thread3.Start();
+                    thread1.Join();
+                    thread2.Join();
+                    thread3.Join();
+                    */
+                    FillDataTables();
+                } 
+                if ((string)e.Argument == "UpdDB")
+                {
+                    TidyVars();
+                    UpdDB();
 
-            }
+                    if (varsForInstall.Count() > 0)
+                    {
+                        var varNames = VarsDependencies(varsForInstall);
+                        varsForInstall.Clear();
+                        File.Delete("varsForInstall.txt");
+                        foreach (string varname in varNames)
+                        {
+                            VarInstall(varname);
+                        }
+                    }
+                    UpdateVarsInstalled();
+                    RescanPackages();
+                    //Application.Restart();
+                    //Environment.Exit(0);
 
-            if ((string)e.Argument == "rebuildLink")
-            {
-                FixRebuildLink();
-            } 
-            if ((string)e.Argument == "fixPreview")
-            {
-                FixPreview();
-                MessageBox.Show("Fix preview finish");
+                }
+
+                if ((string)e.Argument == "rebuildLink")
+                {
+                    FixRebuildLink();
+                } 
+                if ((string)e.Argument == "fixPreview")
+                {
+                    FixPreview();
+                    MessageBox.Show("Fix preview finish");
+                }
+                if ((string)e.Argument == "savesDepend")
+                {
+                    FixSavseDependencies();
+                    UpdateVarsInstalled();
+                    RescanPackages();
+                }
+                if ((string)e.Argument == "LogAnalysis")
+                {
+                    LogAnalysis();
+                    UpdateVarsInstalled();
+                    RescanPackages();
+                }
+                if ((string)e.Argument == "MissingDepends")
+                {
+                    MissingDepends();
+                    UpdateVarsInstalled();
+                    RescanPackages();
+                }
+                if ((string)e.Argument == "AllMissingDepends")
+                {
+                    AllMissingDepends();
+                }
+                if ((string)e.Argument == "FilteredMissingDepends")
+                {
+                    FilteredMissingDepends();
+                }
+                if ((string)e.Argument == "StaleVars")
+                {
+                    StaleVars();
+                }
+                if ((string)e.Argument == "OldVersionVars")
+                {
+                    StaleVars();
+                    OldVersionVars();
+                }
             }
-            if ((string)e.Argument == "savesDepend")
+            finally
             {
-                FixSavseDependencies();
-                UpdateVarsInstalled();
-                RescanPackages();
+                if (mutexAcquired)
+                {
+                    mutex.ReleaseMutex();
+                }
             }
-            if ((string)e.Argument == "LogAnalysis")
-            {
-                LogAnalysis();
-                UpdateVarsInstalled();
-                RescanPackages();
-            }
-            if ((string)e.Argument == "MissingDepends")
-            {
-                MissingDepends();
-                UpdateVarsInstalled();
-                RescanPackages();
-            }
-            if ((string)e.Argument == "AllMissingDepends")
-            {
-                AllMissingDepends();
-            }
-            if ((string)e.Argument == "FilteredMissingDepends")
-            {
-                FilteredMissingDepends();
-            }
-            if ((string)e.Argument == "StaleVars")
-            {
-                StaleVars();
-            }
-            if ((string)e.Argument == "OldVersionVars")
-            {
-                StaleVars();
-                OldVersionVars();
-            }
-            mutex.ReleaseMutex();
         }
 
         private void backgroundWorkerInstall_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
