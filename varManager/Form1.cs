@@ -87,25 +87,21 @@ namespace varManager
         }
 
         private List<string> varsForInstall = new List<string>();
-        private async Task TidyVarsAsync()
+        private void TidyVars()
         {
             List<string> vars = GetVarspathVars();
             List<string> varsUsed = GetAddonpackagesVars();
             varsForInstall.Clear();
-            
-            // 使用安全的异步读取方法
-            List<string> existingVars = await ReadVarsForInstallAsync().ConfigureAwait(false);
-            varsForInstall.AddRange(existingVars);
-            
+            if (File.Exists("varsForInstall.txt"))
+                varsForInstall.AddRange(File.ReadAllLines("varsForInstall.txt"));
             foreach (var varins in varsUsed)
             {
                 if (ComplyVarFile(varins))
                     varsForInstall.Add(Path.GetFileNameWithoutExtension(varins));
             }
-            
-            // 使用安全的异步写入方法
+            File.Delete("varsForInstall.txt");
             varsForInstall = varsForInstall.Distinct().ToList();
-            await WriteVarsForInstallAsync(varsForInstall).ConfigureAwait(false);
+            File.WriteAllLines("varsForInstall.txt", varsForInstall);
 
             vars.AddRange(varsUsed);
 
@@ -113,11 +109,7 @@ namespace varManager
             // System.Diagnostics.Process.Start(tidypath);
         }
 
-        private void TidyVars()
-        {
-            Task.Run(() => TidyVarsAsync()).GetAwaiter().GetResult();
-        }
-
+  
         private void TidyVars(List<string> vars)
         {
             string tidypath = Path.Combine(Settings.Default.varspath, tidiedDirName);
@@ -580,7 +572,7 @@ namespace varManager
             }
             return installedVars;
         }
-        private async Task UpdateVarsInstalled()
+        private void UpdateVarsInstalled()
         {
             foreach (var row in this.varManagerDataSet.installStatus)
                 row.Delete();
@@ -589,137 +581,33 @@ namespace varManager
             installStatusTableAdapter.DeleteAll();
             this.varManagerDataSet.installStatus.Clear();
             this.varManagerDataSet.installStatus.AcceptChanges();
-            await mutex.WaitAsync();
-            try
+            mutex.WaitOne();
+            foreach (string varfile in GetInstalledVars().Values)
             {
-                foreach (string varfile in GetInstalledVars().Values)
+                string varName = Path.GetFileNameWithoutExtension(varfile);
+                if (varManagerDataSet.vars.FindByvarName(varName) != null)
                 {
-                    string varName = Path.GetFileNameWithoutExtension(varfile);
-                    if (varManagerDataSet.vars.FindByvarName(varName) != null)
-                    {
-                        bool isdisable = File.Exists(varfile + ".disabled");
-                        varManagerDataSet.installStatus.AddinstallStatusRow(varName, true, isdisable);
-                    }
+                    bool isdisable = File.Exists(varfile + ".disabled");
+                    varManagerDataSet.installStatus.AddinstallStatusRow(varName, true, isdisable);
                 }
+            }
 
-                installStatusTableAdapter.Update(varManagerDataSet.installStatus);
-                this.varManagerDataSet.installStatus.AcceptChanges();
-            }
-            finally
-            {
-                mutex.Release();
-            }
+            installStatusTableAdapter.Update(varManagerDataSet.installStatus);
+            this.varManagerDataSet.installStatus.AcceptChanges();
+            mutex.ReleaseMutex();
             // TODO: 这行代码将数据加载到表"varManagerDataSet1.varsView"中。您可以根据需要移动或删除它。
 
             //varsViewBindingSource.ResetBindings(true);
-            this.BeginInvoke(new Action(async () =>
-            {
-                try
-                {
-                    await UpdateVarsViewDataGridView();
-                }
-                catch (Exception ex)
-                {
-                    this.BeginInvoke(addlog, new object[] { $"UpdateVarsViewDataGridView failed: {ex.Message}", LogLevel.ERROR });
-                }
-            }));
+            InvokeUpdateVarsViewDataGridView invokeUpdateVarsViewDataGridView = new InvokeUpdateVarsViewDataGridView(UpdateVarsViewDataGridView);
+            this.BeginInvoke(invokeUpdateVarsViewDataGridView);
             //varsViewDataGridView.Update();
         }
 
-        private SemaphoreSlim mutex = new SemaphoreSlim(1, 1);
-        private SemaphoreSlim fileOperationMutex = new SemaphoreSlim(1, 1);
+        private Mutex mutex;
+        private System.Threading.Mutex mut = new Mutex();
 
-        // 安全的异步文件操作方法
-        private async Task<List<string>> ReadVarsForInstallAsync()
-        {
-            await fileOperationMutex.WaitAsync();
-            try
-            {
-                string filePath = "varsForInstall.txt";
-                if (File.Exists(filePath))
-                {
-                    return (await File.ReadAllLinesAsync(filePath)).ToList();
-                }
-                return new List<string>();
-            }
-            finally
-            {
-                fileOperationMutex.Release();
-            }
-        }
-
-        private async Task WriteVarsForInstallAsync(List<string> varsForInstall)
-        {
-            await fileOperationMutex.WaitAsync();
-            try
-            {
-                string filePath = "varsForInstall.txt";
-                string tempFile = Path.GetTempFileName();
-                
-                try
-                {
-                    // 写入临时文件
-                    await File.WriteAllLinesAsync(tempFile, varsForInstall);
-                    
-                    // 删除原文件（如果存在）
-                    if (File.Exists(filePath))
-                    {
-                        File.Delete(filePath);
-                    }
-                    
-                    // 重命名临时文件为目标文件
-                    File.Move(tempFile, filePath);
-                }
-                finally
-                {
-                    // 清理临时文件
-                    if (File.Exists(tempFile))
-                    {
-                        File.Delete(tempFile);
-                    }
-                }
-            }
-            finally
-            {
-                fileOperationMutex.Release();
-            }
-        }
-
-        private async Task DeleteVarsForInstallAsync()
-        {
-            await fileOperationMutex.WaitAsync();
-            try
-            {
-                string filePath = "varsForInstall.txt";
-                if (File.Exists(filePath))
-                {
-                    File.Delete(filePath); // 同步删除，.NET 6 兼容
-                }
-            }
-            finally
-            {
-                fileOperationMutex.Release();
-            }
-        }
-
-        // 验证方法 - 测试并发安全性
-        private async Task<bool> TestConcurrentFileAccessAsync()
-        {
-            // 创建测试数据
-            var testData = new List<string> { "test1", "test2", "test3" };
-            await WriteVarsForInstallAsync(testData);
-
-            // 并发读取测试（内部自带锁）
-            var readTask1 = ReadVarsForInstallAsync();
-            var readTask2 = ReadVarsForInstallAsync();
-            var results = await Task.WhenAll(readTask1, readTask2);
-
-            // 验证数据一致性
-            return results[0].Count == results[1].Count &&
-                   results[0].SequenceEqual(results[1]);
-        }
-      
-        private async void Form1_Load(object sender, EventArgs e)
+        
+        private void Form1_Load(object sender, EventArgs e)
         {
             this.Text = "VarManager  v" + Assembly.GetEntryAssembly().GetName().Version.ToString();
             if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
@@ -731,8 +619,9 @@ namespace varManager
                 this.Close();
                 return;
             }
-            // TODO: 这行代码将数据加载到表“varManagerDataSet.installStatus”中。您可以根据需要移动或删除它。
+            // TODO: 这行代码将数据加载到表"varManagerDataSet.installStatus"中。您可以根据需要移动或删除它。
             //this.installStatusTableAdapter.DeleteAll();
+            mutex = new System.Threading.Mutex();
             
             backgroundWorkerInstall.RunWorkerAsync("FillDataTables");
             //
@@ -740,7 +629,7 @@ namespace varManager
             string packpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, "AddonPackages")).FullName;
 
             string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
-            if (string.Equals(varspath, packpath, StringComparison.OrdinalIgnoreCase))
+            if (varspath == packpath)
             {
                 MessageBox.Show("Vars Path can't be {VamInstallDir}\\AddonPackages");
                 OpenSetting();
@@ -811,7 +700,7 @@ namespace varManager
                 this.BeginInvoke(addlog, new Object[] { $"Warning: {ex.Message}", LogLevel.INFO });
             }
 
-            await UpdateVarsInstalled();
+            UpdateVarsInstalled();
             comboBoxCreater.Items.Add("____ALL");
             foreach (var row in this.varManagerDataSet.vars.GroupBy(g => g.creatorName))
             {
@@ -844,7 +733,9 @@ namespace varManager
             
         }
 
-        public async Task UpdateVarsViewDataGridView()
+        public delegate void InvokeUpdateVarsViewDataGridView();
+        
+        public void UpdateVarsViewDataGridView()
         {
             List<string> selectedRowList = new List<string>();
             foreach (DataGridViewRow item in varsViewDataGridView.SelectedRows)
@@ -873,15 +764,9 @@ namespace varManager
             }
             varsViewDataGridView.SelectionChanged += new System.EventHandler(this.varsDataGridView_SelectionChanged);
 
-            await mutex.WaitAsync();
-            try
-            {
-                UpdatePreviewPics();
-            }
-            finally
-            {
-                mutex.Release();
-            }
+            mutex.WaitOne();
+            UpdatePreviewPics();
+            mutex.ReleaseMutex();
             tableLayoutPanelPreview.Visible = false;
         }
         public delegate void InvokeAddLoglist(string message, LogLevel logLevel);
@@ -1390,6 +1275,7 @@ namespace varManager
 
         private void backgroundWorkerInstall_DoWork(object sender, DoWorkEventArgs e)
         {
+            mutex.WaitOne();
             if ((string)e.Argument == "FillDataTables")
             {
                 /*
@@ -1407,22 +1293,21 @@ namespace varManager
             } 
             if ((string)e.Argument == "UpdDB")
             {
-                TidyVarsAsync().GetAwaiter().GetResult();
+                TidyVars();
                 UpdDB();
 
                 if (varsForInstall.Count() > 0)
                 {
                     var varNames = VarsDependencies(varsForInstall);
                     varsForInstall.Clear();
-                    DeleteVarsForInstallAsync().GetAwaiter().GetResult();
+                    File.Delete("varsForInstall.txt");
                     foreach (string varname in varNames)
                     {
                         VarInstall(varname);
                     }
                 }
-                UpdateVarsInstalled().GetAwaiter().GetResult();
+                UpdateVarsInstalled();
                 RescanPackages();
-                ClearReportedMissingPreviews();
                 //Application.Restart();
                 //Environment.Exit(0);
 
@@ -1435,25 +1320,24 @@ namespace varManager
             if ((string)e.Argument == "fixPreview")
             {
                 FixPreview();
-                ClearReportedMissingPreviews();
                 MessageBox.Show("Fix preview finish");
             }
             if ((string)e.Argument == "savesDepend")
             {
                 FixSavseDependencies();
-                UpdateVarsInstalled().GetAwaiter().GetResult();
+                UpdateVarsInstalled();
                 RescanPackages();
             }
             if ((string)e.Argument == "LogAnalysis")
             {
                 LogAnalysis();
-                UpdateVarsInstalled().GetAwaiter().GetResult();
+                UpdateVarsInstalled();
                 RescanPackages();
             }
             if ((string)e.Argument == "MissingDepends")
             {
                 MissingDepends();
-                UpdateVarsInstalled().GetAwaiter().GetResult();
+                UpdateVarsInstalled();
                 RescanPackages();
             }
             if ((string)e.Argument == "AllMissingDepends")
@@ -1473,6 +1357,7 @@ namespace varManager
                 StaleVars();
                 OldVersionVars();
             }
+            mutex.ReleaseMutex();
         }
 
         private void backgroundWorkerInstall_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
@@ -2030,12 +1915,6 @@ namespace varManager
         private List<Previewpic> previewpics = new List<Previewpic>();
 
         private List<Previewpic> previewpicsfilter = new List<Previewpic>();
-        private static HashSet<string> reportedMissingPreviews = new HashSet<string>();
-        
-        public static void ClearReportedMissingPreviews()
-        {
-            reportedMissingPreviews.Clear();
-        }
 
         private void UpdatePreviewPics()
         {
@@ -2073,24 +1952,18 @@ namespace varManager
             PreviewInitType();
         }
 
-        private async void PreviewInitType()
+        private void PreviewInitType()
         {
-            await mutex.WaitAsync();
-            try
-            {
-                previewpicsfilter = previewpics;
-                if (checkBoxPreviewTypeLoadable.CheckState == CheckState.Checked)
-                    previewpicsfilter = previewpicsfilter.Where(q => q.IsPreset || q.Atomtype == "scenes").ToList();
-                string previewtype = "all";
-                if (new string[8] { "scenes", "looks", "clothing", "hairstyle", "assets", "morphs", "pose", "skin" }.Contains(comboBoxPreviewType.Text))
-                    previewtype = comboBoxPreviewType.Text;
-                if (previewtype != "all")
-                    previewpicsfilter = previewpicsfilter.Where(q => q.Atomtype == previewtype).ToList();
-            }
-            finally
-            {
-                mutex.Release();
-            }
+            mut.WaitOne();
+            previewpicsfilter = previewpics;
+            if (checkBoxPreviewTypeLoadable.CheckState == CheckState.Checked)
+                previewpicsfilter = previewpicsfilter.Where(q => q.IsPreset || q.Atomtype == "scenes").ToList();
+            string previewtype = "all";
+            if (new string[8] { "scenes", "looks", "clothing", "hairstyle", "assets", "morphs", "pose", "skin" }.Contains(comboBoxPreviewType.Text))
+                previewtype = comboBoxPreviewType.Text;
+            if (previewtype != "all")
+                previewpicsfilter = previewpicsfilter.Where(q => q.Atomtype == previewtype).ToList();
+            mut.ReleaseMutex();
             listViewPreviewPics.VirtualListSize = previewpicsfilter.Count;
             listViewPreviewPics.Invalidate();
             toolStripLabelPreviewCountItem.Text = "/" + previewpicsfilter.Count.ToString();
@@ -2182,12 +2055,8 @@ namespace varManager
                     key = picpath;
                 else
                 {
-                    if (!reportedMissingPreviews.Contains(picpath))
-                    {
-                        reportedMissingPreviews.Add(picpath);
-                        this.BeginInvoke(addlog, new Object[] { $"{picpath} is missing,Please run 'fix preview'", LogLevel.WARNING });
-                        buttonFixPreview.Focus();
-                    }
+                    this.BeginInvoke(addlog, new Object[] { $"{picpath} is missing,Please run 'fix preview'", LogLevel.WARNING });
+                    buttonFixPreview.Focus();
                 }
 
             }
@@ -2454,7 +2323,7 @@ namespace varManager
             FilterVars();
         }
 
-        private async void varsViewDataGridView_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        private void varsViewDataGridView_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (varsViewDataGridView.Columns[e.ColumnIndex].Name == "installedDataGridViewCheckBoxColumn" && e.RowIndex >= 0)
             {
@@ -2478,7 +2347,7 @@ namespace varManager
                         List<string> varnames = new List<string>();
                         varnames.Add(varName);
                         UnintallVars(varnames);
-                        await UpdateVarsInstalled();
+                        UpdateVarsInstalled();
                         RescanPackages();
                     }
 
@@ -2500,7 +2369,7 @@ namespace varManager
                         {
                             VarInstall(varname);
                         }
-                        await UpdateVarsInstalled();
+                        UpdateVarsInstalled();
                         RescanPackages();
                     }
                 }
@@ -2548,7 +2417,7 @@ namespace varManager
             }
         }
 
-        private async void buttonInstall_Click(object sender, EventArgs e)
+        private void buttonInstall_Click(object sender, EventArgs e)
         {
             List<string> varNames = new List<string>();
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
@@ -2588,7 +2457,7 @@ namespace varManager
                 {
                     VarInstall(varname);
                 }
-                await UpdateVarsInstalled();
+                UpdateVarsInstalled();
             }
         }
         public List<string> GetDependents(string dependName)
@@ -2825,7 +2694,7 @@ namespace varManager
             this.BeginInvoke(addlog, new Object[] { $"varsViewDataGridView_DataError, {e.Exception.Message}", LogLevel.ERROR });
         }
 
-        private async void buttonUninstallSels_Click(object sender, EventArgs e)
+        private void buttonUninstallSels_Click(object sender, EventArgs e)
         {
             List<string> varNames = new List<string>();
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
@@ -2856,11 +2725,11 @@ namespace varManager
             if (result == DialogResult.Yes)
             {
                 UnintallVars(varNames);
-                await UpdateVarsInstalled();
+                UpdateVarsInstalled();
             }
         }
 
-        private async void buttonDelete_Click(object sender, EventArgs e)
+        private void buttonDelete_Click(object sender, EventArgs e)
         {
             List<string> varNames = new List<string>();
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
@@ -2885,7 +2754,7 @@ namespace varManager
             if (result == DialogResult.Yes)
             {
                 DeleteVars(varNames);
-                await UpdateVarsInstalled();
+                UpdateVarsInstalled();
                 RescanPackages();
             }
         }
@@ -2953,7 +2822,7 @@ namespace varManager
             }
         }
 
-        private async void buttonInstFormTxt_Click(object sender, EventArgs e)
+        private void buttonInstFormTxt_Click(object sender, EventArgs e)
         {
             if (openFileDialogInstByTXT.ShowDialog() == DialogResult.OK)
             {
@@ -2962,19 +2831,19 @@ namespace varManager
                 {
                     VarInstall(varname);
                 }
-                await UpdateVarsInstalled();
+                UpdateVarsInstalled();
                 RescanPackages();
             }
         }
 
-        private async void comboBoxPacksSwitch_SelectedIndexChanged(object sender, EventArgs e)
+        private void comboBoxPacksSwitch_SelectedIndexChanged(object sender, EventArgs e)
         {
             
             string sw = (string)comboBoxPacksSwitch.SelectedItem;
             if (!string.IsNullOrEmpty(sw))
             {
                 buttonPacksDelete.Enabled = (sw != "default");
-                await varpacksSwitch(sw);
+                varpacksSwitch(sw);
 
             }
             else
@@ -2983,7 +2852,7 @@ namespace varManager
             }
         }
 
-        private async Task varpacksSwitch(string sw)
+        private void varpacksSwitch(string sw)
         {
             string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
             DirectoryInfo diswitch = new DirectoryInfo(Path.Combine(packsSwitchpath, sw));
@@ -3003,7 +2872,7 @@ namespace varManager
                     else
                     {
                        
-                        await UpdateVarsInstalled();
+                        UpdateVarsInstalled();
                         RescanPackages();
                     }
                 }
@@ -3017,7 +2886,7 @@ namespace varManager
                 }
                 else
                 {
-                    await UpdateVarsInstalled();
+                    UpdateVarsInstalled();
                     RescanPackages();
                 }
             }
@@ -3074,7 +2943,7 @@ namespace varManager
 
         }
 
-        private async void buttonPacksRename_Click(object sender, EventArgs e)
+        private void buttonPacksRename_Click(object sender, EventArgs e)
         {
             string curswitch = (string)comboBoxPacksSwitch.SelectedItem;
             if (!string.IsNullOrEmpty(curswitch) && curswitch != "default")
@@ -3088,7 +2957,7 @@ namespace varManager
                     DirectoryInfo diswitch = new DirectoryInfo(Path.Combine(packsSwitchpath, curswitch));
                     diswitch.MoveTo(Path.Combine(packsSwitchpath, newName));
                     comboBoxPacksSwitch.Items[comboBoxPacksSwitch.SelectedIndex] = newName;
-                    await this.varpacksSwitch(newName);
+                    this.varpacksSwitch(newName);
                 }
             }
         }
@@ -3336,7 +3205,7 @@ namespace varManager
             }
         }
 
-        private async void buttonpreviewinstall_Click(object sender, EventArgs e)
+        private void buttonpreviewinstall_Click(object sender, EventArgs e)
         {
             string varName = labelPreviewVarName.Text;
             if (varManagerDataSet.installStatus.Where(q => q.varName == varName && q.Installed).Count() > 0)
@@ -3374,7 +3243,7 @@ namespace varManager
 
                 }
             }
-            await UpdateVarsInstalled();
+            UpdateVarsInstalled();
             RescanPackages();
         }
 
