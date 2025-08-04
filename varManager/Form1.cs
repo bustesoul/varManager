@@ -15,6 +15,7 @@ using System.Text;
 //using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using varManager.Properties;
 using SimpleJSON;
@@ -86,26 +87,35 @@ namespace varManager
         }
 
         private List<string> varsForInstall = new List<string>();
-        private void TidyVars()
+        private async Task TidyVarsAsync()
         {
             List<string> vars = GetVarspathVars();
             List<string> varsUsed = GetAddonpackagesVars();
             varsForInstall.Clear();
-            if (File.Exists("varsForInstall.txt"))
-                varsForInstall.AddRange(File.ReadAllLines("varsForInstall.txt"));
+            
+            // 使用安全的异步读取方法
+            List<string> existingVars = await ReadVarsForInstallAsync().ConfigureAwait(false);
+            varsForInstall.AddRange(existingVars);
+            
             foreach (var varins in varsUsed)
             {
                 if (ComplyVarFile(varins))
                     varsForInstall.Add(Path.GetFileNameWithoutExtension(varins));
             }
-            File.Delete("varsForInstall.txt");
+            
+            // 使用安全的异步写入方法
             varsForInstall = varsForInstall.Distinct().ToList();
-            File.WriteAllLines("varsForInstall.txt", varsForInstall);
+            await WriteVarsForInstallAsync(varsForInstall).ConfigureAwait(false);
 
             vars.AddRange(varsUsed);
 
             TidyVars(vars);
             // System.Diagnostics.Process.Start(tidypath);
+        }
+
+        private void TidyVars()
+        {
+            Task.Run(() => TidyVarsAsync()).GetAwaiter().GetResult();
         }
 
         private void TidyVars(List<string> vars)
@@ -295,28 +305,26 @@ namespace varManager
                 }
                 dependenciesList = dependenciesList.Distinct().ToList();
             }
-            catch (Exception ex)
+            catch
             {
-                throw ex;
+                throw;
             }
             return dependenciesList;
         }
         
         private bool Varislatest(string varname)
         {
-            bool latest = true;
-            string[] varnamepart = varname.Split('.');
-            if (varnamepart.Length == 3)
-            {
-                int version = 0;
-                if (int.TryParse(varnamepart[2], out version))
-                {
-                    int maxversion = varManagerDataSet.vars.Where(q => q.creatorName == varnamepart[0] && q.packageName == varnamepart[1]).Max(q => q.version);
-                    if (version < maxversion)
-                        latest = false;
-                }
-            }
-            return latest;
+            var parts = varname.Split('.');
+            if (parts.Length != 3) return true;
+            if (!int.TryParse(parts[2], out var version)) return true;
+
+            var versions = varManagerDataSet.vars
+                .Where(q => q.creatorName == parts[0] && q.packageName == parts[1])
+                .Select(q => q.version);
+
+            if (!versions.Any()) return true;
+
+            return version >= versions.Max();
         }
         private int VarCountVersion(string varname)
         {
@@ -449,9 +457,9 @@ namespace varManager
                     {
                         Directory.Delete(typepath, true);
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        throw ex;
+                        throw;
                     }
                 }
             }
@@ -528,7 +536,13 @@ namespace varManager
                         if (File.Exists(linkvar))
                             File.Delete(linkvar);
 
-                    string operav = Path.Combine(Settings.Default.varspath, varManagerDataSet.vars.FindByvarName(varname).varPath, varname + ".var");
+                    var row = varManagerDataSet.vars.FindByvarName(varname);
+                    if (row == null)
+                    {
+                        this.BeginInvoke(addlog, new Object[] { $"{varname} record not found, skip delete.", LogLevel.WARNING });
+                        continue;
+                    }
+                    string operav = Path.Combine(Settings.Default.varspath, row.varPath, varname + ".var");
                     string deletedv = Path.Combine(delevarspath, varname + ".var");
                     try
                     {
@@ -566,7 +580,7 @@ namespace varManager
             }
             return installedVars;
         }
-        private void UpdateVarsInstalled()
+        private async Task UpdateVarsInstalled()
         {
             foreach (var row in this.varManagerDataSet.installStatus)
                 row.Delete();
@@ -575,32 +589,137 @@ namespace varManager
             installStatusTableAdapter.DeleteAll();
             this.varManagerDataSet.installStatus.Clear();
             this.varManagerDataSet.installStatus.AcceptChanges();
-            mutex.WaitOne();
-            foreach (string varfile in GetInstalledVars().Values)
+            await mutex.WaitAsync();
+            try
             {
-                string varName = Path.GetFileNameWithoutExtension(varfile);
-                if (varManagerDataSet.vars.FindByvarName(varName) != null)
+                foreach (string varfile in GetInstalledVars().Values)
                 {
-                    bool isdisable = File.Exists(varfile + ".disabled");
-                    varManagerDataSet.installStatus.AddinstallStatusRow(varName, true, isdisable);
+                    string varName = Path.GetFileNameWithoutExtension(varfile);
+                    if (varManagerDataSet.vars.FindByvarName(varName) != null)
+                    {
+                        bool isdisable = File.Exists(varfile + ".disabled");
+                        varManagerDataSet.installStatus.AddinstallStatusRow(varName, true, isdisable);
+                    }
                 }
-            }
 
-            installStatusTableAdapter.Update(varManagerDataSet.installStatus);
-            this.varManagerDataSet.installStatus.AcceptChanges();
-            mutex.ReleaseMutex();
-            // TODO: 这行代码将数据加载到表“varManagerDataSet1.varsView”中。您可以根据需要移动或删除它。
+                installStatusTableAdapter.Update(varManagerDataSet.installStatus);
+                this.varManagerDataSet.installStatus.AcceptChanges();
+            }
+            finally
+            {
+                mutex.Release();
+            }
+            // TODO: 这行代码将数据加载到表"varManagerDataSet1.varsView"中。您可以根据需要移动或删除它。
 
             //varsViewBindingSource.ResetBindings(true);
-            InvokeUpdateVarsViewDataGridView invokeUpdateVarsViewDataGridView = new InvokeUpdateVarsViewDataGridView(UpdateVarsViewDataGridView);
-            this.BeginInvoke(invokeUpdateVarsViewDataGridView);
-            
+            this.BeginInvoke(new Action(async () =>
+            {
+                try
+                {
+                    await UpdateVarsViewDataGridView();
+                }
+                catch (Exception ex)
+                {
+                    this.BeginInvoke(addlog, new object[] { $"UpdateVarsViewDataGridView failed: {ex.Message}", LogLevel.ERROR });
+                }
+            }));
             //varsViewDataGridView.Update();
         }
-        private Mutex mutex;
-        private System.Threading.Mutex mut = new Mutex();
+
+        private SemaphoreSlim mutex = new SemaphoreSlim(1, 1);
+        private SemaphoreSlim fileOperationMutex = new SemaphoreSlim(1, 1);
+
+        // 安全的异步文件操作方法
+        private async Task<List<string>> ReadVarsForInstallAsync()
+        {
+            await fileOperationMutex.WaitAsync();
+            try
+            {
+                string filePath = "varsForInstall.txt";
+                if (File.Exists(filePath))
+                {
+                    return (await File.ReadAllLinesAsync(filePath)).ToList();
+                }
+                return new List<string>();
+            }
+            finally
+            {
+                fileOperationMutex.Release();
+            }
+        }
+
+        private async Task WriteVarsForInstallAsync(List<string> varsForInstall)
+        {
+            await fileOperationMutex.WaitAsync();
+            try
+            {
+                string filePath = "varsForInstall.txt";
+                string tempFile = Path.GetTempFileName();
+                
+                try
+                {
+                    // 写入临时文件
+                    await File.WriteAllLinesAsync(tempFile, varsForInstall);
+                    
+                    // 删除原文件（如果存在）
+                    if (File.Exists(filePath))
+                    {
+                        File.Delete(filePath);
+                    }
+                    
+                    // 重命名临时文件为目标文件
+                    File.Move(tempFile, filePath);
+                }
+                finally
+                {
+                    // 清理临时文件
+                    if (File.Exists(tempFile))
+                    {
+                        File.Delete(tempFile);
+                    }
+                }
+            }
+            finally
+            {
+                fileOperationMutex.Release();
+            }
+        }
+
+        private async Task DeleteVarsForInstallAsync()
+        {
+            await fileOperationMutex.WaitAsync();
+            try
+            {
+                string filePath = "varsForInstall.txt";
+                if (File.Exists(filePath))
+                {
+                    File.Delete(filePath); // 同步删除，.NET 6 兼容
+                }
+            }
+            finally
+            {
+                fileOperationMutex.Release();
+            }
+        }
+
+        // 验证方法 - 测试并发安全性
+        private async Task<bool> TestConcurrentFileAccessAsync()
+        {
+            // 创建测试数据
+            var testData = new List<string> { "test1", "test2", "test3" };
+            await WriteVarsForInstallAsync(testData);
+
+            // 并发读取测试（内部自带锁）
+            var readTask1 = ReadVarsForInstallAsync();
+            var readTask2 = ReadVarsForInstallAsync();
+            var results = await Task.WhenAll(readTask1, readTask2);
+
+            // 验证数据一致性
+            return results[0].Count == results[1].Count &&
+                   results[0].SequenceEqual(results[1]);
+        }
       
-        private void Form1_Load(object sender, EventArgs e)
+        private async void Form1_Load(object sender, EventArgs e)
         {
             this.Text = "VarManager  v" + Assembly.GetEntryAssembly().GetName().Version.ToString();
             if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
@@ -614,7 +733,6 @@ namespace varManager
             }
             // TODO: 这行代码将数据加载到表“varManagerDataSet.installStatus”中。您可以根据需要移动或删除它。
             //this.installStatusTableAdapter.DeleteAll();
-            mutex = new System.Threading.Mutex();
             
             backgroundWorkerInstall.RunWorkerAsync("FillDataTables");
             //
@@ -622,7 +740,7 @@ namespace varManager
             string packpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, "AddonPackages")).FullName;
 
             string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
-            if (varspath == packpath)
+            if (string.Equals(varspath, packpath, StringComparison.OrdinalIgnoreCase))
             {
                 MessageBox.Show("Vars Path can't be {VamInstallDir}\\AddonPackages");
                 OpenSetting();
@@ -693,7 +811,7 @@ namespace varManager
                 this.BeginInvoke(addlog, new Object[] { $"Warning: {ex.Message}", LogLevel.INFO });
             }
 
-            UpdateVarsInstalled();
+            await UpdateVarsInstalled();
             comboBoxCreater.Items.Add("____ALL");
             foreach (var row in this.varManagerDataSet.vars.GroupBy(g => g.creatorName))
             {
@@ -726,9 +844,7 @@ namespace varManager
             
         }
 
-        public delegate void InvokeUpdateVarsViewDataGridView();
-        
-        public void UpdateVarsViewDataGridView()
+        public async Task UpdateVarsViewDataGridView()
         {
             List<string> selectedRowList = new List<string>();
             foreach (DataGridViewRow item in varsViewDataGridView.SelectedRows)
@@ -757,12 +873,17 @@ namespace varManager
             }
             varsViewDataGridView.SelectionChanged += new System.EventHandler(this.varsDataGridView_SelectionChanged);
 
-            mutex.WaitOne();
-            UpdatePreviewPics();
-            mutex.ReleaseMutex();
+            await mutex.WaitAsync();
+            try
+            {
+                UpdatePreviewPics();
+            }
+            finally
+            {
+                mutex.Release();
+            }
             tableLayoutPanelPreview.Visible = false;
         }
-
         public delegate void InvokeAddLoglist(string message, LogLevel logLevel);
 
         public void UpdateAddLoglist(string message, LogLevel logLevel)
@@ -857,20 +978,8 @@ namespace varManager
                 var varsrow = varManagerDataSet.vars.FindByvarName(basename);
                 if (varsrow == null)
                 {
-                    ZipFile varzipfile;
-                    try
+                    using (ZipFile varzipfile = new ZipFile(destvarfilename))
                     {
-                        varzipfile = new ZipFile(destvarfilename);
-                    }
-                    catch (Exception)
-                    {
-                        string notComplRulefilename = Path.Combine(Settings.Default.varspath, notComplyRuleDirName, Path.GetFileName(destvarfilename));
-                        string errlog = $"{basename}, Invalid var package structure, move into {notComplyRuleDirName} directory";
-                        //string errorMessage = destvarfilename + " is invalid,please check";
-                        this.BeginInvoke(addlog, new Object[] { errlog, LogLevel.WARNING });
-                        File.Move(destvarfilename, notComplRulefilename);
-                        return;
-                    }
                     varsrow = varManagerDataSet.vars.NewvarsRow();
                     varsrow.varName = basename;
                     
@@ -899,8 +1008,6 @@ namespace varManager
                             string errlog = $"{basename}, Invalid var package structure, move into {notComplyRuleDirName} directory";
                             //string errorMessage = destvarfilename + " is invalid,please check";
                             this.BeginInvoke(addlog, new Object[] { errlog, LogLevel.WARNING });
-                            //varzipfile.Dispose();
-                            varzipfile.Close();
                             File.Move(destvarfilename, notComplRulefilename);
                             return;
                         }
@@ -1029,24 +1136,10 @@ namespace varManager
                                         string jpgextratname = Path.Combine(typepath, typename + jpgcount.ToString("000") + "_" + namejpg + ".jpg");
                                         if (!File.Exists(jpgextratname))
                                         {
-                                            using (FileStream streamWriter = File.Create(jpgextratname))
+                                            using (var sr = varzipfile.GetInputStream(jpg))
+                                            using (var streamWriter = File.Create(jpgextratname))
                                             {
-                                                var sr = varzipfile.GetInputStream(jpg);
-
-                                                int size = 2048;
-                                                byte[] data = new byte[2048];
-                                                while (true)
-                                                {
-                                                    size = sr.Read(data, 0, data.Length);
-                                                    if (size > 0)
-                                                    {
-                                                        streamWriter.Write(data, 0, size);
-                                                    }
-                                                    else
-                                                    {
-                                                        break;
-                                                    }
-                                                }
+                                                sr.CopyTo(streamWriter);
                                             }
                                         }
                                     }
@@ -1083,8 +1176,11 @@ namespace varManager
 
                         List<string> dependencies = new List<string>();
 
-                        var metajsonsteam = new StreamReader(varzipfile.GetInputStream(metajson));
-                        string jsonstring = metajsonsteam.ReadToEnd();
+                        string jsonstring;
+                        using (var metajsonsteam = new StreamReader(varzipfile.GetInputStream(metajson)))
+                        {
+                            jsonstring = metajsonsteam.ReadToEnd();
+                        }
                         try
                         {
                             dependencies = Getdependencies(jsonstring);
@@ -1092,7 +1188,6 @@ namespace varManager
                         catch (Exception ex)
                         {
                             this.BeginInvoke(addlog, new Object[] { destvarfilename + " get dependencies failed " + ex.Message, LogLevel.ERROR });
-
                         }
                         var dependencierows = varManagerDataSet.dependencies.Where(q => q.varName == basename).ToList();
                         for (int i = dependencierows.Count() - 1; i >= 0; i--)
@@ -1103,6 +1198,7 @@ namespace varManager
                             varManagerDataSet.dependencies.AdddependenciesRow(basename, dependencie);
                         dependenciesTableAdapter.Update(varManagerDataSet.dependencies);
                         varManagerDataSet.dependencies.AcceptChanges();
+                    }
                     }
                 }
                 else
@@ -1231,9 +1327,13 @@ namespace varManager
                 scenesTableAdapter.Update(varManagerDataSet.scenes);
                 varManagerDataSet.scenes.AcceptChanges();
 
-                varManagerDataSet.vars.FindByvarName(deletevar).Delete();
-                varsTableAdapter.Update(varManagerDataSet.vars);
-                varManagerDataSet.vars.AcceptChanges();
+                var row = varManagerDataSet.vars.FindByvarName(deletevar);
+                if (row != null)
+                {
+                    row.Delete();
+                    varsTableAdapter.Update(varManagerDataSet.vars);
+                    varManagerDataSet.vars.AcceptChanges();
+                }
 
                 DelePreviewPics(deletevar);
 
@@ -1290,7 +1390,6 @@ namespace varManager
 
         private void backgroundWorkerInstall_DoWork(object sender, DoWorkEventArgs e)
         {
-            mutex.WaitOne();
             if ((string)e.Argument == "FillDataTables")
             {
                 /*
@@ -1308,21 +1407,22 @@ namespace varManager
             } 
             if ((string)e.Argument == "UpdDB")
             {
-                TidyVars();
+                TidyVarsAsync().GetAwaiter().GetResult();
                 UpdDB();
 
                 if (varsForInstall.Count() > 0)
                 {
                     var varNames = VarsDependencies(varsForInstall);
                     varsForInstall.Clear();
-                    File.Delete("varsForInstall.txt");
+                    DeleteVarsForInstallAsync().GetAwaiter().GetResult();
                     foreach (string varname in varNames)
                     {
                         VarInstall(varname);
                     }
                 }
-                UpdateVarsInstalled();
+                UpdateVarsInstalled().GetAwaiter().GetResult();
                 RescanPackages();
+                ClearReportedMissingPreviews();
                 //Application.Restart();
                 //Environment.Exit(0);
 
@@ -1335,24 +1435,25 @@ namespace varManager
             if ((string)e.Argument == "fixPreview")
             {
                 FixPreview();
+                ClearReportedMissingPreviews();
                 MessageBox.Show("Fix preview finish");
             }
             if ((string)e.Argument == "savesDepend")
             {
                 FixSavseDependencies();
-                UpdateVarsInstalled();
+                UpdateVarsInstalled().GetAwaiter().GetResult();
                 RescanPackages();
             }
             if ((string)e.Argument == "LogAnalysis")
             {
                 LogAnalysis();
-                UpdateVarsInstalled();
+                UpdateVarsInstalled().GetAwaiter().GetResult();
                 RescanPackages();
             }
             if ((string)e.Argument == "MissingDepends")
             {
                 MissingDepends();
-                UpdateVarsInstalled();
+                UpdateVarsInstalled().GetAwaiter().GetResult();
                 RescanPackages();
             }
             if ((string)e.Argument == "AllMissingDepends")
@@ -1372,7 +1473,6 @@ namespace varManager
                 StaleVars();
                 OldVersionVars();
             }
-            mutex.ReleaseMutex();
         }
 
         private void backgroundWorkerInstall_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
@@ -1598,24 +1698,10 @@ namespace varManager
                                 Directory.CreateDirectory(jpgdirectory);
                             if (!File.Exists(picpath))
                             {
-                                using (FileStream streamWriter = File.Create(picpath))
+                                using (var sr = varzipfile.GetInputStream(jpg))
+                                using (var streamWriter = File.Create(picpath))
                                 {
-                                    var sr = varzipfile.GetInputStream(jpg);
-
-                                    int size = 2048;
-                                    byte[] data = new byte[2048];
-                                    while (true)
-                                    {
-                                        size = sr.Read(data, 0, data.Length);
-                                        if (size > 0)
-                                        {
-                                            streamWriter.Write(data, 0, size);
-                                        }
-                                        else
-                                        {
-                                            break;
-                                        }
-                                    }
+                                    sr.CopyTo(streamWriter);
                                 }
                             }
                             success = true;
@@ -1675,14 +1761,15 @@ namespace varManager
                 {
                     try
                     {
-                        var metajsonsteam = new StreamReader(jsonfile);
-                        string jsonstring = metajsonsteam.ReadToEnd();
+                        string jsonstring;
+                        using (var metajsonsteam = new StreamReader(jsonfile))
+                        {
+                            jsonstring = metajsonsteam.ReadToEnd();
+                        }
                         foreach (string dependency in Getdependencies(jsonstring))
                         {
                             this.varManagerDataSet.savedepens.AddsavedepensRow(savepath, fi.LastWriteTime, dependency);
-                            //dependencies.Add(dependency);
                         }
-
                     }
                     catch (Exception ex)
                     {
@@ -1943,6 +2030,12 @@ namespace varManager
         private List<Previewpic> previewpics = new List<Previewpic>();
 
         private List<Previewpic> previewpicsfilter = new List<Previewpic>();
+        private static HashSet<string> reportedMissingPreviews = new HashSet<string>();
+        
+        public static void ClearReportedMissingPreviews()
+        {
+            reportedMissingPreviews.Clear();
+        }
 
         private void UpdatePreviewPics()
         {
@@ -1980,18 +2073,24 @@ namespace varManager
             PreviewInitType();
         }
 
-        private void PreviewInitType()
+        private async void PreviewInitType()
         {
-            mut.WaitOne();
-            previewpicsfilter = previewpics;
-            if (checkBoxPreviewTypeLoadable.CheckState == CheckState.Checked)
-                previewpicsfilter = previewpicsfilter.Where(q => q.IsPreset || q.Atomtype == "scenes").ToList();
-            string previewtype = "all";
-            if (new string[8] { "scenes", "looks", "clothing", "hairstyle", "assets", "morphs", "pose", "skin" }.Contains(comboBoxPreviewType.Text))
-                previewtype = comboBoxPreviewType.Text;
-            if (previewtype != "all")
-                previewpicsfilter = previewpicsfilter.Where(q => q.Atomtype == previewtype).ToList();
-            mut.ReleaseMutex();
+            await mutex.WaitAsync();
+            try
+            {
+                previewpicsfilter = previewpics;
+                if (checkBoxPreviewTypeLoadable.CheckState == CheckState.Checked)
+                    previewpicsfilter = previewpicsfilter.Where(q => q.IsPreset || q.Atomtype == "scenes").ToList();
+                string previewtype = "all";
+                if (new string[8] { "scenes", "looks", "clothing", "hairstyle", "assets", "morphs", "pose", "skin" }.Contains(comboBoxPreviewType.Text))
+                    previewtype = comboBoxPreviewType.Text;
+                if (previewtype != "all")
+                    previewpicsfilter = previewpicsfilter.Where(q => q.Atomtype == previewtype).ToList();
+            }
+            finally
+            {
+                mutex.Release();
+            }
             listViewPreviewPics.VirtualListSize = previewpicsfilter.Count;
             listViewPreviewPics.Invalidate();
             toolStripLabelPreviewCountItem.Text = "/" + previewpicsfilter.Count.ToString();
@@ -2083,8 +2182,12 @@ namespace varManager
                     key = picpath;
                 else
                 {
-                    this.BeginInvoke(addlog, new Object[] { $"{picpath} is missing,Please run 'fix preview'", LogLevel.WARNING });
-                    buttonFixPreview.Focus();
+                    if (!reportedMissingPreviews.Contains(picpath))
+                    {
+                        reportedMissingPreviews.Add(picpath);
+                        this.BeginInvoke(addlog, new Object[] { $"{picpath} is missing,Please run 'fix preview'", LogLevel.WARNING });
+                        buttonFixPreview.Focus();
+                    }
                 }
 
             }
@@ -2122,7 +2225,7 @@ namespace varManager
                     e.Cancel = true;
                     return;
                 }
-                mut.WaitOne();
+                mutex.Wait();
                 if (previewpicsfilter.Count > startpic + i)
                 {
                     this.BeginInvoke(previewpics,
@@ -2135,7 +2238,7 @@ namespace varManager
                                                 );
 
                 }
-                mut.ReleaseMutex();
+                mutex.Release();
             }
         }
         */
@@ -2351,7 +2454,7 @@ namespace varManager
             FilterVars();
         }
 
-        private void varsViewDataGridView_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        private async void varsViewDataGridView_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (varsViewDataGridView.Columns[e.ColumnIndex].Name == "installedDataGridViewCheckBoxColumn" && e.RowIndex >= 0)
             {
@@ -2375,7 +2478,7 @@ namespace varManager
                         List<string> varnames = new List<string>();
                         varnames.Add(varName);
                         UnintallVars(varnames);
-                        UpdateVarsInstalled();
+                        await UpdateVarsInstalled();
                         RescanPackages();
                     }
 
@@ -2397,7 +2500,7 @@ namespace varManager
                         {
                             VarInstall(varname);
                         }
-                        UpdateVarsInstalled();
+                        await UpdateVarsInstalled();
                         RescanPackages();
                     }
                 }
@@ -2445,7 +2548,7 @@ namespace varManager
             }
         }
 
-        private void buttonInstall_Click(object sender, EventArgs e)
+        private async void buttonInstall_Click(object sender, EventArgs e)
         {
             List<string> varNames = new List<string>();
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
@@ -2485,7 +2588,7 @@ namespace varManager
                 {
                     VarInstall(varname);
                 }
-                UpdateVarsInstalled();
+                await UpdateVarsInstalled();
             }
         }
         public List<string> GetDependents(string dependName)
@@ -2722,7 +2825,7 @@ namespace varManager
             this.BeginInvoke(addlog, new Object[] { $"varsViewDataGridView_DataError, {e.Exception.Message}", LogLevel.ERROR });
         }
 
-        private void buttonUninstallSels_Click(object sender, EventArgs e)
+        private async void buttonUninstallSels_Click(object sender, EventArgs e)
         {
             List<string> varNames = new List<string>();
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
@@ -2753,11 +2856,11 @@ namespace varManager
             if (result == DialogResult.Yes)
             {
                 UnintallVars(varNames);
-                UpdateVarsInstalled();
+                await UpdateVarsInstalled();
             }
         }
 
-        private void buttonDelete_Click(object sender, EventArgs e)
+        private async void buttonDelete_Click(object sender, EventArgs e)
         {
             List<string> varNames = new List<string>();
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
@@ -2782,7 +2885,7 @@ namespace varManager
             if (result == DialogResult.Yes)
             {
                 DeleteVars(varNames);
-                UpdateVarsInstalled();
+                await UpdateVarsInstalled();
                 RescanPackages();
             }
         }
@@ -2850,7 +2953,7 @@ namespace varManager
             }
         }
 
-        private void buttonInstFormTxt_Click(object sender, EventArgs e)
+        private async void buttonInstFormTxt_Click(object sender, EventArgs e)
         {
             if (openFileDialogInstByTXT.ShowDialog() == DialogResult.OK)
             {
@@ -2859,19 +2962,19 @@ namespace varManager
                 {
                     VarInstall(varname);
                 }
-                UpdateVarsInstalled();
+                await UpdateVarsInstalled();
                 RescanPackages();
             }
         }
 
-        private void comboBoxPacksSwitch_SelectedIndexChanged(object sender, EventArgs e)
+        private async void comboBoxPacksSwitch_SelectedIndexChanged(object sender, EventArgs e)
         {
             
             string sw = (string)comboBoxPacksSwitch.SelectedItem;
             if (!string.IsNullOrEmpty(sw))
             {
                 buttonPacksDelete.Enabled = (sw != "default");
-                varpacksSwitch(sw);
+                await varpacksSwitch(sw);
 
             }
             else
@@ -2880,7 +2983,7 @@ namespace varManager
             }
         }
 
-        private void varpacksSwitch(string sw)
+        private async Task varpacksSwitch(string sw)
         {
             string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
             DirectoryInfo diswitch = new DirectoryInfo(Path.Combine(packsSwitchpath, sw));
@@ -2900,7 +3003,7 @@ namespace varManager
                     else
                     {
                        
-                        UpdateVarsInstalled();
+                        await UpdateVarsInstalled();
                         RescanPackages();
                     }
                 }
@@ -2914,7 +3017,7 @@ namespace varManager
                 }
                 else
                 {
-                    UpdateVarsInstalled();
+                    await UpdateVarsInstalled();
                     RescanPackages();
                 }
             }
@@ -2971,7 +3074,7 @@ namespace varManager
 
         }
 
-        private void buttonPacksRename_Click(object sender, EventArgs e)
+        private async void buttonPacksRename_Click(object sender, EventArgs e)
         {
             string curswitch = (string)comboBoxPacksSwitch.SelectedItem;
             if (!string.IsNullOrEmpty(curswitch) && curswitch != "default")
@@ -2985,7 +3088,7 @@ namespace varManager
                     DirectoryInfo diswitch = new DirectoryInfo(Path.Combine(packsSwitchpath, curswitch));
                     diswitch.MoveTo(Path.Combine(packsSwitchpath, newName));
                     comboBoxPacksSwitch.Items[comboBoxPacksSwitch.SelectedIndex] = newName;
-                    this.varpacksSwitch(newName);
+                    await this.varpacksSwitch(newName);
                 }
             }
         }
@@ -3233,7 +3336,7 @@ namespace varManager
             }
         }
 
-        private void buttonpreviewinstall_Click(object sender, EventArgs e)
+        private async void buttonpreviewinstall_Click(object sender, EventArgs e)
         {
             string varName = labelPreviewVarName.Text;
             if (varManagerDataSet.installStatus.Where(q => q.varName == varName && q.Installed).Count() > 0)
@@ -3271,7 +3374,7 @@ namespace varManager
 
                 }
             }
-            UpdateVarsInstalled();
+            await UpdateVarsInstalled();
             RescanPackages();
         }
 
