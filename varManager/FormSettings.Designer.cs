@@ -1,6 +1,4 @@
 ﻿
-using System.Security.Principal;
-
 namespace varManager
 {
     partial class FormSettings
@@ -48,9 +46,9 @@ namespace varManager
             this.openFileDialogExec = new System.Windows.Forms.OpenFileDialog();
             label3 = new System.Windows.Forms.Label();
             this.SuspendLayout();
-            // 
+            //
             // label3
-            // 
+            //
             label3.AutoSize = true;
             label3.ForeColor = System.Drawing.Color.Crimson;
             label3.Location = new System.Drawing.Point(105, 254);
@@ -60,26 +58,26 @@ namespace varManager
             label3.Text = "This is a repository for the original var files.\r\nNote that that it is NOT {vamIn" +
     "stallDir} \\AddonPackages directory\r\nIt is recommended to have the same partition" +
     " as the VAM installation directory";
-            // 
+            //
             // label1
-            // 
+            //
             this.label1.AutoSize = true;
             this.label1.Location = new System.Drawing.Point(80, 218);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(70, 17);
             this.label1.TabIndex = 0;
             this.label1.Text = "vars path:";
-            // 
+            //
             // textBoxVarspath
-            // 
+            //
             this.textBoxVarspath.Location = new System.Drawing.Point(173, 212);
             this.textBoxVarspath.Name = "textBoxVarspath";
             this.textBoxVarspath.Size = new System.Drawing.Size(574, 25);
             this.textBoxVarspath.TabIndex = 2;
             this.textBoxVarspath.Text = "d:\\vars";
-            // 
+            //
             // buttonVarspath
-            // 
+            //
             this.buttonVarspath.Location = new System.Drawing.Point(753, 211);
             this.buttonVarspath.Name = "buttonVarspath";
             this.buttonVarspath.Size = new System.Drawing.Size(35, 29);
@@ -87,26 +85,26 @@ namespace varManager
             this.buttonVarspath.Text = "..";
             this.buttonVarspath.UseVisualStyleBackColor = true;
             this.buttonVarspath.Click += new System.EventHandler(this.buttonVarspath_Click);
-            // 
+            //
             // labelExec
-            // 
+            //
             this.labelExec.AutoSize = true;
             this.labelExec.Location = new System.Drawing.Point(32, 154);
             this.labelExec.Name = "labelExec";
             this.labelExec.Size = new System.Drawing.Size(118, 17);
             this.labelExec.TabIndex = 6;
             this.labelExec.Text = "defaultVamExec:";
-            // 
+            //
             // textBoxExec
-            // 
+            //
             this.textBoxExec.Location = new System.Drawing.Point(173, 148);
             this.textBoxExec.Name = "textBoxExec";
             this.textBoxExec.Size = new System.Drawing.Size(574, 25);
             this.textBoxExec.TabIndex = 7;
             this.textBoxExec.Text = "VaM (Desktop Mode).bat";
-            // 
+            //
             // buttonExec
-            // 
+            //
             this.buttonExec.Location = new System.Drawing.Point(753, 148);
             this.buttonExec.Name = "buttonExec";
             this.buttonExec.Size = new System.Drawing.Size(35, 29);
@@ -114,9 +112,9 @@ namespace varManager
             this.buttonExec.Text = "..";
             this.buttonExec.UseVisualStyleBackColor = true;
             this.buttonExec.Click += new System.EventHandler(this.buttonExec_Click);
-            // 
+            //
             // buttonSave
-            // 
+            //
             this.buttonSave.DialogResult = System.Windows.Forms.DialogResult.OK;
             this.buttonSave.Location = new System.Drawing.Point(597, 470);
             this.buttonSave.Name = "buttonSave";
@@ -125,14 +123,14 @@ namespace varManager
             this.buttonSave.Text = "Save";
             this.buttonSave.UseVisualStyleBackColor = true;
             this.buttonSave.Click += new System.EventHandler(this.buttonSave_Click);
-            // 
+            //
             // folderBrowserDialogVars
-            // 
+            //
             this.folderBrowserDialogVars.Description = global::varManager.Properties.Settings.Default.varspath;
             this.folderBrowserDialogVars.SelectedPath = global::varManager.Properties.Settings.Default.varspath;
-            // 
+            //
             // buttonCancel
-            // 
+            //
             this.buttonCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
             this.buttonCancel.Location = new System.Drawing.Point(713, 470);
             this.buttonCancel.Name = "buttonCancel";
@@ -140,26 +138,26 @@ namespace varManager
             this.buttonCancel.TabIndex = 5;
             this.buttonCancel.Text = "Cancel";
             this.buttonCancel.UseVisualStyleBackColor = true;
-            // 
+            //
             // label2
-            // 
+            //
             this.label2.AutoSize = true;
             this.label2.Location = new System.Drawing.Point(24, 90);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(114, 17);
             this.label2.TabIndex = 0;
             this.label2.Text = "VAM Install path:";
-            // 
+            //
             // textBoxVamPath
-            // 
+            //
             this.textBoxVamPath.Location = new System.Drawing.Point(173, 86);
             this.textBoxVamPath.Name = "textBoxVamPath";
             this.textBoxVamPath.Size = new System.Drawing.Size(574, 25);
             this.textBoxVamPath.TabIndex = 0;
             this.textBoxVamPath.Text = "d:\\Virt_a_mate";
-            // 
+            //
             // buttonVamPath
-            // 
+            //
             this.buttonVamPath.Location = new System.Drawing.Point(753, 85);
             this.buttonVamPath.Name = "buttonVamPath";
             this.buttonVamPath.Size = new System.Drawing.Size(35, 29);
@@ -167,15 +165,15 @@ namespace varManager
             this.buttonVamPath.Text = "..";
             this.buttonVamPath.UseVisualStyleBackColor = true;
             this.buttonVamPath.Click += new System.EventHandler(this.buttonVamPath_Click);
-            // 
+            //
             // folderBrowserDialogVam
-            // 
+            //
             this.folderBrowserDialogVam.Description = global::varManager.Properties.Settings.Default.varspath;
             this.folderBrowserDialogVam.SelectedPath = global::varManager.Properties.Settings.Default.varspath;
             this.folderBrowserDialogVam.ShowNewFolderButton = false;
-            // 
+            //
             // FormSettings
-            // 
+            //
             this.AcceptButton = this.buttonSave;
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 17F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
@@ -204,13 +202,6 @@ namespace varManager
             this.ResumeLayout(false);
             this.PerformLayout();
 
-            bool isAdmin = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
-            if (!isAdmin)
-            {
-                MessageBox.Show("You need to run this program with administrator privileges to change the settings. " +
-                                "Please configure the settings and try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Close();
-            }
         }
 
         #endregion

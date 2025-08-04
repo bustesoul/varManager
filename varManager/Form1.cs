@@ -46,6 +46,207 @@ namespace varManager
         {
             InitializeComponent();
             addlog = new InvokeAddLoglist(UpdateAddLoglist);
+
+            // 添加Form关闭事件处理，确保互斥锁被正确释放
+            this.FormClosing += Form1_FormClosing;
+        }
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            try
+            {
+                // 确保互斥锁被释放
+                if (mutex != null)
+                {
+                    try
+                    {
+                        mutex.ReleaseMutex();
+                    }
+                    catch (ApplicationException)
+                    {
+                        // 如果互斥锁不是当前线程持有的，会抛出此异常，可以安全忽略
+                    }
+                    mutex.Dispose();
+                    mutex = null;
+                }
+
+                if (mut != null)
+                {
+                    try
+                    {
+                        mut.ReleaseMutex();
+                    }
+                    catch (ApplicationException)
+                    {
+                        // 如果互斥锁不是当前线程持有的，会抛出此异常，可以安全忽略
+                    }
+                    mut.Dispose();
+                    mut = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                // 记录清理过程中的错误，但不阻止应用程序关闭
+                System.Diagnostics.Debug.WriteLine($"Error during cleanup: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 检查并清理可能的死锁情况
+        /// </summary>
+        private void CheckAndCleanupDeadlock()
+        {
+            try
+            {
+                // 检查临时文件，如果存在可能表示上次异常退出
+                string currentDir = Directory.GetCurrentDirectory();
+                string lockIndicator = Path.Combine(currentDir, "varsForInstall.txt");
+
+                // 尝试获取一个测试互斥锁来检测死锁
+                System.Threading.Mutex testMutex = null;
+                bool mutexCreated = false;
+
+                try
+                {
+                    testMutex = new System.Threading.Mutex(true, "VarManagerDeadlockTest", out mutexCreated);
+
+                    if (!mutexCreated)
+                    {
+                        // 如果无法创建互斥锁，可能存在死锁
+                        if (!testMutex.WaitOne(1000)) // 等待1秒
+                        {
+                            ShowDeadlockWarning();
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // 互斥锁操作失败，可能存在问题
+                    ShowDeadlockWarning();
+                }
+                finally
+                {
+                    if (testMutex != null)
+                    {
+                        try
+                        {
+                            if (mutexCreated)
+                                testMutex.ReleaseMutex();
+                            testMutex.Dispose();
+                        }
+                        catch { }
+                    }
+                }
+
+                // 清理可能遗留的临时文件
+                CleanupLegacyTempFiles();
+            }
+            catch (Exception ex)
+            {
+                // 死锁检测失败，但不影响应用程序启动
+                System.Diagnostics.Debug.WriteLine($"Deadlock detection failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 显示死锁警告并提供清理选项
+        /// </summary>
+        private void ShowDeadlockWarning()
+        {
+            var result = MessageBox.Show(
+                "检测到可能的死锁情况，这可能是由于上次程序异常退出导致的。\n\n" +
+                "是否要清理并重新初始化？\n\n" +
+                "选择'是'将清理临时文件并尝试恢复正常状态。\n" +
+                "选择'否'将尝试继续启动，但可能会遇到问题。",
+                "死锁检测警告",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.Yes)
+            {
+                CleanupDeadlockResources();
+            }
+        }
+
+        /// <summary>
+        /// 清理死锁相关资源
+        /// </summary>
+        private void CleanupDeadlockResources()
+        {
+            try
+            {
+                string currentDir = Directory.GetCurrentDirectory();
+
+                // 清理临时文件
+                string[] tempFiles = {
+                    "varsForInstall.txt",
+                    "mutex.lock",
+                    "deadlock.flag"
+                };
+
+                foreach (string tempFile in tempFiles)
+                {
+                    string fullPath = Path.Combine(currentDir, tempFile);
+                    if (File.Exists(fullPath))
+                    {
+                        try
+                        {
+                            File.Delete(fullPath);
+                            this.BeginInvoke(addlog, new Object[] { $"已清理临时文件: {tempFile}", LogLevel.INFO });
+                        }
+                        catch (Exception ex)
+                        {
+                            this.BeginInvoke(addlog, new Object[] { $"无法删除临时文件 {tempFile}: {ex.Message}", LogLevel.WARNING });
+                        }
+                    }
+                }
+
+                // 等待系统释放资源
+                System.Threading.Thread.Sleep(1000);
+
+                this.BeginInvoke(addlog, new Object[] { "死锁清理完成", LogLevel.INFO });
+            }
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"死锁清理过程中发生错误: {ex.Message}", LogLevel.ERROR });
+            }
+        }
+
+        /// <summary>
+        /// 清理遗留的临时文件
+        /// </summary>
+        private void CleanupLegacyTempFiles()
+        {
+            try
+            {
+                string currentDir = Directory.GetCurrentDirectory();
+
+                // 查找并清理可能的锁文件
+                string[] lockPatterns = { "*.lock", "*.tmp" };
+                foreach (string pattern in lockPatterns)
+                {
+                    try
+                    {
+                        string[] lockFiles = Directory.GetFiles(currentDir, pattern);
+                        foreach (string lockFile in lockFiles)
+                        {
+                            // 检查文件修改时间，如果超过1小时就删除
+                            FileInfo fi = new FileInfo(lockFile);
+                            if (DateTime.Now - fi.LastWriteTime > TimeSpan.FromHours(1))
+                            {
+                                try
+                                {
+                                    File.Delete(lockFile);
+                                    System.Diagnostics.Debug.WriteLine($"清理了过期的锁文件: {lockFile}");
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         private void buttonSetting_Click(object sender, EventArgs e)
@@ -575,22 +776,15 @@ namespace varManager
             installStatusTableAdapter.DeleteAll();
             this.varManagerDataSet.installStatus.Clear();
             this.varManagerDataSet.installStatus.AcceptChanges();
-            
-            bool mutexAcquired = false;
+
+            if (!mutex.WaitOne(TimeSpan.FromMinutes(2)))
+            {
+                this.BeginInvoke(addlog, new Object[] { "Failed to acquire mutex lock in UpdateVarsInstalled", LogLevel.ERROR });
+                return;
+            }
+
             try
             {
-                try
-                {
-                    mutex.WaitOne();
-                    mutexAcquired = true;
-                }
-                catch (AbandonedMutexException ex)
-                {
-                    // Mutex was abandoned by another thread, but we still own it now
-                    mutexAcquired = true;
-                    this.BeginInvoke(addlog, new Object[] { $"Mutex was abandoned in UpdateVarsInstalled: {ex.Message}", LogLevel.WARNING });
-                }
-                
                 foreach (string varfile in GetInstalledVars().Values)
                 {
                     string varName = Path.GetFileNameWithoutExtension(varfile);
@@ -604,15 +798,15 @@ namespace varManager
                 installStatusTableAdapter.Update(varManagerDataSet.installStatus);
                 this.varManagerDataSet.installStatus.AcceptChanges();
             }
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"Error in UpdateVarsInstalled: {ex.Message}", LogLevel.ERROR });
+            }
             finally
             {
-                if (mutexAcquired)
-                {
-                    mutex.ReleaseMutex();
-                }
+                mutex.ReleaseMutex();
             }
-            
-            // TODO: 这行代码将数据加载到表"varManagerDataSet1.varsView"中。您可以根据需要移动或删除它。
+            // TODO: 这行代码将数据加载到表“varManagerDataSet1.varsView”中。您可以根据需要移动或删除它。
 
             //varsViewBindingSource.ResetBindings(true);
             InvokeUpdateVarsViewDataGridView invokeUpdateVarsViewDataGridView = new InvokeUpdateVarsViewDataGridView(UpdateVarsViewDataGridView);
@@ -625,19 +819,33 @@ namespace varManager
       
         private void Form1_Load(object sender, EventArgs e)
         {
-            this.Text = "VarManager  v" + Assembly.GetEntryAssembly().GetName().Version.ToString();
-            if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
+            try
             {
-                OpenSetting();
+                // 启动时检测并清理可能的死锁情况
+                CheckAndCleanupDeadlock();
+                this.Text = "VarManager  v" + Assembly.GetEntryAssembly().GetName().Version.ToString();
+                if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
+                {
+                    OpenSetting();
+                }
+                if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
+                {
+                    this.Close();
+                    return;
+                }
+                // TODO: 这行代码将数据加载到表"varManagerDataSet.installStatus"中。您可以根据需要移动或删除它。
+                //this.installStatusTableAdapter.DeleteAll();
+
+                // 安全地初始化互斥锁
+                mutex = new System.Threading.Mutex(false); // false表示调用线程不拥有互斥锁
             }
-            if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
+            catch (Exception ex)
             {
+                MessageBox.Show($"初始化失败: {ex.Message}\n\n详细信息: {ex.ToString()}",
+                               "启动错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 this.Close();
                 return;
             }
-            // TODO: 这行代码将数据加载到表“varManagerDataSet.installStatus”中。您可以根据需要移动或删除它。
-            //this.installStatusTableAdapter.DeleteAll();
-            mutex = new System.Threading.Mutex();
             
             backgroundWorkerInstall.RunWorkerAsync("FillDataTables");
             //
@@ -780,31 +988,24 @@ namespace varManager
             }
             varsViewDataGridView.SelectionChanged += new System.EventHandler(this.varsDataGridView_SelectionChanged);
 
-            bool mutexAcquired = false;
+            if (!mutex.WaitOne(TimeSpan.FromMinutes(1)))
+            {
+                this.BeginInvoke(addlog, new Object[] { "Failed to acquire mutex lock in UpdateVarsViewDataGridView", LogLevel.ERROR });
+                return;
+            }
+
             try
             {
-                try
-                {
-                    mutex.WaitOne();
-                    mutexAcquired = true;
-                }
-                catch (AbandonedMutexException ex)
-                {
-                    // Mutex was abandoned by another thread, but we still own it now
-                    mutexAcquired = true;
-                    this.BeginInvoke(addlog, new Object[] { $"Mutex was abandoned in UpdateVarsViewDataGridView: {ex.Message}", LogLevel.WARNING });
-                }
-                
                 UpdatePreviewPics();
+            }
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"Error in UpdatePreviewPics: {ex.Message}", LogLevel.ERROR });
             }
             finally
             {
-                if (mutexAcquired)
-                {
-                    mutex.ReleaseMutex();
-                }
+                mutex.ReleaseMutex();
             }
-            
             tableLayoutPanelPreview.Visible = false;
         }
 
@@ -1335,21 +1536,15 @@ namespace varManager
 
         private void backgroundWorkerInstall_DoWork(object sender, DoWorkEventArgs e)
         {
-            bool mutexAcquired = false;
+            // 使用超时机制避免无限等待
+            if (!mutex.WaitOne(TimeSpan.FromMinutes(5)))
+            {
+                this.BeginInvoke(addlog, new Object[] { "Failed to acquire mutex lock within timeout", LogLevel.ERROR });
+                return;
+            }
+
             try
             {
-                try
-                {
-                    mutex.WaitOne();
-                    mutexAcquired = true;
-                }
-                catch (AbandonedMutexException ex)
-                {
-                    // Mutex was abandoned by another thread, but we still own it now
-                    mutexAcquired = true;
-                    this.BeginInvoke(addlog, new Object[] { $"Mutex was abandoned in backgroundWorkerInstall_DoWork: {ex.Message}", LogLevel.WARNING });
-                }
-                
                 if ((string)e.Argument == "FillDataTables")
                 {
                     /*
@@ -1364,7 +1559,7 @@ namespace varManager
                     thread3.Join();
                     */
                     FillDataTables();
-                } 
+                }
                 if ((string)e.Argument == "UpdDB")
                 {
                     TidyVars();
@@ -1390,7 +1585,7 @@ namespace varManager
                 if ((string)e.Argument == "rebuildLink")
                 {
                     FixRebuildLink();
-                } 
+                }
                 if ((string)e.Argument == "fixPreview")
                 {
                     FixPreview();
@@ -1432,12 +1627,14 @@ namespace varManager
                     OldVersionVars();
                 }
             }
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"Background worker error: {ex.Message}", LogLevel.ERROR });
+            }
             finally
             {
-                if (mutexAcquired)
-                {
-                    mutex.ReleaseMutex();
-                }
+                // 确保互斥锁总是被释放
+                mutex.ReleaseMutex();
             }
         }
 
