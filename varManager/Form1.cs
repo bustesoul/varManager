@@ -46,9 +46,17 @@ namespace varManager
         {
             InitializeComponent();
             addlog = new InvokeAddLoglist(UpdateAddLoglist);
+            
+            // 记录应用程序启动开始
+            this.BeginInvoke(addlog, new Object[] { "Application constructor started", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { $"VarManager version: {Assembly.GetEntryAssembly().GetName().Version}", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { "InitializeComponent completed", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { "Log delegate initialized", LogLevel.INFO });
 
             // 添加Form关闭事件处理，确保互斥锁被正确释放
             this.FormClosing += Form1_FormClosing;
+            this.BeginInvoke(addlog, new Object[] { "Form closing event handler registered", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { "Form1 constructor completed successfully", LogLevel.INFO });
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
@@ -96,32 +104,50 @@ namespace varManager
         /// </summary>
         private void CheckAndCleanupDeadlock()
         {
+            this.BeginInvoke(addlog, new Object[] { "Starting deadlock detection and cleanup", LogLevel.INFO });
+            
             try
             {
                 // 检查临时文件，如果存在可能表示上次异常退出
                 string currentDir = Directory.GetCurrentDirectory();
+                this.BeginInvoke(addlog, new Object[] { $"Current directory: {currentDir}", LogLevel.INFO });
+                
                 string lockIndicator = Path.Combine(currentDir, "varsForInstall.txt");
+                this.BeginInvoke(addlog, new Object[] { $"Checking lock indicator file: {lockIndicator}", LogLevel.INFO });
 
                 // 尝试获取一个测试互斥锁来检测死锁
+                this.BeginInvoke(addlog, new Object[] { "Creating test mutex for deadlock detection", LogLevel.INFO });
                 System.Threading.Mutex testMutex = null;
                 bool mutexCreated = false;
 
                 try
                 {
                     testMutex = new System.Threading.Mutex(true, "VarManagerDeadlockTest", out mutexCreated);
+                    this.BeginInvoke(addlog, new Object[] { $"Test mutex created successfully, mutexCreated: {mutexCreated}", LogLevel.INFO });
 
                     if (!mutexCreated)
                     {
+                        this.BeginInvoke(addlog, new Object[] { "Mutex already exists, checking for deadlock", LogLevel.WARNING });
                         // 如果无法创建互斥锁，可能存在死锁
                         if (!testMutex.WaitOne(1000)) // 等待1秒
                         {
+                            this.BeginInvoke(addlog, new Object[] { "Deadlock detected - mutex wait timeout", LogLevel.ERROR });
                             ShowDeadlockWarning();
                         }
+                        else
+                        {
+                            this.BeginInvoke(addlog, new Object[] { "Mutex acquired successfully, no deadlock detected", LogLevel.INFO });
+                        }
+                    }
+                    else
+                    {
+                        this.BeginInvoke(addlog, new Object[] { "Test mutex created as new instance, no existing deadlock", LogLevel.INFO });
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     // 互斥锁操作失败，可能存在问题
+                    this.BeginInvoke(addlog, new Object[] { $"Mutex operation failed: {ex.Message}", LogLevel.ERROR });
                     ShowDeadlockWarning();
                 }
                 finally
@@ -131,21 +157,33 @@ namespace varManager
                         try
                         {
                             if (mutexCreated)
+                            {
                                 testMutex.ReleaseMutex();
+                                this.BeginInvoke(addlog, new Object[] { "Test mutex released successfully", LogLevel.INFO });
+                            }
                             testMutex.Dispose();
+                            this.BeginInvoke(addlog, new Object[] { "Test mutex disposed", LogLevel.INFO });
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            this.BeginInvoke(addlog, new Object[] { $"Error disposing test mutex: {ex.Message}", LogLevel.WARNING });
+                        }
                     }
                 }
 
                 // 清理可能遗留的临时文件
+                this.BeginInvoke(addlog, new Object[] { "Starting cleanup of legacy temp files", LogLevel.INFO });
                 CleanupLegacyTempFiles();
+                this.BeginInvoke(addlog, new Object[] { "Legacy temp files cleanup completed", LogLevel.INFO });
             }
             catch (Exception ex)
             {
                 // 死锁检测失败，但不影响应用程序启动
+                this.BeginInvoke(addlog, new Object[] { $"Deadlock detection failed: {ex.Message}", LogLevel.ERROR });
                 System.Diagnostics.Debug.WriteLine($"Deadlock detection failed: {ex.Message}");
             }
+            
+            this.BeginInvoke(addlog, new Object[] { "Deadlock detection and cleanup process completed", LogLevel.INFO });
         }
 
         /// <summary>
@@ -819,128 +857,240 @@ namespace varManager
       
         private void Form1_Load(object sender, EventArgs e)
         {
+            this.BeginInvoke(addlog, new Object[] { "=== Form1_Load started ===", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { "Entering Form1_Load event handler", LogLevel.INFO });
+            
             try
             {
+                this.BeginInvoke(addlog, new Object[] { "Starting deadlock check and cleanup", LogLevel.INFO });
                 // 启动时检测并清理可能的死锁情况
                 CheckAndCleanupDeadlock();
+                this.BeginInvoke(addlog, new Object[] { "Deadlock check and cleanup completed", LogLevel.INFO });
+                
+                this.BeginInvoke(addlog, new Object[] { "Setting window title", LogLevel.INFO });
                 this.Text = "VarManager  v" + Assembly.GetEntryAssembly().GetName().Version.ToString();
-                if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
+                
+                this.BeginInvoke(addlog, new Object[] { "Starting configuration validation", LogLevel.INFO });
+                this.BeginInvoke(addlog, new Object[] { $"VaM path from settings: {Settings.Default.vampath}", LogLevel.INFO });
+                string vamExePath = Path.Combine(Settings.Default.vampath, "VaM.exe");
+                this.BeginInvoke(addlog, new Object[] { $"Checking VaM.exe at: {vamExePath}", LogLevel.INFO });
+                
+                if (!File.Exists(vamExePath))
                 {
+                    this.BeginInvoke(addlog, new Object[] { "VaM.exe not found, opening settings", LogLevel.WARNING });
                     OpenSetting();
                 }
-                if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
+                
+                // 再次检查VaM.exe是否存在
+                if (!File.Exists(vamExePath))
                 {
+                    this.BeginInvoke(addlog, new Object[] { "VaM.exe still not found after settings, closing application", LogLevel.ERROR });
                     this.Close();
                     return;
                 }
+                
+                this.BeginInvoke(addlog, new Object[] { "VaM.exe validation passed", LogLevel.INFO });
                 // TODO: 这行代码将数据加载到表"varManagerDataSet.installStatus"中。您可以根据需要移动或删除它。
                 //this.installStatusTableAdapter.DeleteAll();
 
                 // 安全地初始化互斥锁
+                this.BeginInvoke(addlog, new Object[] { "Initializing main application mutex", LogLevel.INFO });
                 mutex = new System.Threading.Mutex(false); // false表示调用线程不拥有互斥锁
+                this.BeginInvoke(addlog, new Object[] { "Main application mutex initialized successfully", LogLevel.INFO });
             }
             catch (Exception ex)
             {
+                this.BeginInvoke(addlog, new Object[] { $"Critical initialization error: {ex.Message}", LogLevel.FATAL });
                 MessageBox.Show($"初始化失败: {ex.Message}\n\n详细信息: {ex.ToString()}",
                                "启动错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 this.Close();
                 return;
             }
             
+            this.BeginInvoke(addlog, new Object[] { "Starting background worker for data table filling", LogLevel.INFO });
             backgroundWorkerInstall.RunWorkerAsync("FillDataTables");
-            //
+            
+            this.BeginInvoke(addlog, new Object[] { "Starting path validation and setup", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { $"Vars path from settings: {Settings.Default.varspath}", LogLevel.INFO });
             string varspath = new DirectoryInfo(Settings.Default.varspath).FullName.ToLower();
+            this.BeginInvoke(addlog, new Object[] { $"Normalized vars path: {varspath}", LogLevel.INFO });
+            
             string packpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, "AddonPackages")).FullName;
+            this.BeginInvoke(addlog, new Object[] { $"AddonPackages path: {packpath}", LogLevel.INFO });
 
             string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
+            this.BeginInvoke(addlog, new Object[] { $"AddonPackages switch path: {packsSwitchpath}", LogLevel.INFO });
+            
             if (varspath == packpath)
             {
+                this.BeginInvoke(addlog, new Object[] { "ERROR: Vars path cannot be same as AddonPackages path", LogLevel.ERROR });
                 MessageBox.Show("Vars Path can't be {VamInstallDir}\\AddonPackages");
                 OpenSetting();
             }
+            else
+            {
+                this.BeginInvoke(addlog, new Object[] { "Path validation passed - vars path is different from AddonPackages", LogLevel.INFO });
+            }
+            
+            this.BeginInvoke(addlog, new Object[] { "Setting preview type combo box", LogLevel.INFO });
             comboBoxPreviewType.SelectedIndex = 0;
            
 
 
+            this.BeginInvoke(addlog, new Object[] { "Creating AddonPackages switch directory", LogLevel.INFO });
             DirectoryInfo dipacksswitch = Directory.CreateDirectory(packsSwitchpath);
+            this.BeginInvoke(addlog, new Object[] { $"Switch directory created/verified: {dipacksswitch.FullName}", LogLevel.INFO });
+            
+            this.BeginInvoke(addlog, new Object[] { "Scanning existing switch directories", LogLevel.INFO });
             DirectoryInfo[] packswitchdirs = dipacksswitch.GetDirectories("*", SearchOption.TopDirectoryOnly);
             List<string> packnames = new List<string>();
             foreach (DirectoryInfo dipack in packswitchdirs)
             {
                 packnames.Add(dipack.Name);
+                this.BeginInvoke(addlog, new Object[] { $"Found switch directory: {dipack.Name}", LogLevel.INFO });
             }
+            
             if (packnames.IndexOf("default") == -1)
             {
+                this.BeginInvoke(addlog, new Object[] { "Default switch directory not found, creating it", LogLevel.INFO });
                 Directory.CreateDirectory(Path.Combine(packsSwitchpath, "default"));
                 packnames.Add("default");
+                this.BeginInvoke(addlog, new Object[] { "Default switch directory created", LogLevel.INFO });
             }
+            else
+            {
+                this.BeginInvoke(addlog, new Object[] { "Default switch directory already exists", LogLevel.INFO });
+            }
+            
+            this.BeginInvoke(addlog, new Object[] { "Populating switch combo box", LogLevel.INFO });
             comboBoxPacksSwitch.Items.Add("default");
             foreach (string packname in packnames)
             {
                 if (packname != "default")
+                {
                     comboBoxPacksSwitch.Items.Add(packname);
+                    this.BeginInvoke(addlog, new Object[] { $"Added switch option: {packname}", LogLevel.INFO });
+                }
             }
 
+            this.BeginInvoke(addlog, new Object[] { "Starting symbolic link setup for AddonPackages", LogLevel.INFO });
             DirectoryInfo dipackpath = new DirectoryInfo(packpath);
+            this.BeginInvoke(addlog, new Object[] { $"Checking AddonPackages directory: {packpath}", LogLevel.INFO });
 
             if (dipackpath.Exists)
             {
+                this.BeginInvoke(addlog, new Object[] { "AddonPackages directory exists", LogLevel.INFO });
                 if (!dipackpath.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 {
+                    this.BeginInvoke(addlog, new Object[] { "AddonPackages is a real directory (not symlink), moving to default switch", LogLevel.INFO });
                     Comm.DirectoryMoveAll(packpath, Path.Combine(packsSwitchpath, "default"));
+                    this.BeginInvoke(addlog, new Object[] { "AddonPackages content moved to default switch", LogLevel.INFO });
+                }
+                else
+                {
+                    this.BeginInvoke(addlog, new Object[] { "AddonPackages is already a symbolic link", LogLevel.INFO });
                 }
             }
+            else
+            {
+                this.BeginInvoke(addlog, new Object[] { "AddonPackages directory does not exist", LogLevel.INFO });
+            }
+            
             dipackpath = new DirectoryInfo(packpath);
             if (dipackpath.Exists)
             {
                 if (!dipackpath.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 {
-                    dipackpath.MoveTo(Path.Combine(Settings.Default.vampath, $"AddonPackages_{DateTime.Now.ToString("yyyyMMddHHmmss")}"));
+                    string backupPath = Path.Combine(Settings.Default.vampath, $"AddonPackages_{DateTime.Now.ToString("yyyyMMddHHmmss")}");
+                    this.BeginInvoke(addlog, new Object[] { $"Moving existing AddonPackages to backup: {backupPath}", LogLevel.INFO });
+                    dipackpath.MoveTo(backupPath);
+                    this.BeginInvoke(addlog, new Object[] { "AddonPackages moved to backup successfully", LogLevel.INFO });
                 }
-
             }
+            
             dipackpath = new DirectoryInfo(packpath);
             if (!dipackpath.Exists)
             {
+                this.BeginInvoke(addlog, new Object[] { "Creating symbolic link for AddonPackages to default switch", LogLevel.INFO });
                 Comm.CreateSymbolicLink(packpath, Path.Combine(packsSwitchpath, "default"), Comm.SYMBOLIC_LINK_FLAG.Directory);
+                this.BeginInvoke(addlog, new Object[] { "Symbolic link created successfully", LogLevel.INFO });
+            }
+            else
+            {
+                this.BeginInvoke(addlog, new Object[] { "AddonPackages directory already exists, skipping symbolic link creation", LogLevel.INFO });
             }
 
             try
             {
+                this.BeginInvoke(addlog, new Object[] { "Verifying symbolic link target", LogLevel.INFO });
                 DirectoryInfo diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
+                this.BeginInvoke(addlog, new Object[] { $"Symbolic link points to: {diswitch.FullName}", LogLevel.INFO });
+                
                 if (!diswitch.Exists)
                 {
+                    this.BeginInvoke(addlog, new Object[] { "Symbolic link target does not exist, recreating link", LogLevel.WARNING });
                     dipackpath.Delete();
                     Comm.CreateSymbolicLink(packpath, Path.Combine(packsSwitchpath, "default"), Comm.SYMBOLIC_LINK_FLAG.Directory);
+                    this.BeginInvoke(addlog, new Object[] { "Symbolic link recreated to default switch", LogLevel.INFO });
                 }
+                else
+                {
+                    this.BeginInvoke(addlog, new Object[] { "Symbolic link target exists and is valid", LogLevel.INFO });
+                }
+                
                 diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
+                this.BeginInvoke(addlog, new Object[] { $"Current switch name: {diswitch.Name}", LogLevel.INFO });
+                
                 if (comboBoxPacksSwitch.Items.IndexOf(diswitch.Name) >= 0)
                 {
                     comboBoxPacksSwitch.SelectedItem = diswitch.Name;
+                    this.BeginInvoke(addlog, new Object[] { $"Switch combo box set to: {diswitch.Name}", LogLevel.INFO });
+                }
+                else
+                {
+                    this.BeginInvoke(addlog, new Object[] { $"Switch '{diswitch.Name}' not found in combo box items", LogLevel.WARNING });
                 }
             }
             catch (Exception ex)
             {
-                this.BeginInvoke(addlog, new Object[] { $"Warning: {ex.Message}", LogLevel.INFO });
+                this.BeginInvoke(addlog, new Object[] { $"Error during symbolic link verification: {ex.Message}", LogLevel.WARNING });
             }
 
+            this.BeginInvoke(addlog, new Object[] { "=== Starting UpdateVarsInstalled ===", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { "Calling UpdateVarsInstalled to scan and update vars database", LogLevel.INFO });
             UpdateVarsInstalled();
+            this.BeginInvoke(addlog, new Object[] { "UpdateVarsInstalled completed successfully", LogLevel.INFO });
+            
+            this.BeginInvoke(addlog, new Object[] { "Populating creator combo box", LogLevel.INFO });
             comboBoxCreater.Items.Add("____ALL");
             foreach (var row in this.varManagerDataSet.vars.GroupBy(g => g.creatorName))
             {
                 comboBoxCreater.Items.Add(row.Key);
             }
             comboBoxCreater.SelectedIndex = 0;
+            this.BeginInvoke(addlog, new Object[] { $"Creator combo box populated with {comboBoxCreater.Items.Count} items", LogLevel.INFO });
             //  FillDataTables();
             //TimeSpan ts6 = DateTime.Now - dtstart;
             //dtstart = DateTime.Now;
             //MessageBox.Show($"{ts1.TotalSeconds},{ts2.TotalSeconds},{ts3.TotalSeconds},{ts4.TotalSeconds},{ts5.TotalSeconds},{ts6.TotalSeconds}");
+            
+            this.BeginInvoke(addlog, new Object[] { "Initializing DataGridView filter manager", LogLevel.INFO });
             dgvFilterManager = new DgvFilterManager(varsViewDataGridView);
+            this.BeginInvoke(addlog, new Object[] { "DataGridView filter manager initialized", LogLevel.INFO });
+            
+            this.BeginInvoke(addlog, new Object[] { "Checking for unorganized var files in AddonPackages", LogLevel.INFO });
             if (ExistAddonpackagesVar())
             {
+                this.BeginInvoke(addlog, new Object[] { "Found unorganized var files in AddonPackages - user needs to run UPD_DB", LogLevel.WARNING });
                 MessageBox.Show("There are unorganized var files in the current switch, please run UPD_DB first");
                 buttonUpdDB.Focus();
             }
+            else
+            {
+                this.BeginInvoke(addlog, new Object[] { "No unorganized var files found in AddonPackages", LogLevel.INFO });
+            }
+            
+            this.BeginInvoke(addlog, new Object[] { "=== Form1_Load completed successfully ===", LogLevel.INFO });
         }
         
         private void FillDataTables()
