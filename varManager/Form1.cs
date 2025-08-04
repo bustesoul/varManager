@@ -46,17 +46,9 @@ namespace varManager
         {
             InitializeComponent();
             addlog = new InvokeAddLoglist(UpdateAddLoglist);
-            
-            // 记录应用程序启动开始
-            this.BeginInvoke(addlog, new Object[] { "Application constructor started", LogLevel.INFO });
-            this.BeginInvoke(addlog, new Object[] { $"VarManager version: {Assembly.GetEntryAssembly().GetName().Version}", LogLevel.INFO });
-            this.BeginInvoke(addlog, new Object[] { "InitializeComponent completed", LogLevel.INFO });
-            this.BeginInvoke(addlog, new Object[] { "Log delegate initialized", LogLevel.INFO });
 
             // 添加Form关闭事件处理，确保互斥锁被正确释放
             this.FormClosing += Form1_FormClosing;
-            this.BeginInvoke(addlog, new Object[] { "Form closing event handler registered", LogLevel.INFO });
-            this.BeginInvoke(addlog, new Object[] { "Form1 constructor completed successfully", LogLevel.INFO });
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
@@ -893,7 +885,7 @@ namespace varManager
                 // TODO: 这行代码将数据加载到表"varManagerDataSet.installStatus"中。您可以根据需要移动或删除它。
                 //this.installStatusTableAdapter.DeleteAll();
 
-                // 安全地初始化互斥锁
+                // 安全地初始化互斥锁，不让UI线程持有
                 this.BeginInvoke(addlog, new Object[] { "Initializing main application mutex", LogLevel.INFO });
                 mutex = new System.Threading.Mutex(false); // false表示调用线程不拥有互斥锁
                 this.BeginInvoke(addlog, new Object[] { "Main application mutex initialized successfully", LogLevel.INFO });
