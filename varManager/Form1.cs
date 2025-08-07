@@ -623,6 +623,16 @@ namespace varManager
             //this.installStatusTableAdapter.DeleteAll();
             mutex = new System.Threading.Mutex();
             
+            // Set the sort after data source initialization to avoid .NET 9 issues
+            try
+            {
+                if (varsViewBindingSource.DataSource != null)
+                {
+                    varsViewBindingSource.Sort = "metaDate Desc";
+                }
+            }
+            catch { /* Ignore sorting errors during initialization */ }
+            
             backgroundWorkerInstall.RunWorkerAsync("FillDataTables");
             //
             string varspath = new DirectoryInfo(Settings.Default.varspath).FullName.ToLower();
@@ -1918,6 +1928,8 @@ namespace varManager
 
         private void UpdatePreviewPics()
         {
+            if (IsDisposed) return;
+            
             previewpics.Clear();
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
             {
@@ -1954,19 +1966,37 @@ namespace varManager
 
         private void PreviewInitType()
         {
-            mut.WaitOne();
-            previewpicsfilter = previewpics;
-            if (checkBoxPreviewTypeLoadable.CheckState == CheckState.Checked)
-                previewpicsfilter = previewpicsfilter.Where(q => q.IsPreset || q.Atomtype == "scenes").ToList();
-            string previewtype = "all";
-            if (new string[8] { "scenes", "looks", "clothing", "hairstyle", "assets", "morphs", "pose", "skin" }.Contains(comboBoxPreviewType.Text))
-                previewtype = comboBoxPreviewType.Text;
-            if (previewtype != "all")
-                previewpicsfilter = previewpicsfilter.Where(q => q.Atomtype == previewtype).ToList();
-            mut.ReleaseMutex();
-            listViewPreviewPics.VirtualListSize = previewpicsfilter.Count;
-            listViewPreviewPics.Invalidate();
-            toolStripLabelPreviewCountItem.Text = "/" + previewpicsfilter.Count.ToString();
+            if (IsDisposed || mut == null) return;
+            
+            try
+            {
+                mut.WaitOne();
+                previewpicsfilter = previewpics;
+                if (checkBoxPreviewTypeLoadable.CheckState == CheckState.Checked)
+                    previewpicsfilter = previewpicsfilter.Where(q => q.IsPreset || q.Atomtype == "scenes").ToList();
+                string previewtype = "all";
+                if (new string[8] { "scenes", "looks", "clothing", "hairstyle", "assets", "morphs", "pose", "skin" }.Contains(comboBoxPreviewType.Text))
+                    previewtype = comboBoxPreviewType.Text;
+                if (previewtype != "all")
+                    previewpicsfilter = previewpicsfilter.Where(q => q.Atomtype == previewtype).ToList();
+                mut.ReleaseMutex();
+                
+                if (!IsDisposed)
+                {
+                    listViewPreviewPics.VirtualListSize = previewpicsfilter.Count;
+                    listViewPreviewPics.Invalidate();
+                    toolStripLabelPreviewCountItem.Text = "/" + previewpicsfilter.Count.ToString();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+            catch (Exception)
+            {
+                try { mut.ReleaseMutex(); } catch { }
+                throw;
+            }
             /*
             toolStripComboBoxPreviewPage.SelectedIndexChanged -= new System.EventHandler(this.toolStripComboBoxPreviewPage_SelectedIndexChanged); toolStripComboBoxPreviewPage.Items.Clear();
             previewPages = (previewpicsfilter.Count + maxpicxPerpage - 1) / maxpicxPerpage;
@@ -2642,9 +2672,11 @@ namespace varManager
             string logfile = Path.Combine(appdataPath, "MeshedVR\\VaM\\output_log.txt");
             if (File.Exists(logfile))
             {
-                var metajsonsteam = new StreamReader(logfile);
-                string logstring = metajsonsteam.ReadToEnd();
-                metajsonsteam.Close();
+                string logstring;
+                using (var metajsonsteam = new StreamReader(logfile))
+                {
+                    logstring = metajsonsteam.ReadToEnd();
+                }
                 System.Diagnostics.Process.Start(logfile);
                 List<string> dependencies = new List<string>();
                 try
@@ -2902,9 +2934,10 @@ namespace varManager
                 Directory.CreateDirectory(Path.Combine(Settings.Default.vampath, "Custom\\PluginData\\feelfar"));
                 JSONClass jc = new JSONClass();
                 jc["rescan"] = "true";
-                StreamWriter swLoad = new StreamWriter(loadscenefile);
-                swLoad.Write(jc.ToString());
-                swLoad.Close();
+                using (StreamWriter swLoad = new StreamWriter(loadscenefile))
+                {
+                    swLoad.Write(jc.ToString());
+                }
             }
         }
 

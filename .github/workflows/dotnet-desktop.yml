@@ -33,7 +33,9 @@ jobs:
       - name: Install .NET Core
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 6.0.x
+          dotnet-version: |
+            6.0.x
+            9.0.x
 
       # Add MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
       - name: Setup MSBuild.exe
@@ -76,12 +78,12 @@ jobs:
 
       - name: Copy vam_downloader to plugin directory
         run: |
-          mkdir -p varManager/bin/${{ matrix.configuration }}/net6.0-windows/win-x64/publish/plugin
-          cp ../vam_downloader/target/x86_64-pc-windows-msvc/release/vam_downloader.exe varManager/bin/${{ matrix.configuration }}/net6.0-windows/win-x64/publish/plugin/
+          mkdir -p varManager/bin/${{ matrix.configuration }}/net9.0-windows/win-x64/publish/plugin
+          cp ../vam_downloader/target/x86_64-pc-windows-msvc/release/vam_downloader.exe varManager/bin/${{ matrix.configuration }}/net9.0-windows/win-x64/publish/plugin/
 
       # Upload the build artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: varManager_${{ env.Project_Version }}
-          path: varManager/bin/${{ matrix.configuration }}/net6.0-windows/win-x64/publish
+          path: varManager/bin/${{ matrix.configuration }}/net9.0-windows/win-x64/publish

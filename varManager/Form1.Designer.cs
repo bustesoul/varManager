@@ -738,7 +738,7 @@ namespace varManager
             // 
             varsViewBindingSource.DataMember = "varsView";
             varsViewBindingSource.DataSource = varManagerDataSet;
-            varsViewBindingSource.Sort = "metaDate Desc";
+            // varsViewBindingSource.Sort = "metaDate Desc"; // Moved to Form1_Load to avoid .NET 9 initialization issues
             // 
             // varManagerDataSet
             // 
