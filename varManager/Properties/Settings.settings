@@ -11,10 +11,10 @@
     <Setting Name="varManagerConnectionString" Type="(Connection string)" Scope="Application">
       <DesignTimeValue Profile="(Default)">&lt;?xml version="1.0" encoding="utf-16"?&gt;
 &lt;SerializableConnectionString xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"&gt;
-  &lt;ConnectionString&gt;Provider=Microsoft.ACE.OLEDB.12.0;Data Source=|DataDirectory|\varManager.mdb&lt;/ConnectionString&gt;
-  &lt;ProviderName&gt;System.Data.OleDb&lt;/ProviderName&gt;
+  &lt;ConnectionString&gt;Data Source=|DataDirectory|\varManager.db&lt;/ConnectionString&gt;
+  &lt;ProviderName&gt;Microsoft.Data.Sqlite&lt;/ProviderName&gt;
 &lt;/SerializableConnectionString&gt;</DesignTimeValue>
-      <Value Profile="(Default)">Provider=Microsoft.ACE.OLEDB.12.0;Data Source=|DataDirectory|\varManager.mdb</Value>
+      <Value Profile="(Default)">Data Source=|DataDirectory|\varManager.db</Value>
     </Setting>
     <Setting Name="presetMorphs" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">True</Value>

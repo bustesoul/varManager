@@ -11,6 +11,8 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using varManager.Properties;
+using varManager.Data;
+using varManager.Models;
 
 namespace varManager
 {
@@ -19,6 +21,7 @@ namespace varManager
         private static string missingVarLinkDirName = "___MissingVarLink___";
         private List<string> missingVars;
         public Form1 form1;
+        private VarManagerContext dbContext;
         Dictionary<string, string> downloadUrls = new Dictionary<string, string>();
         Dictionary<string, string> downloadUrlsNoVersion = new Dictionary<string, string>();
         
@@ -29,6 +32,7 @@ namespace varManager
         public FormMissingVars()
         {
             InitializeComponent();
+            dbContext = new VarManagerContext();
         }
 
         public List<string> MissingVars { get => missingVars; set => missingVars = value; }
@@ -37,8 +41,7 @@ namespace varManager
         private void FormMissingVars_Load(object sender, EventArgs e)
         {
             Directory.CreateDirectory(Path.Combine(Settings.Default.vampath, "AddonPackages", missingVarLinkDirName));
-            // TODO: 这行代码将数据加载到表“varManagerDataSet.vars”中。您可以根据需要移动或删除它。
-            this.varsTableAdapter.Fill(this.varManagerDataSet.vars);
+            // Load data using EF Core instead of TableAdapter
             toolStripComboBoxIgnoreVersion.SelectedIndex = 0;
             FillMissVarGridView();
         }
@@ -294,9 +297,9 @@ namespace varManager
             }
 
             this.comboBoxCreater.SelectedIndexChanged -= new System.EventHandler(this.comboBoxCreater_SelectedIndexChanged);
-            var creators = this.varManagerDataSet.vars.GroupBy(g => g.creatorName);
+            var creators = dbContext.Vars.GroupBy(g => g.CreatorName);
             if (textBoxFilter.Text.Trim() != "")
-                creators = this.varManagerDataSet.vars.Where(q => q.varName.ToLower().IndexOf(textBoxFilter.Text.Trim().ToLower()) >= 0).GroupBy(g => g.creatorName);
+                creators = dbContext.Vars.Where(q => q.VarName.ToLower().IndexOf(textBoxFilter.Text.Trim().ToLower()) >= 0).GroupBy(g => g.CreatorName);
             string curcreator = comboBoxCreater.Text;
             comboBoxCreater.Items.Clear();
             comboBoxCreater.Items.Add("____ALL");
@@ -501,7 +504,7 @@ namespace varManager
 
                 if (!string.IsNullOrEmpty(destvarname))
                 {
-                    varManagerDataSet.varsRow varsrow = varManagerDataSet.vars.FindByvarName(destvarname);
+                    var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == destvarname);
                     if (missingvarname.Substring(missingvarname.LastIndexOf('.')) == ".latest")
                     {
                         missingvarname = missingvarname.Substring(0, missingvarname.LastIndexOf('.')) + destvarname.Substring(destvarname.LastIndexOf('.'));
@@ -509,7 +512,7 @@ namespace varManager
                     if (varsrow != null)
                     {
                         string missingvar = Path.Combine(Settings.Default.vampath, "AddonPackages", missingVarLinkDirName, missingvarname + ".var");
-                        string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.varPath, varsrow.varName + ".var");
+                        string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.VarPath!, varsrow.VarName + ".var");
                         Comm.CreateSymbolicLink(missingvar, destvarfile, Comm.SYMBOLIC_LINK_FLAG.File);
                         Comm.SetSymboLinkFileTime(missingvar, File.GetCreationTime(destvarfile), File.GetLastWriteTime(destvarfile));
                         //File.SetCreationTime(missingvar, File.GetCreationTime(destvarfile));
@@ -570,9 +573,9 @@ namespace varManager
             if (saveFileDialogSaveTxt.ShowDialog() == DialogResult.OK)
             {
                 List<string> varNames = new List<string>();
-                foreach (var varstatus in this.varManagerDataSet.installStatus)
+                foreach (var varstatus in dbContext.InstallStatuses.Where(i => i.Installed))
                 {
-                    if (varstatus.Installed) varNames.Add(varstatus.varName);
+                    varNames.Add(varstatus.VarName!);
                 }
                 File.WriteAllLines(saveFileDialogSaveTxt.FileName, varNames.ToArray());
             }

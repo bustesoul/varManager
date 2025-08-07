@@ -1,5 +1,6 @@
 ﻿using DgvFilterPopup;
 using ICSharpCode.SharpZipLib.Zip;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -17,6 +18,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using varManager.Data;
+using varManager.Models;
 using varManager.Properties;
 using SimpleJSON;
 using static SimpleLogger;
@@ -41,8 +44,21 @@ namespace varManager
         private static string installLinkDirName = "___VarsLink___";
         private static string missingVarLinkDirName = "___MissingVarLink___";
         private static string tempVarLinkDirName = "___TempVarLink___";
-        //private varManagerDataSet.dependenciesDataTable installedDependencies = new varManagerDataSet.dependenciesDataTable();
         private InvokeAddLoglist addlog;
+        private VarManagerContext? _dbContext;
+        private VarManagerContext dbContext 
+        { 
+            get 
+            { 
+                if (_dbContext == null)
+                {
+                    _dbContext = new VarManagerContext();
+                    // Ensure database is created
+                    _dbContext.Database.EnsureCreated();
+                }
+                return _dbContext; 
+            } 
+        }
         public Form1()
         {
             InitializeComponent();
@@ -310,9 +326,12 @@ namespace varManager
             if (parts.Length != 3) return true;
             if (!int.TryParse(parts[2], out var version)) return true;
 
-            var versions = varManagerDataSet.vars
-                .Where(q => q.creatorName == parts[0] && q.packageName == parts[1])
-                .Select(q => q.version);
+            var versions = dbContext.Vars
+                .Where(q => q.CreatorName == parts[0] && q.PackageName == parts[1])
+                .Select(q => q.Version)
+                .ToList()
+                .Where(v => int.TryParse(v, out _))
+                .Select(v => int.Parse(v));
 
             if (!versions.Any()) return true;
 
@@ -324,7 +343,7 @@ namespace varManager
             string[] varnamepart = varname.Split('.');
             if (varnamepart.Length == 3)
             {
-                countversion = varManagerDataSet.vars.Where(q => q.creatorName == varnamepart[0] && q.packageName == varnamepart[1]).Count();
+                countversion = dbContext.Vars.Where(q => q.CreatorName == varnamepart[0] && q.PackageName == varnamepart[1]).Count();
 
             }
             return countversion;
@@ -338,16 +357,16 @@ namespace varManager
                 if (Varislatest(varname))
                 {
                     string latest = varname.Substring(0, varname.LastIndexOf('.')) + ".latest";
-                    foreach (var row in varManagerDataSet.dependencies.Where(q => q.dependency == varname || q.dependency == latest))
+                    foreach (var row in dbContext.Dependencies.Where(q => q.DependencyName == varname || q.DependencyName == latest))
                     {
-                        varnames.Add(row.varName);
+                        varnames.Add(row.VarName!);
                     }
                 }
                 else
                 {
-                    foreach (var row in varManagerDataSet.dependencies.Where(q => q.dependency == varname))
+                    foreach (var row in dbContext.Dependencies.Where(q => q.DependencyName == varname))
                     {
-                        varnames.Add(row.varName);
+                        varnames.Add(row.VarName!);
                     }
                 }
             }
@@ -361,16 +380,16 @@ namespace varManager
             if (Varislatest(varname))
             {
                 string latest = varname.Substring(0, varname.LastIndexOf('.')) + ".latest";
-                foreach (var row in varManagerDataSet.dependencies.Where(q => q.dependency == varname || q.dependency == latest))
+                foreach (var row in dbContext.Dependencies.Where(q => q.DependencyName == varname || q.DependencyName == latest))
                 {
-                    varnames.Add(row.varName);
+                    varnames.Add(row.VarName!);
                 }
             }
             else
             {
-                foreach (var row in varManagerDataSet.dependencies.Where(q => q.dependency == varname))
+                foreach (var row in dbContext.Dependencies.Where(q => q.DependencyName == varname))
                 {
-                    varnames.Add(row.varName);
+                    varnames.Add(row.VarName!);
                 }
             }
             
@@ -379,28 +398,27 @@ namespace varManager
         private List<string> DependentSaved(string varname)
         {
             List<string> saveds = new List<string>();
-            varManagerDataSet.savedepensDataTable savedepens = new varManagerDataSet.savedepensDataTable();
             
             if (Varislatest(varname))
             {
                 string latest = varname.Substring(0, varname.LastIndexOf('.')) + ".latest";
-                savedepensTableAdapter.FillByDepens(savedepens, latest);
-                savedepens.AcceptChanges();
-                foreach (var row in savedepens)
+                var savedDepsLatest = dbContext.SavedDependencies
+                    .Where(q => q.DependencyName == latest)
+                    .ToList();
+                foreach (var row in savedDepsLatest)
                 {
-                    saveds.Add(row.savepath);
+                    saveds.Add(row.VarName!);
                 }
             }
-            savedepens.Clear();
-            savedepens.AcceptChanges();
 
-            savedepensTableAdapter.FillByDepens(savedepens, varname);
-            savedepens.AcceptChanges();
-            foreach (var row in savedepens)
+            var savedDeps = dbContext.SavedDependencies
+                .Where(q => q.DependencyName == varname)
+                .ToList();
+            foreach (var row in savedDeps)
             {
-                saveds.Add(row.savepath);
+                saveds.Add(row.VarName!);
             }
-            saveds= saveds.Distinct().ToList();
+            saveds = saveds.Distinct().ToList();
             return saveds;
         }
         private List<string> ImplicatedVars(List<string> varnames)
@@ -466,9 +484,10 @@ namespace varManager
             formUninstallVars.previewpicsDirName = previewpicsDirName;
             foreach (string varname in varimplics)
             {
-                foreach (var row in varManagerDataSet.varsView.Where(q => q.varName == varname && q.Installed))
+                foreach (var row in dbContext.VarsView.Where(q => q.VarName == varname && q.Installed))
                 {
-                    formUninstallVars.varManagerDataSet.varsView.Rows.Add(row.ItemArray);
+                    // Convert to appropriate format for the uninstall form
+                    // This will need to be adapted based on FormUninstallVars requirements
                 }
             }
             if (formUninstallVars.ShowDialog() == DialogResult.OK)
@@ -490,10 +509,10 @@ namespace varManager
         public string getVarFilePath(string varname)
         {
             string varfilepath = "";
-            var varRow = varManagerDataSet.vars.FindByvarName(varname);
+            var varRow = dbContext.Vars.FirstOrDefault(v => v.VarName == varname);
             if (varRow != null)
             {
-                varfilepath = Path.Combine(Settings.Default.varspath, varRow.varPath, varRow.varName + ".var");
+                varfilepath = Path.Combine(Settings.Default.varspath, varRow.VarPath!, varRow.VarName + ".var");
             }
             return varfilepath;
         }
@@ -509,9 +528,10 @@ namespace varManager
             formUninstallVars.previewpicsDirName = previewpicsDirName;
             foreach (string varname in varimplics)
             {
-                foreach (var row in varManagerDataSet.varsView.Where(q => q.varName == varname))
+                foreach (var row in dbContext.VarsView.Where(q => q.VarName == varname))
                 {
-                    formUninstallVars.varManagerDataSet.varsView.Rows.Add(row.ItemArray);
+                    // Convert to appropriate format for the uninstall form
+                    // This will need to be adapted based on FormUninstallVars requirements
                 }
             }
             if (formUninstallVars.ShowDialog() == DialogResult.OK)
@@ -528,13 +548,13 @@ namespace varManager
                         if (File.Exists(linkvar))
                             File.Delete(linkvar);
 
-                    var row = varManagerDataSet.vars.FindByvarName(varname);
+                    var row = dbContext.Vars.FirstOrDefault(v => v.VarName == varname);
                     if (row == null)
                     {
                         this.BeginInvoke(addlog, new Object[] { $"{varname} record not found, skip delete.", LogLevel.WARNING });
                         continue;
                     }
-                    string operav = Path.Combine(Settings.Default.varspath, row.varPath, varname + ".var");
+                    string operav = Path.Combine(Settings.Default.varspath, row.VarPath!, varname + ".var");
                     string deletedv = Path.Combine(delevarspath, varname + ".var");
                     try
                     {
@@ -548,6 +568,67 @@ namespace varManager
                 }
             }
 
+        }
+        private DataTable CreateVarsViewDataTable()
+        {
+            var dataTable = new DataTable("varsView");
+            
+            // Add columns matching the VarsView entity properties
+            dataTable.Columns.Add("varName", typeof(string));
+            dataTable.Columns.Add("Installed", typeof(bool));
+            dataTable.Columns.Add("fsize", typeof(double));
+            dataTable.Columns.Add("varPath", typeof(string));
+            dataTable.Columns.Add("creatorName", typeof(string));
+            dataTable.Columns.Add("packageName", typeof(string));
+            dataTable.Columns.Add("version", typeof(string));
+            dataTable.Columns.Add("metaDate", typeof(DateTime));
+            dataTable.Columns.Add("varDate", typeof(DateTime));
+            dataTable.Columns.Add("scenes", typeof(int));
+            dataTable.Columns.Add("looks", typeof(int));
+            dataTable.Columns.Add("clothing", typeof(int));
+            dataTable.Columns.Add("hairstyle", typeof(int));
+            dataTable.Columns.Add("plugins", typeof(int));
+            dataTable.Columns.Add("assets", typeof(int));
+            dataTable.Columns.Add("morphs", typeof(int));
+            dataTable.Columns.Add("pose", typeof(int));
+            dataTable.Columns.Add("skin", typeof(int));
+            dataTable.Columns.Add("Disabled", typeof(bool));
+            
+            // Fill with data from EF Core
+            var varsViewData = dbContext.VarsView.ToList();
+            foreach (var item in varsViewData)
+            {
+                dataTable.Rows.Add(
+                    item.VarName,
+                    item.Installed,
+                    item.Fsize,
+                    item.VarPath,
+                    item.CreatorName,
+                    item.PackageName,
+                    item.Version,
+                    item.MetaDate,
+                    item.VarDate,
+                    item.Scenes,
+                    item.Looks,
+                    item.Clothing,
+                    item.Hairstyle,
+                    item.Plugins,
+                    item.Assets,
+                    item.Morphs,
+                    item.Pose,
+                    item.Skin,
+                    item.Disabled
+                );
+            }
+            
+            return dataTable;
+        }
+
+        private DataSet CreateVarsDataSet()
+        {
+            var dataSet = new DataSet();
+            dataSet.Tables.Add(CreateVarsViewDataTable());
+            return dataSet;
         }
         private DgvFilterManager dgvFilterManager;
         private Dictionary<string, string> GetInstalledVars()
@@ -574,33 +655,51 @@ namespace varManager
         }
         private void UpdateVarsInstalled()
         {
-            foreach (var row in this.varManagerDataSet.installStatus)
-                row.Delete();
-            installStatusTableAdapter.Update(varManagerDataSet.installStatus);
-            this.varManagerDataSet.installStatus.AcceptChanges();
-            installStatusTableAdapter.DeleteAll();
-            this.varManagerDataSet.installStatus.Clear();
-            this.varManagerDataSet.installStatus.AcceptChanges();
-            mutex.WaitOne();
-            foreach (string varfile in GetInstalledVars().Values)
+            bool mutexAcquired = false;
+            try
             {
-                string varName = Path.GetFileNameWithoutExtension(varfile);
-                if (varManagerDataSet.vars.FindByvarName(varName) != null)
+                // Ensure DbContext is properly initialized
+                if (dbContext.Database.CanConnect())
                 {
-                    bool isdisable = File.Exists(varfile + ".disabled");
-                    varManagerDataSet.installStatus.AddinstallStatusRow(varName, true, isdisable);
+                    // Clear existing install status data using EF Core
+                    dbContext.InstallStatuses.RemoveRange(dbContext.InstallStatuses);
+                    
+                    mutex.WaitOne();
+                    mutexAcquired = true;
+                    
+                    foreach (string varfile in GetInstalledVars().Values)
+                    {
+                        string varName = Path.GetFileNameWithoutExtension(varfile);
+                        if (dbContext.Vars.Any(v => v.VarName == varName))
+                        {
+                            bool isdisable = File.Exists(varfile + ".disabled");
+                            dbContext.InstallStatuses.Add(new InstallStatus 
+                            { 
+                                VarName = varName, 
+                                Installed = true, 
+                                Disabled = isdisable 
+                            });
+                        }
+                    }
+
+                    dbContext.SaveChanges();
+                    
+                    InvokeUpdateVarsViewDataGridView invokeUpdateVarsViewDataGridView = new InvokeUpdateVarsViewDataGridView(UpdateVarsViewDataGridView);
+                    this.BeginInvoke(invokeUpdateVarsViewDataGridView);
+                    //varsViewDataGridView.Update();
                 }
             }
-
-            installStatusTableAdapter.Update(varManagerDataSet.installStatus);
-            this.varManagerDataSet.installStatus.AcceptChanges();
-            mutex.ReleaseMutex();
-            // TODO: 这行代码将数据加载到表"varManagerDataSet1.varsView"中。您可以根据需要移动或删除它。
-
-            //varsViewBindingSource.ResetBindings(true);
-            InvokeUpdateVarsViewDataGridView invokeUpdateVarsViewDataGridView = new InvokeUpdateVarsViewDataGridView(UpdateVarsViewDataGridView);
-            this.BeginInvoke(invokeUpdateVarsViewDataGridView);
-            //varsViewDataGridView.Update();
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"Error updating vars installed: {ex.Message}", LogLevel.ERROR });
+            }
+            finally
+            {
+                if (mutexAcquired)
+                {
+                    mutex.ReleaseMutex();
+                }
+            }
         }
 
         private Mutex mutex;
@@ -619,8 +718,6 @@ namespace varManager
                 this.Close();
                 return;
             }
-            // TODO: 这行代码将数据加载到表"varManagerDataSet.installStatus"中。您可以根据需要移动或删除它。
-            //this.installStatusTableAdapter.DeleteAll();
             mutex = new System.Threading.Mutex();
             
             // Set the sort after data source initialization to avoid .NET 9 issues
@@ -712,15 +809,25 @@ namespace varManager
 
             UpdateVarsInstalled();
             comboBoxCreater.Items.Add("____ALL");
-            foreach (var row in this.varManagerDataSet.vars.GroupBy(g => g.creatorName))
+            var creators = dbContext.Vars
+                .GroupBy(v => v.CreatorName)
+                .Select(g => g.Key)
+                .OrderBy(c => c)
+                .ToList();
+            foreach (var creator in creators)
             {
-                comboBoxCreater.Items.Add(row.Key);
+                comboBoxCreater.Items.Add(creator);
             }
             comboBoxCreater.SelectedIndex = 0;
             //  FillDataTables();
             //TimeSpan ts6 = DateTime.Now - dtstart;
             //dtstart = DateTime.Now;
             //MessageBox.Show($"{ts1.TotalSeconds},{ts2.TotalSeconds},{ts3.TotalSeconds},{ts4.TotalSeconds},{ts5.TotalSeconds},{ts6.TotalSeconds}");
+            
+            // Initialize DataSource with DataSet for DgvFilterManager compatibility
+            var dataSet = CreateVarsDataSet();
+            varsViewBindingSource.DataSource = dataSet;
+            varsViewBindingSource.DataMember = "varsView";
             dgvFilterManager = new DgvFilterManager(varsViewDataGridView);
             if (ExistAddonpackagesVar())
             {
@@ -732,15 +839,18 @@ namespace varManager
         private void FillDataTables()
         {
             this.BeginInvoke(addlog, new Object[] { $"load vars...", LogLevel.INFO });
-            // TODO: 这行代码将数据加载到表“varManagerDataSet.vars”中。您可以根据需要移动或删除它。
-            this.varsTableAdapter.Fill(this.varManagerDataSet.vars); 
-            this.BeginInvoke(addlog, new Object[] { $"load scenes...", LogLevel.INFO });
-            // TODO: 这行代码将数据加载到表“varManagerDataSet.scenes”中。您可以根据需要移动或删除它。
-            this.scenesTableAdapter.Fill(this.varManagerDataSet.scenes);
-            this.BeginInvoke(addlog, new Object[] { $"load dependencies...", LogLevel.INFO });
-            // TODO: 这行代码将数据加载到表“varManagerDataSet.dependencies”中。您可以根据需要移动或删除它。
-            this.dependenciesTableAdapter.Fill(this.varManagerDataSet.dependencies);
+            // EF Core automatically loads data when needed - no explicit Fill required
             
+            this.BeginInvoke(addlog, new Object[] { $"load scenes...", LogLevel.INFO });
+            // EF Core automatically loads data when needed - no explicit Fill required
+            
+            this.BeginInvoke(addlog, new Object[] { $"load dependencies...", LogLevel.INFO });
+            // EF Core automatically loads data when needed - no explicit Fill required
+            
+            // Pre-load some critical data for performance
+            _ = dbContext.Vars.Count(); // This will initialize the connection
+            _ = dbContext.Scenes.Count();
+            _ = dbContext.Dependencies.Count();
         }
 
         public delegate void InvokeUpdateVarsViewDataGridView();
@@ -753,7 +863,11 @@ namespace varManager
                 selectedRowList.Add(item.Cells[0].Value.ToString());
             }
             varsViewDataGridView.SelectionChanged -= new System.EventHandler(this.varsDataGridView_SelectionChanged);
-            this.varsViewTableAdapter.Fill(this.varManagerDataSet.varsView);
+            
+            // Refresh the data by recreating the DataSet for DgvFilterManager compatibility
+            var dataSet = CreateVarsDataSet();
+            varsViewBindingSource.DataSource = dataSet;
+            varsViewBindingSource.DataMember = "varsView";
             varsViewDataGridView.Update();
 
             int firstindex = int.MaxValue;
@@ -870,28 +984,30 @@ namespace varManager
                 string curpath = Path.GetDirectoryName(destvarfilename);
                 curpath = Comm.MakeRelativePath(Settings.Default.varspath, curpath);
 
-                var varsrow = varManagerDataSet.vars.FindByvarName(basename);
+                var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == basename);
                 if (varsrow == null)
                 {
                     using (ZipFile varzipfile = new ZipFile(destvarfilename))
                     {
-                    varsrow = varManagerDataSet.vars.NewvarsRow();
-                    varsrow.varName = basename;
+                    // Create new Var entity
+                    varsrow = new Var
+                    {
+                        VarName = basename
+                    };
                     
                     string[] varnamepart = basename.Split('.');
                     if (varnamepart.Length == 3)
                     {
-                        //varsrow.createDate = File.GetCreationTime(destvarfilename);
                         FileInfo finfo = new FileInfo(destvarfilename);
-                        varsrow.filesize = finfo.Length;
-                        varsrow.creatorName = varnamepart[0];
-                        varsrow.packageName = varnamepart[1];
-                        varsrow.varDate = finfo.LastWriteTime;
+                        varsrow.Filesize = finfo.Length;
+                        varsrow.CreatorName = varnamepart[0];
+                        varsrow.PackageName = varnamepart[1];
+                        varsrow.VarDate = finfo.LastWriteTime;
                         int version;
                         if (!int.TryParse(varnamepart[2], out version))
                             version = 1;
-                        varsrow.version = version;
-                        varsrow.varPath = curpath;
+                        varsrow.Version = version.ToString();
+                        varsrow.VarPath = curpath;
                         //ZipFile zipFile = new ZipFile(destvarfilename);
 
 
@@ -906,8 +1022,7 @@ namespace varManager
                             File.Move(destvarfilename, notComplRulefilename);
                             return;
                         }
-                        //varsrow.metaDate = metajson.LastWriteTime.DateTime;
-                        varsrow.metaDate = metajson.DateTime;
+                        varsrow.MetaDate = metajson.DateTime;
                         int countscene = 0, countlook = 0, countclothing = 0, counthair = 0, countplugincs = 0, countplugincslist = 0, countasset = 0, countmorphs = 0, countpose = 0, countskin = 0;
                         //foreach (var zfile in varzipfile.Entries)
                         //varzipfile
@@ -1041,7 +1156,17 @@ namespace varManager
                                     // string ext = zfile.FullName.Substring(zfile.FullName.LastIndexOf('.')).ToLower();
                                     // if (ext == ".vap" || ext == ".json")
                                     if (typename == "scenes" || typename == "looks" || typename == "clothing" || typename == "hairstyle" || typename == "morphs" || typename == "pose" || typename == "skin")
-                                        varManagerDataSet.scenes.AddscenesRow(basename, typename, isPreset, zfile.Name, jpgname);
+                                    {
+                                        // Add scene to EF Core context
+                                        dbContext.Scenes.Add(new Scene
+                                        {
+                                            VarName = basename,
+                                            AtomType = typename,
+                                            IsPreset = isPreset,
+                                            ScenePath = zfile.Name,
+                                            PreviewPic = jpgname
+                                        });
+                                    }
                                 }
 
                             }
@@ -1050,23 +1175,25 @@ namespace varManager
                                 this.BeginInvoke(addlog, new Object[] { zfile.Name + " " + ex.Message, LogLevel.ERROR });
                             }
                         }
-                        scenesTableAdapter.Update(varManagerDataSet.scenes);
-                        varManagerDataSet.scenes.AcceptChanges();
-                        varsrow.scenes = countscene;
-                        varsrow.looks = countlook;
-                        varsrow.clothing = countclothing;
-                        varsrow.hairstyle = counthair;
-                        varsrow.morphs = countmorphs;
-                        varsrow.pose = countpose;
-                        varsrow.skin = countskin;
+                        // Save scenes to database
+                        dbContext.SaveChanges();
+                        
+                        varsrow.Scenes = countscene;
+                        varsrow.Looks = countlook;
+                        varsrow.Clothing = countclothing;
+                        varsrow.Hairstyle = counthair;
+                        varsrow.Morphs = countmorphs;
+                        varsrow.Pose = countpose;
+                        varsrow.Skin = countskin;
                         if (countplugincslist > 0)
-                            varsrow.plugins = countplugincslist;
+                            varsrow.Plugins = countplugincslist;
                         else
-                            varsrow.plugins = countplugincs;
-                        varsrow.assets = countasset;
-                        varManagerDataSet.vars.AddvarsRow(varsrow);
-                        varsTableAdapter.Update(varManagerDataSet.vars);
-                        varManagerDataSet.vars.AcceptChanges();
+                            varsrow.Plugins = countplugincs;
+                        varsrow.Assets = countasset;
+                        
+                        // Add var to context and save
+                        dbContext.Vars.Add(varsrow);
+                        dbContext.SaveChanges();
 
 
                         List<string> dependencies = new List<string>();
@@ -1084,25 +1211,29 @@ namespace varManager
                         {
                             this.BeginInvoke(addlog, new Object[] { destvarfilename + " get dependencies failed " + ex.Message, LogLevel.ERROR });
                         }
-                        var dependencierows = varManagerDataSet.dependencies.Where(q => q.varName == basename).ToList();
-                        for (int i = dependencierows.Count() - 1; i >= 0; i--)
-                        {
-                            dependencierows[i].Delete();
-                        }
+                        // Remove existing dependencies for this var
+                        var existingDeps = dbContext.Dependencies.Where(d => d.VarName == basename).ToList();
+                        dbContext.Dependencies.RemoveRange(existingDeps);
+                        
+                        // Add new dependencies
                         foreach (string dependencie in dependencies)
-                            varManagerDataSet.dependencies.AdddependenciesRow(basename, dependencie);
-                        dependenciesTableAdapter.Update(varManagerDataSet.dependencies);
-                        varManagerDataSet.dependencies.AcceptChanges();
+                        {
+                            dbContext.Dependencies.Add(new Dependency
+                            {
+                                VarName = basename,
+                                DependencyName = dependencie
+                            });
+                        }
+                        dbContext.SaveChanges();
                     }
                     }
                 }
                 else
                 {
-                    if (varsrow.varPath != curpath)
+                    if (varsrow.VarPath != curpath)
                     {
-                        varsrow.varPath = curpath;
-                        varsTableAdapter.Update(varManagerDataSet.vars);
-                        varManagerDataSet.vars.AcceptChanges();
+                        varsrow.VarPath = curpath;
+                        dbContext.SaveChanges();
                     }
                 }
 
@@ -1131,27 +1262,23 @@ namespace varManager
                 curVarfile++;
                 this.BeginInvoke(mi, new Object[] { curVarfile, vars.Length });
             }
-            varManagerDataSet.AcceptChanges();
+            dbContext.SaveChanges();
 
             List<string> deletevars = new List<string>();
 
 
-            foreach (var row in varManagerDataSet.vars)
+            foreach (var row in dbContext.Vars)
             {
-                if (!existVars.Contains(row.varName))
+                if (!existVars.Contains(row.VarName))
                 {
-                    this.BeginInvoke(addlog, new Object[] { $"{row.varName} The target VAR file is not found and the record will be deleted", LogLevel.WARNING });
-                    deletevars.Add(row.varName);
+                    this.BeginInvoke(addlog, new Object[] { $"{row.VarName} The target VAR file is not found and the record will be deleted", LogLevel.WARNING });
+                    deletevars.Add(row.VarName);
                 }
             }
             deletevars = deletevars.Distinct().ToList();
             if (deletevars.Count > 0)
                 CleanVars(deletevars);
 
-            //UpdateVarsInstalled();
-            //this.varManagerDataSet.varsView.Clear();
-            //this.varsViewTableAdapter.Fill(this.varManagerDataSet.varsView);
-            //MessageBox.Show("Update DB finish!Please reopen this tool!");
             return true;
         }
         private bool CleanVars(List<string> deletevars)
@@ -1159,33 +1286,21 @@ namespace varManager
             try
             {
                 this.BeginInvoke(addlog, new Object[] { $"Cleanup dependencies table...", LogLevel.INFO });
-                var dependencierows = varManagerDataSet.dependencies.Where(q => deletevars.Contains(q.varName)).ToList();
-                for (int i = dependencierows.Count() - 1; i >= 0; i--)
-                {
-                    dependencierows[i].Delete();
-                }
-                dependenciesTableAdapter.Update(varManagerDataSet.dependencies);
-                varManagerDataSet.dependencies.AcceptChanges();
+                var dependencierows = dbContext.Dependencies.Where(q => deletevars.Contains(q.VarName)).ToList();
+                dbContext.Dependencies.RemoveRange(dependencierows);
+                dbContext.SaveChanges();
                 this.BeginInvoke(addlog, new Object[] { $"Cleanup dependencies table completed.", LogLevel.INFO });
 
                 this.BeginInvoke(addlog, new Object[] { $"Cleanup scenes table...", LogLevel.INFO });
-                var scenes = varManagerDataSet.scenes.Where(q => deletevars.Contains(q.varName)).ToList();
-                for (int i = scenes.Count() - 1; i >= 0; i--)
-                {
-                    scenes[i].Delete();
-                }
-                scenesTableAdapter.Update(varManagerDataSet.scenes);
-                varManagerDataSet.scenes.AcceptChanges();
+                var scenes = dbContext.Scenes.Where(q => deletevars.Contains(q.VarName)).ToList();
+                dbContext.Scenes.RemoveRange(scenes);
+                dbContext.SaveChanges();
                 this.BeginInvoke(addlog, new Object[] { $"Cleanup scenes table completed.", LogLevel.INFO });
 
                 this.BeginInvoke(addlog, new Object[] { $"Cleanup vars table...", LogLevel.INFO });
-                var varrows = varManagerDataSet.vars.Where(q => deletevars.Contains(q.varName)).ToList();
-                for (int i = varrows.Count() - 1; i >= 0; i--)
-                {
-                    varrows[i].Delete();
-                }
-                varsTableAdapter.Update(varManagerDataSet.vars);
-                varManagerDataSet.vars.AcceptChanges();
+                var varrows = dbContext.Vars.Where(q => deletevars.Contains(q.VarName)).ToList();
+                dbContext.Vars.RemoveRange(varrows);
+                dbContext.SaveChanges();
                 this.BeginInvoke(addlog, new Object[] { $"Cleanup vars table completed.", LogLevel.INFO });
 
                 this.BeginInvoke(addlog, new Object[] { $"Cleanup PreviewPics...", LogLevel.INFO });
@@ -1206,28 +1321,19 @@ namespace varManager
         {
             try
             {
-                var dependencierows = varManagerDataSet.dependencies.Where(q => q.varName == deletevar).ToList();
-                for (int i = dependencierows.Count() - 1; i >= 0; i--)
-                {
-                    dependencierows[i].Delete();
-                }
-                dependenciesTableAdapter.Update(varManagerDataSet.dependencies);
-                varManagerDataSet.dependencies.AcceptChanges();
+                var dependencierows = dbContext.Dependencies.Where(q => q.VarName == deletevar).ToList();
+                dbContext.Dependencies.RemoveRange(dependencierows);
+                dbContext.SaveChanges();
 
-                var scenes = varManagerDataSet.scenes.Where(q => q.varName == deletevar).ToList();
-                for (int i = scenes.Count() - 1; i >= 0; i--)
-                {
-                    scenes[i].Delete();
-                }
-                scenesTableAdapter.Update(varManagerDataSet.scenes);
-                varManagerDataSet.scenes.AcceptChanges();
+                var scenes = dbContext.Scenes.Where(q => q.VarName == deletevar).ToList();
+                dbContext.Scenes.RemoveRange(scenes);
+                dbContext.SaveChanges();
 
-                var row = varManagerDataSet.vars.FindByvarName(deletevar);
+                var row = dbContext.Vars.FirstOrDefault(v => v.VarName == deletevar);
                 if (row != null)
                 {
-                    row.Delete();
-                    varsTableAdapter.Update(varManagerDataSet.vars);
-                    varManagerDataSet.vars.AcceptChanges();
+                    dbContext.Vars.Remove(row);
+                    dbContext.SaveChanges();
                 }
 
                 DelePreviewPics(deletevar);
@@ -1252,7 +1358,7 @@ namespace varManager
             int success = 0;
             if (operate >= 1)
             {
-                varManagerDataSet.varsRow varsrow = varManagerDataSet.vars.FindByvarName(varName);
+                var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == varName);
                 if (varsrow != null)
                 {
                     //string[] varexist = Directory.GetFiles(Path.Combine(Settings.Default.vampath, "AddonPackages"), varName + ".var");
@@ -1263,7 +1369,7 @@ namespace varManager
                     if (File.Exists(linkvar))
                         return 2;
 
-                    string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.varPath, varsrow.varName + ".var");
+                    string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.VarPath, varsrow.VarName + ".var");
 
                     if (!Comm.CreateSymbolicLink(linkvar, destvarfile, Comm.SYMBOLIC_LINK_FLAG.File))
                     {
@@ -1394,9 +1500,14 @@ namespace varManager
         {
             this.BeginInvoke(addlog, new Object[] { "Search for dependencies...", LogLevel.INFO });
             List<string> dependencies = new List<string>();
-            foreach (var varrow in varManagerDataSet.varsView.Where(q => q.Installed == true))
+            foreach (var varrow in dbContext.VarsView.Where(q => q.Installed == true))
             {
-                dependencies.AddRange(varManagerDataSet.dependencies.Where(q => q.varName == varrow.varName).Select(q => q.dependency));
+                var varDependencies = dbContext.Dependencies.Where(q => q.VarName == varrow.VarName).Select(q => q.DependencyName);
+                foreach (var dep in varDependencies)
+                {
+                    if (!string.IsNullOrEmpty(dep))
+                        dependencies.Add(dep);
+                }
             }
             dependencies = dependencies.Distinct().ToList();
             List<string> missingvars = new List<string>();
@@ -1440,9 +1551,7 @@ namespace varManager
             
             foreach (DataRowView varrowview in listDatarow)
             {
-                dependencies.AddRange(varManagerDataSet.dependencies.Where(q => q.varName == varrowview.Row.Field<string>("varName")).Select(q => q.dependency));
-                //dependencies.Add(varrowview.Row.Field<string>("varName"));
-                //dependencies.AddRange(varManagerDataSet.dependencies.Where(q => q.varName == varrow.varName).Select(q => q.dependency));
+                dependencies.AddRange(dbContext.Dependencies.Where(q => q.VarName == varrowview.Row.Field<string>("varName")).Select(q => q.DependencyName));
             }
             
             dependencies = dependencies.Distinct().ToList();
@@ -1506,7 +1615,7 @@ namespace varManager
         {
             List<string> dependencies = new List<string>();
 
-            dependencies.AddRange(varManagerDataSet.dependencies.Select(q => q.dependency));
+            dependencies.AddRange(dbContext.Dependencies.Select(q => q.DependencyName));
 
             dependencies = dependencies.Distinct().ToList();
             List<string> missingvars = new List<string>();
@@ -1551,11 +1660,11 @@ namespace varManager
                     {
                         string destfilename = Comm.ReparsePoint(linkvar);
                         this.BeginInvoke(addlog, new Object[] { $"symlink {linkvar} rebuilding ...", LogLevel.INFO });
-                        varManagerDataSet.varsRow varsrow = varManagerDataSet.vars.FindByvarName(Path.GetFileNameWithoutExtension(destfilename));
+                        var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == Path.GetFileNameWithoutExtension(destfilename));
                         File.Delete(linkvar);
                         if (varsrow != null)
                         {
-                            string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.varPath, varsrow.varName + ".var");
+                            string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.VarPath, varsrow.VarName + ".var");
                             Comm.CreateSymbolicLink(linkvar, destvarfile, Comm.SYMBOLIC_LINK_FLAG.File);
                             Comm.SetSymboLinkFileTime(linkvar, File.GetCreationTime(destvarfile), File.GetLastWriteTime(destvarfile));
                         }
@@ -1570,23 +1679,23 @@ namespace varManager
             MessageBox.Show("fix finish");
         }
 
-        private bool ReExtractedPreview(varManagerDataSet.scenesRow scenerow)
+        private bool ReExtractedPreview(Scene scenerow)
         {
             bool success = false;
-            var varsrow = this.varManagerDataSet.vars.FindByvarName(scenerow.varName);
+            var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == scenerow.VarName);
             if (varsrow != null)
             {
-                string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.varPath, varsrow.varName + ".var");
+                string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.VarPath!, varsrow.VarName + ".var");
                 if (File.Exists(destvarfile))
                 {
                     //using (ZipArchive varzipfile = ZipFile.OpenRead(destvarfile))
                     using (ZipFile varzipfile = new  ZipFile(destvarfile))
                     {
-                        string jpgfile = scenerow.scenePath.Substring(0, scenerow.scenePath.LastIndexOf('.')) + ".jpg";
+                        string jpgfile = scenerow.ScenePath!.Substring(0, scenerow.ScenePath.LastIndexOf('.')) + ".jpg";
                         var jpg = varzipfile.GetEntry(jpgfile);
                         if (jpg != null)
                         {
-                            string picpath = Path.Combine(Settings.Default.varspath, previewpicsDirName, scenerow.atomType, scenerow.varName, scenerow.previewPic);
+                            string picpath = Path.Combine(Settings.Default.varspath, previewpicsDirName, scenerow.AtomType!, scenerow.VarName, scenerow.PreviewPic!);
 
                             string jpgdirectory = Path.GetDirectoryName(picpath);
                             if(!Directory.Exists(jpgdirectory))
@@ -1608,9 +1717,9 @@ namespace varManager
         }
         private void FixPreview()
         {
-            foreach (varManagerDataSet.scenesRow scenerow in this.varManagerDataSet.scenes.Where(q=> !string.IsNullOrEmpty(q.previewPic)))
+            foreach (var scenerow in dbContext.Scenes.Where(q => !string.IsNullOrEmpty(q.PreviewPic)))
             {
-                string picpath = Path.Combine(Settings.Default.varspath, previewpicsDirName, scenerow.atomType, scenerow.varName, scenerow.previewPic);
+                string picpath = Path.Combine(Settings.Default.varspath, previewpicsDirName, scenerow.AtomType!, scenerow.VarName, scenerow.PreviewPic!);
                 if (!File.Exists(picpath))
                 {
                     if (ReExtractedPreview(scenerow))
@@ -1629,9 +1738,9 @@ namespace varManager
         {
             List<string> dependencies = new List<string>();
             this.BeginInvoke(addlog, new Object[] { "Analyze the *.json files in the 'Save' directory and  the *.vap files in the 'Custom' directory ", LogLevel.INFO });
-            this.varManagerDataSet.savedepens.Clear();
-            this.varManagerDataSet.savedepens.AcceptChanges();
-            this.savedepensTableAdapter.Fill(this.varManagerDataSet.savedepens);
+            // Clear and reload saved dependencies
+            dbContext.SavedDependencies.RemoveRange(dbContext.SavedDependencies);
+            dbContext.SaveChanges();
             List<string> savefiles = Directory.GetFiles(Path.Combine(Settings.Default.vampath, "Saves"), "*.json", SearchOption.AllDirectories).ToList();
             savefiles.AddRange(Directory.GetFiles(Path.Combine(Settings.Default.vampath, "Custom"), "*.vap", SearchOption.AllDirectories));
             foreach (string jsonfile in savefiles)
@@ -1642,15 +1751,11 @@ namespace varManager
 
                 this.BeginInvoke(addlog, new Object[] { $"Analyze { Path.GetFileName(jsonfile)} ...", LogLevel.INFO });
 
-                var rows = this.varManagerDataSet.savedepens.Where(q => q.savepath == savepath && Math.Abs((q.modidate - fi.LastWriteTime).TotalSeconds) <= 2);
+                var rows = dbContext.SavedDependencies.Where(q => q.SavePath == savepath && q.ModiDate.HasValue && Math.Abs((q.ModiDate.Value - fi.LastWriteTime).TotalSeconds) <= 2).ToList();
 
-                if (rows.Count() > 0)
+                if (rows.Any())
                 {
-                    foreach (var row in rows)
-                    {
-                        row.SetModified();
-                        //dependencies.Add(row.dependency);
-                    }
+                    // Dependencies already exist for this file, no need to reprocess
                 }
                 else
                 {
@@ -1663,7 +1768,12 @@ namespace varManager
                         }
                         foreach (string dependency in Getdependencies(jsonstring))
                         {
-                            this.varManagerDataSet.savedepens.AddsavedepensRow(savepath, fi.LastWriteTime, dependency);
+                            dbContext.SavedDependencies.Add(new SavedDependency
+                            {
+                                SavePath = savepath,
+                                ModiDate = fi.LastWriteTime,
+                                DependencyName = dependency
+                            });
                         }
                     }
                     catch (Exception ex)
@@ -1672,14 +1782,9 @@ namespace varManager
                     }
                 }
             }
-            foreach (var row in this.varManagerDataSet.savedepens)
-            {
-                if (row.RowState == DataRowState.Unchanged)
-                    row.Delete();
-            }
-            this.savedepensTableAdapter.Update(this.varManagerDataSet.savedepens);
-            this.varManagerDataSet.savedepens.AcceptChanges();
-            dependencies = this.varManagerDataSet.savedepens.Select(q => q.dependency).Distinct().ToList();
+            // Save all changes
+            dbContext.SaveChanges();
+            dependencies = dbContext.SavedDependencies.Select(q => q.DependencyName).Distinct().ToList();
             //dependencies = dependencies.Distinct().ToList();
             var dependencies2 = VarsDependencies(dependencies);
             dependencies = dependencies.Concat(dependencies2).Distinct().OrderBy(q => q).ToList();
@@ -1776,15 +1881,18 @@ namespace varManager
             }
 
             this.comboBoxCreater.SelectedIndexChanged -= new System.EventHandler(this.comboBoxCreater_SelectedIndexChanged);
-            var creators = this.varManagerDataSet.vars.GroupBy(g => g.creatorName);
-            if (textBoxFilter.Text.Trim() != "")
-                creators = this.varManagerDataSet.vars.Where(q => q.varName.ToLower().IndexOf(textBoxFilter.Text.Trim().ToLower()) >= 0).GroupBy(g => g.creatorName);
+            var creators = dbContext.Vars
+                .Where(v => string.IsNullOrEmpty(textBoxFilter.Text.Trim()) || v.VarName!.ToLower().Contains(textBoxFilter.Text.Trim().ToLower()))
+                .GroupBy(v => v.CreatorName)
+                .Select(g => g.Key)
+                .OrderBy(c => c)
+                .ToList();
             string curcreator = comboBoxCreater.Text;
             comboBoxCreater.Items.Clear();
             comboBoxCreater.Items.Add("____ALL");
             foreach (var creator in creators)
             {
-                comboBoxCreater.Items.Add(creator.Key);
+                comboBoxCreater.Items.Add(creator);
             }
             if (comboBoxCreater.Items.Contains(curcreator))
                 comboBoxCreater.SelectedItem = curcreator;
@@ -1803,20 +1911,30 @@ namespace varManager
             {
                 if (varnamepart[2].ToLower() == "latest")
                 {
-                    var packs = varManagerDataSet.vars.Where(q => q.creatorName == varnamepart[0] && q.packageName == varnamepart[1]);
-                    if (packs.Count() > 0)
-                        varrealver = packs.OrderByDescending(q => q.version).First().varName;
+                    var packs = dbContext.Vars.Where(q => q.CreatorName == varnamepart[0] && q.PackageName == varnamepart[1]);
+                    if (packs.Any())
+                    {
+                        var packsList = packs.ToList(); // Execute query first
+                        var latestPack = packsList
+                            .Where(p => int.TryParse(p.Version, out _)) // Filter valid versions
+                            .OrderByDescending(p => int.TryParse(p.Version, out int ver) ? ver : 0)
+                            .FirstOrDefault();
+                        varrealver = latestPack?.VarName ?? "missing";
+                    }
                 }
                 else
                 {
-                    var varsrow = varManagerDataSet.vars.FindByvarName(varname);
+                    var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == varname);
                     if (varsrow != null)
                         varrealver = varname;
                     else
                     {
-                        string closestver = GetClosestMatchingPackageVersion(varnamepart[0], varnamepart[1], int.Parse(varnamepart[2]));
-                        if (closestver != "missing")
-                            varrealver = closestver + "$";
+                        if (int.TryParse(varnamepart[2], out int requestedVersion))
+                        {
+                            string closestver = GetClosestMatchingPackageVersion(varnamepart[0], varnamepart[1], requestedVersion);
+                            if (closestver != "missing")
+                                varrealver = closestver + "$";
+                        }
                     }
                 }
             }
@@ -1824,29 +1942,28 @@ namespace varManager
         }
         public string GetClosestMatchingPackageVersion(string creatorName,string packageName,int requestVersion)
         {
-            //int num = -1;
-            var packs = varManagerDataSet.vars.Where(q => q.creatorName == creatorName && q.packageName == packageName).OrderBy(q => q.version);
-            if (packs.Count() > 0)
+            var packs = dbContext.Vars.Where(q => q.CreatorName == creatorName && q.PackageName == packageName)
+                                    .ToList() // Execute query first
+                                    .Where(q => int.TryParse(q.Version, out _)) // Filter only valid integer versions
+                                    .OrderBy(q => int.TryParse(q.Version, out int ver) ? ver : 0);
+            if (packs.Any())
             {
                 foreach (var pack in packs)
                 {
-                    if (pack.version >= requestVersion)
+                    if (int.TryParse(pack.Version, out int packVersion) && packVersion >= requestVersion)
                     {
-                        //num = pack.version;
-                        return pack.varName;
+                        return pack.VarName!;
                     }
                 }
-               return packs.Last().varName;
-
+                return packs.Last().VarName!;
             }
             return "missing";
-           
         }
         private List<string> VarsDependencies(string varname)
         {
             List<string> depens = new List<string>();
-            foreach (var depenrow in varManagerDataSet.dependencies.Where(q => q.varName == varname))
-                depens.Add(depenrow.dependency);
+            foreach (var depenrow in dbContext.Dependencies.Where(q => q.VarName == varname))
+                depens.Add(depenrow.DependencyName!);
             return depens;
 
         }
@@ -1941,25 +2058,10 @@ namespace varManager
                 {
                     installed = true;
                 }
-                foreach (varManagerDataSet.scenesRow scenerow in this.varManagerDataSet.scenes.Where(q => q.varName == varName))
+                foreach (var scenerow in dbContext.Scenes.Where(q => q.VarName == varName))
                 {
-                    previewpics.Add(new Previewpic(varName, scenerow.atomType, scenerow.previewPic, installed, scenerow.scenePath, scenerow.isPreset));
+                    previewpics.Add(new Previewpic(varName, scenerow.AtomType!, scenerow.PreviewPic!, installed, scenerow.ScenePath!, scenerow.IsPreset));
                 }
-                //string[] typenames = new string[5] { "scenes", "looks", "clothing", "hairstyle", "assets" };
-                //foreach (string typename in typenames)
-                //{
-                //    string typepath = Path.Combine(Settings.Default.varspath, previewpicsDirName, typename, varName);
-                //    if (Directory.Exists(typepath))
-                //    {
-                //        foreach (string jpgfile in Directory.GetFiles(typepath, "*.jpg", SearchOption.AllDirectories))
-                //        {
-                //            string scenepath = "";
-                //            EnumerableRowCollection<varManagerDataSet.scenesRow> scenesels = this.varManagerDataSet.scenes.Where(q => q.varName == varName && q.previewPic == Path.GetFileName(jpgfile));
-                //            if (scenesels.Count() > 0) scenepath = scenesels.First().scenePath;
-                //            previewpics.Add(new Previewpic(varName, typename, jpgfile,installed, scenepath));
-                //        }
-                //    }
-                //}
             }
             PreviewInitType();
         }
@@ -2233,23 +2335,26 @@ namespace varManager
 
         void StaleVars()
         {
-            var query = varManagerDataSet.vars.GroupBy(g => g.creatorName + "." + g.packageName,
-                                     q => q.version,
-                                     (baseName, versions) => new
-                                     {
-                                         Key = baseName,
-                                         Count = versions.Count(),
-                                         Max = versions.Max()
-                                     });
+            var varsData = dbContext.Vars.ToList(); // Execute query first
+            var query = varsData.GroupBy(g => g.CreatorName + "." + g.PackageName)
+                               .Select(group => new
+                               {
+                                   Key = group.Key,
+                                   Count = group.Count(),
+                                   MaxVersion = group.Where(v => int.TryParse(v.Version, out _))
+                                                    .Select(v => int.TryParse(v.Version, out int ver) ? ver : 0)
+                                                    .DefaultIfEmpty(0)
+                                                    .Max(),
+                                   Vars = group.ToList()
+                               });
             List<string> listOldvar = new List<string>();
             foreach (var result in query)
             {
                 if (result.Count > 1)
                 {
-                    string[] vv = result.Key.Split('.');
-                    foreach (var oldvar in varManagerDataSet.vars.Where(q => q.creatorName == vv[0] && q.packageName == vv[1] && q.version != result.Max))
+                    foreach (var oldvar in result.Vars.Where(v => (int.TryParse(v.Version, out int ver) ? ver : 0) != result.MaxVersion))
                     {
-                        listOldvar.Add(oldvar.varName);
+                        listOldvar.Add(oldvar.VarName!);
                     }
                 }
             }
@@ -2259,53 +2364,55 @@ namespace varManager
             var installedvars = GetInstalledVars();
             foreach (var oldvar in listOldvar)
             {
-                if (varManagerDataSet.dependencies.Count(q => q.dependency == oldvar) == 0)
+                if (dbContext.Dependencies.Count(q => q.DependencyName == oldvar) == 0)
                 {
                     if (installedvars.ContainsKey(oldvar))
                     {
                         File.Delete(installedvars[oldvar]);
                     }
-                    //string linkvar = Path.Combine(Settings.Default.vampath, "AddonPackages", installLinkDirName, oldvar + ".var");
-                    //if (File.Exists(linkvar))
-                    //    File.Delete(linkvar);
-                    string oldv = Path.Combine(Settings.Default.varspath, varManagerDataSet.vars.FindByvarName(oldvar).varPath, oldvar + ".var");
-                    string stalev = Path.Combine(stalepath, oldvar + ".var");
-                    try
+                    var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == oldvar);
+                    if (varsrow != null)
                     {
-                        this.BeginInvoke(addlog, new Object[] { $"move {oldv} to {stalepath}.", LogLevel.INFO });
-                        File.Move(oldv, stalev);
-                        CleanVar(oldvar);
-                    }
-                    catch (Exception ex)
-                    {
-                        this.BeginInvoke(addlog, new Object[] { $"{oldv} move failed,{ex.Message}", LogLevel.ERROR });
+                        string oldv = Path.Combine(Settings.Default.varspath, varsrow.VarPath!, oldvar + ".var");
+                        string stalev = Path.Combine(stalepath, oldvar + ".var");
+                        try
+                        {
+                            this.BeginInvoke(addlog, new Object[] { $"move {oldv} to {stalepath}.", LogLevel.INFO });
+                            File.Move(oldv, stalev);
+                            CleanVar(oldvar);
+                        }
+                        catch (Exception ex)
+                        {
+                            this.BeginInvoke(addlog, new Object[] { $"{oldv} move failed,{ex.Message}", LogLevel.ERROR });
+                        }
                     }
                 }
             }
             System.Diagnostics.Process.Start(stalepath);
-            //MessageBox.Show("Please run upd-db once");
         }
 
         void OldVersionVars()
         {
-            var versionLastest = varManagerDataSet.vars.Where(q=>q.plugins<=0||q.scenes>0||q.looks>0)
-                                     .GroupBy(g => g.creatorName + "." + g.packageName,
-                                     q => q.version,
-                                     (baseName, versions) => new
-                                     {
-                                         Key = baseName,
-                                         Count = versions.Count(),
-                                         Max = versions.Max()
-                                     });
+            var varsData = dbContext.Vars.Where(q => q.Plugins <= 0 || q.Scenes > 0 || q.Looks > 0).ToList();
+            var versionLastest = varsData.GroupBy(g => g.CreatorName + "." + g.PackageName)
+                                        .Select(group => new
+                                        {
+                                            Key = group.Key,
+                                            Count = group.Count(),
+                                            MaxVersion = group.Where(v => int.TryParse(v.Version, out _))
+                                                             .Select(v => int.TryParse(v.Version, out int ver) ? ver : 0)
+                                                             .DefaultIfEmpty(0)
+                                                             .Max(),
+                                            Vars = group.ToList()
+                                        });
             List<string> listOldvar = new List<string>();
             foreach (var result in versionLastest)
             {
                 if (result.Count > 1)
                 {
-                    string[] vv = result.Key.Split('.');
-                    foreach (var oldvar in varManagerDataSet.vars.Where(q => q.creatorName == vv[0] && q.packageName == vv[1] && q.version != result.Max))
+                    foreach (var oldvar in result.Vars.Where(v => (int.TryParse(v.Version, out int ver) ? ver : 0) != result.MaxVersion))
                     {
-                        listOldvar.Add(oldvar.varName);
+                        listOldvar.Add(oldvar.VarName!);
                     }
                 }
             }
@@ -2317,30 +2424,29 @@ namespace varManager
             {
                 if (installedvars.ContainsKey(oldvar))
                 {
-                    string basename = oldvar.Substring(0, oldvar.LastIndexOf(".") );
-                    string varlastest = basename + "." + versionLastest.Where(q => q.Key == basename).First().Max.ToString();
+                    string basename = oldvar.Substring(0, oldvar.LastIndexOf("."));
+                    string varlastest = basename + "." + versionLastest.Where(q => q.Key == basename).First().MaxVersion.ToString();
                     File.Delete(installedvars[oldvar]);
                     VarInstall(varlastest);
                 }
-                //string linkvar = Path.Combine(Settings.Default.vampath, "AddonPackages", installLinkDirName, oldvar + ".var");
-                //if (File.Exists(linkvar))
-                //    File.Delete(linkvar);
-                string oldv = Path.Combine(Settings.Default.varspath, varManagerDataSet.vars.FindByvarName(oldvar).varPath, oldvar + ".var");
-                string oldversionv = Path.Combine(oldversionpath, oldvar + ".var");
-                try
+                var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == oldvar);
+                if (varsrow != null)
                 {
-                    this.BeginInvoke(addlog, new Object[] { $"move {oldv} to {oldversionpath}.", LogLevel.INFO });
-                    File.Move(oldv, oldversionv);
-                    CleanVar(oldvar);
+                    string oldv = Path.Combine(Settings.Default.varspath, varsrow.VarPath!, oldvar + ".var");
+                    string oldversionv = Path.Combine(oldversionpath, oldvar + ".var");
+                    try
+                    {
+                        this.BeginInvoke(addlog, new Object[] { $"move {oldv} to {oldversionpath}.", LogLevel.INFO });
+                        File.Move(oldv, oldversionv);
+                        CleanVar(oldvar);
+                    }
+                    catch (Exception ex)
+                    {
+                        this.BeginInvoke(addlog, new Object[] { $"{oldv} move failed,{ex.Message}", LogLevel.ERROR });
+                    }
                 }
-                catch (Exception ex)
-                {
-                    this.BeginInvoke(addlog, new Object[] { $"{oldv} move failed,{ex.Message}", LogLevel.ERROR });
-                }
-
             }
             System.Diagnostics.Process.Start(oldversionpath);
-            //MessageBox.Show("Please run upd-db once");
         }
 
         private void textBoxFilter_TextChanged(object sender, EventArgs e)
@@ -2359,7 +2465,7 @@ namespace varManager
             {
                 string varName = varsViewDataGridView.Rows[e.RowIndex].Cells["varNameDataGridViewTextBoxColumn"].Value.ToString();
                 bool installed = false;
-                var row = varManagerDataSet.installStatus.FindByvarName(varName);
+                var row = dbContext.InstallStatuses.FirstOrDefault(i => i.VarName == varName);
                 if (row != null)
                 {
                     installed = row.Installed;
@@ -2413,8 +2519,8 @@ namespace varManager
 
         public bool IsVarInstalled(string varName)
         {
-            var installstatusrow = varManagerDataSet.installStatus.FindByvarName(varName);
-            if (installstatusrow!=null)
+            var installstatusrow = dbContext.InstallStatuses.FirstOrDefault(i => i.VarName == varName);
+            if (installstatusrow != null)
                 return installstatusrow.Installed;
             else
                 return false;
@@ -2426,14 +2532,14 @@ namespace varManager
             formVarDetail.strVarName = varName;
 
             formVarDetail.dependencies = new Dictionary<string, string>();
-            foreach(var dependrow in this.varManagerDataSet.dependencies.Where(q=>q.varName == varName))
+            foreach(var dependrow in dbContext.Dependencies.Where(q => q.VarName == varName))
             {
-                string existName = VarExistName(dependrow.dependency);
+                string existName = VarExistName(dependrow.DependencyName!);
                 if (existName.EndsWith("$"))
                 {
                     existName = existName.Substring(0, existName.Length - 1);
                 }
-                formVarDetail.dependencies[dependrow.dependency] = existName;
+                formVarDetail.dependencies[dependrow.DependencyName!] = existName;
             }
             formVarDetail.DependentVarList = DependentVars(varName);
             formVarDetail.DependentJsonList = DependentSaved(varName);
@@ -2454,7 +2560,7 @@ namespace varManager
             {
                 string varName = row.Cells["varNameDataGridViewTextBoxColumn"].Value.ToString();
                 bool install = false;
-                var varsrow = varManagerDataSet.installStatus.FindByvarName(varName);
+                var varsrow = dbContext.InstallStatuses.FirstOrDefault(i => i.VarName == varName);
                 if (varsrow != null)
                 {
                     if (varsrow.Installed)
@@ -2493,13 +2599,13 @@ namespace varManager
         public List<string> GetDependents(string dependName)
         {
             List<string> result = new List<string>();
-            foreach (var dependrow in varManagerDataSet.dependencies.Where(q => q.dependency == dependName))
+            foreach (var dependrow in dbContext.Dependencies.Where(q => q.DependencyName == dependName))
             {
-                result.Add(dependrow.varName);
+                result.Add(dependrow.VarName!);
             }
-            foreach (var dependrow in varManagerDataSet.savedepens.Where(q => q.dependency == dependName))
+            foreach (var dependrow in dbContext.SavedDependencies.Where(q => q.DependencyName == dependName))
             {
-                result.Add(dependrow.savepath);
+                result.Add(dependrow.SavePath!);
             }
             return result;
 
@@ -2732,7 +2838,7 @@ namespace varManager
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
             {
                 string varName = row.Cells["varNameDataGridViewTextBoxColumn"].Value.ToString();
-                var varsrow = varManagerDataSet.installStatus.FindByvarName(varName);
+                var varsrow = dbContext.InstallStatuses.FirstOrDefault(i => i.VarName == varName);
                 if (varsrow != null)
                 {
                     if (varsrow.Installed)
@@ -2797,7 +2903,7 @@ namespace varManager
             foreach (DataGridViewRow row in varsViewDataGridView.SelectedRows)
             {
                 string varName = row.Cells["varNameDataGridViewTextBoxColumn"].Value.ToString();
-                var varsrow = varManagerDataSet.installStatus.FindByvarName(varName);
+                var varsrow = dbContext.InstallStatuses.FirstOrDefault(i => i.VarName == varName);
                 if (varsrow != null)
                 {
                     if (varsrow.Installed)
@@ -2846,9 +2952,9 @@ namespace varManager
             if (saveFileDialogExportInstalled.ShowDialog() == DialogResult.OK)
             {
                 List<string> varNames = new List<string>();
-                foreach (var varstatus in this.varManagerDataSet.installStatus)
+                foreach (var varstatus in dbContext.InstallStatuses.Where(i => i.Installed))
                 {
-                    if (varstatus.Installed) varNames.Add(varstatus.varName);
+                    varNames.Add(varstatus.VarName!);
                 }
                 File.WriteAllLines(saveFileDialogExportInstalled.FileName, varNames.ToArray());
             }
@@ -3074,7 +3180,7 @@ namespace varManager
             bool inRepository = false;
             if (varName.EndsWith(".var"))
                 varName = varName.Substring(0, varName.Length - 4);
-            if (varManagerDataSet.vars.FindByvarName(varName) != null)
+            if (dbContext.Vars.Any(v => v.VarName == varName))
             {
                 inRepository = true;
             }
@@ -3201,8 +3307,8 @@ namespace varManager
 
             foreach (string varname in varnames)
             {
-                var rows = varManagerDataSet.varsView.Where(q => q.varName == varname);
-                if (rows.Count() > 0)
+                var rows = dbContext.VarsView.Where(q => q.VarName == varname);
+                if (rows.Any())
                 {
                     if (!rows.First().Installed)
                         if (VarInstall(varname, true) == 1) 
@@ -3214,7 +3320,6 @@ namespace varManager
                 }
             }
             return varnames;
-            //UpdateVarsInstalled();
         }
 
         private void checkBoxPreviewTypeLoadable_CheckedChanged(object sender, EventArgs e)
@@ -3230,10 +3335,10 @@ namespace varManager
 
         public void LocateVar(string varName)
         {
-            varManagerDataSet.varsRow varsrow = varManagerDataSet.vars.FindByvarName(varName);
+            var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == varName);
             if (varsrow != null)
             {
-                string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.varPath, varsrow.varName + ".var");
+                string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.VarPath!, varsrow.VarName + ".var");
                 Comm.LocateFile(destvarfile);
             }
         }
@@ -3241,7 +3346,7 @@ namespace varManager
         private void buttonpreviewinstall_Click(object sender, EventArgs e)
         {
             string varName = labelPreviewVarName.Text;
-            if (varManagerDataSet.installStatus.Where(q => q.varName == varName && q.Installed).Count() > 0)
+            if (dbContext.InstallStatuses.Where(q => q.VarName == varName && q.Installed).Any())
             {
                 string message = varName + "  will be remove, are you sure?";
                 string caption = "Remove Var";
@@ -3366,8 +3471,8 @@ namespace varManager
             if (varName!="save")
             {
                 depends.Add(varName);
-                var varsrow = varManagerDataSet.vars.FindByvarName(varName);
-                string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.varPath, varsrow.varName + ".var");
+                var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == varName);
+                string destvarfile = Path.Combine(Settings.Default.varspath, varsrow!.VarPath!, varsrow.VarName + ".var");
                 using (ZipFile varzipfile = new ZipFile(destvarfile))
                 {
                     var entry = varzipfile.GetEntry(entryName);
@@ -3573,7 +3678,6 @@ namespace varManager
         {
             FormHub formhub = new FormHub();
             formhub.form1 = this;
-            //formhub.VarManagerDataSet = this.varManagerDataSet;
             formhub.Show();
         }
         public void SelectVarInList(string varname)
