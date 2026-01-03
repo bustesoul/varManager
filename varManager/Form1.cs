@@ -131,6 +131,12 @@ namespace varManager
             int curVarfile = 0;
             foreach (string varfile in vars)
             {
+                if (!File.Exists(varfile))
+                {
+                    this.BeginInvoke(mi, new Object[] { curVarfile, vars.Count() });
+                    curVarfile++;
+                    continue;
+                }
                 if (ComplyVarFile(varfile))
                 {
                     FileInfo pathInfo = new FileInfo(varfile);
@@ -151,7 +157,7 @@ namespace varManager
                     if (File.Exists(destvarfilename))
                     {
                         string errlog = $"{varfile} has same filename in tidy directory,moved into the {redundantDirName} directory";
-                        this.BeginInvoke(addlog, new Object[] { errlog ,LogLevel.ERROR});
+                        this.BeginInvoke(addlog, new Object[] { errlog ,LogLevel.WARNING});
                         string redundantfilename = Path.Combine(redundantpath, Path.GetFileName(varfile));
 
                         int count = 1;

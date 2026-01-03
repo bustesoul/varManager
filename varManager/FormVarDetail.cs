@@ -20,9 +20,13 @@ namespace varManager
         public Dictionary<string,string> dependencies;
         public List<string> DependentVarList;
         public List<string> DependentJsonList;
+        private Size _layoutClientSize;
         public FormVarDetail()
         {
             InitializeComponent();
+            _layoutClientSize = ClientSize;
+            AutoScroll = true;
+            AutoScrollMinSize = _layoutClientSize;
         }
 
         private void FormVarDetail_Load(object sender, EventArgs e)
@@ -71,6 +75,29 @@ namespace varManager
             {
                 dataGridViewDependentSaved.Rows.Add("locate", dependentsaved);
             }
+
+            FitToWorkingArea();
+        }
+
+        private void FitToWorkingArea()
+        {
+            var workingArea = Screen.FromControl(this).WorkingArea;
+            var nonClientSize = new Size(Width - ClientSize.Width, Height - ClientSize.Height);
+            var maxClientWidth = workingArea.Width - nonClientSize.Width;
+            var maxClientHeight = workingArea.Height - nonClientSize.Height;
+            var targetClientWidth = Math.Min(_layoutClientSize.Width, maxClientWidth);
+            var targetClientHeight = Math.Min(_layoutClientSize.Height, maxClientHeight);
+            if (targetClientWidth < _layoutClientSize.Width || targetClientHeight < _layoutClientSize.Height)
+            {
+                ClientSize = new Size(
+                    Math.Max(200, targetClientWidth),
+                    Math.Max(200, targetClientHeight));
+            }
+
+            var bounds = Bounds;
+            var x = Math.Max(workingArea.Left, Math.Min(bounds.Left, workingArea.Right - bounds.Width));
+            var y = Math.Max(workingArea.Top, Math.Min(bounds.Top, workingArea.Bottom - bounds.Height));
+            Location = new Point(x, y);
         }
 
         private void buttonLocate_Click(object sender, EventArgs e)

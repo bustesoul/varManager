@@ -10,6 +10,7 @@ The main method is to place all var files to the repository directory.Create a s
 1. **Upgrade**: Switch database to SQLite and upgrade to .NET 9.
 2. **First Run Notice**: On first run, please click `UPD_DB` to rebuild the database.
 3. **No Data Loss**: Your var files and profile settings are not stored in the database, so they will not be lost.
+4. **Form UX**: More windows are resizable, and redundant UpdateDB duplicate-file logs are reduced.
 
 ### Version 1.0.4.11 Update Tips:
 1. **Support Multiple Download**: Support download multiple var by once click in 
