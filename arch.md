@@ -48,9 +48,20 @@
 ## Backend Scaffold (Current)
 - Implemented endpoints: GET /health, GET /config, POST /shutdown.
 - Config file: config.json next to backend exe, auto-created if missing.
-- Config fields: listen_host, listen_port, log_level, job_concurrency.
+- Config fields: listen_host, listen_port, log_level, job_concurrency, varspath, vampath.
 - Job framework: POST /jobs, GET /jobs/{id}, GET /jobs/{id}/logs (in-memory, capped logs).
-- Placeholder job kind: "noop" (others return not implemented).
+- Job kinds: "noop", "update_db".
+- Windows native file ops module implemented (symlink create/read, set file time).
+- SQLite access layer implemented (schema ensure + CRUD helpers).
+- update_db uses config varspath/vampath, tidies var files, parses zip/meta.json, updates dependencies/scenes/vars.
+
+## Implementation Progress
+- Done: backend service scaffold, config file generation, job framework, "update_db" job core flow.
+- Done: Windows native symlink module (create/read/set file times).
+- Done: SQLite schema ensure + helpers for vars/dependencies/scenes.
+- In progress: update_db parity details and performance hardening.
+- Pending: remaining job kinds (missing deps, log/saves analysis, rebuild links, etc.).
+- Pending: WinForms lifecycle integration (start/health/shutdown) and API call replacements.
 
 ## UI Button Map
 
@@ -58,7 +69,7 @@
 | UI | Handler (file) | Current logic (short) | Rust backend plan | Status |
 | --- | --- | --- | --- | --- |
 | Settings | buttonSetting_Click (varManager/Form1.cs) | Open FormSettings; restart app | Frontend-only; backend reads config.json | TODO |
-| UPD_DB | buttonUpdDB_Click | TidyVars -> UpdDB -> install pending -> UpdateVarsInstalled -> RescanPackages | POST /jobs/update-db | TODO |
+| UPD_DB | buttonUpdDB_Click | TidyVars -> UpdDB -> install pending -> UpdateVarsInstalled -> RescanPackages | POST /jobs (kind=update_db) | TODO |
 | Start VAM | buttonStartVam_Click | Start VaM.exe | POST /vam/start (optional) | TODO |
 | Missing Depends | buttonMissingDepends_Click | Check installed -> install or open MissingVars form | POST /jobs/missing-deps?scope=installed | TODO |
 | All Missing Depends | buttonAllMissingDepends_Click | Check all deps -> open MissingVars form | POST /jobs/missing-deps?scope=all | TODO |

@@ -19,6 +19,10 @@ use std::{
 use tokio::sync::{oneshot, Mutex, Semaphore};
 use tracing_subscriber::EnvFilter;
 
+mod db;
+mod update_db;
+mod winfs;
+
 const LOG_CAPACITY: usize = 1000;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -27,6 +31,10 @@ struct Config {
     listen_port: u16,
     log_level: String,
     job_concurrency: usize,
+    #[serde(default)]
+    varspath: Option<String>,
+    #[serde(default)]
+    vampath: Option<String>,
 }
 
 impl Default for Config {
@@ -36,12 +44,14 @@ impl Default for Config {
             listen_port: 57123,
             log_level: "info".to_string(),
             job_concurrency: 2,
+            varspath: None,
+            vampath: None,
         }
     }
 }
 
 #[derive(Clone)]
-struct AppState {
+pub(crate) struct AppState {
     config: Arc<Config>,
     shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     jobs: Arc<Mutex<HashMap<u64, Job>>>,
@@ -296,7 +306,7 @@ fn config_path() -> PathBuf {
     exe_dir().join("config.json")
 }
 
-fn exe_dir() -> PathBuf {
+pub(crate) fn exe_dir() -> PathBuf {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             return parent.to_path_buf();
@@ -333,11 +343,12 @@ async fn run_job(state: &AppState, id: u64, kind: &str) -> Result<(), String> {
             }
             Ok(())
         }
+        "update_db" => update_db::run_update_db_job(state.clone(), id).await,
         _ => Err(format!("job kind not implemented: {}", kind)),
     }
 }
 
-async fn job_start(state: &AppState, id: u64, message: &str) {
+pub(crate) async fn job_start(state: &AppState, id: u64, message: &str) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         job.status = JobStatus::Running;
@@ -346,7 +357,7 @@ async fn job_start(state: &AppState, id: u64, message: &str) {
     }
 }
 
-async fn job_finish(state: &AppState, id: u64, message: String) {
+pub(crate) async fn job_finish(state: &AppState, id: u64, message: String) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         job.status = JobStatus::Succeeded;
@@ -357,7 +368,7 @@ async fn job_finish(state: &AppState, id: u64, message: String) {
     }
 }
 
-async fn job_fail(state: &AppState, id: u64, error: String) {
+pub(crate) async fn job_fail(state: &AppState, id: u64, error: String) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         job.status = JobStatus::Failed;
@@ -367,14 +378,14 @@ async fn job_fail(state: &AppState, id: u64, error: String) {
     }
 }
 
-async fn job_progress(state: &AppState, id: u64, progress: u8) {
+pub(crate) async fn job_progress(state: &AppState, id: u64, progress: u8) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         job.progress = progress.min(100);
     }
 }
 
-async fn job_log(state: &AppState, id: u64, line: String) {
+pub(crate) async fn job_log(state: &AppState, id: u64, line: String) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         push_log(job, line);
