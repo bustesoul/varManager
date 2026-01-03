@@ -125,7 +125,7 @@ impl Db {
         &self.conn
     }
 
-    pub fn transaction(&self) -> Result<Transaction<'_>, String> {
+    pub fn transaction(&mut self) -> Result<Transaction<'_>, String> {
         self.conn.transaction().map_err(|err| err.to_string())
     }
 }
@@ -233,8 +233,8 @@ pub fn replace_scenes(
     Ok(())
 }
 
-pub fn list_vars(conn: &Connection) -> Result<Vec<String>, String> {
-    let mut stmt = conn
+pub fn list_vars(tx: &Transaction<'_>) -> Result<Vec<String>, String> {
+    let mut stmt = tx
         .prepare("SELECT varName FROM vars")
         .map_err(|err| err.to_string())?;
     let rows = stmt

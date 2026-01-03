@@ -68,7 +68,7 @@ fn update_db_blocking(reporter: &JobReporter) -> Result<(), String> {
     reporter.progress(10);
 
     let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
+    let mut db = Db::open(&db_path)?;
     db.ensure_schema()?;
     reporter.log(format!("DB ready: {}", db.path().display()));
 
@@ -482,7 +482,7 @@ fn cleanup_missing_vars(
     exist_vars: &HashSet<String>,
     reporter: &JobReporter,
 ) -> Result<(), String> {
-    let db_vars = list_vars(tx.connection())?;
+    let db_vars = list_vars(tx)?;
     let mut removed = 0;
     for var_name in db_vars {
         if !exist_vars.contains(&var_name) {
