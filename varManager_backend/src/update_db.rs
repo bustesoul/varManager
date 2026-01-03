@@ -1,11 +1,13 @@
 use crate::db::{
-    delete_var_related, list_vars, replace_dependencies, replace_scenes, upsert_var, Db,
-    SceneRecord, VarRecord,
+    delete_var_related, list_vars, replace_dependencies, replace_scenes, upsert_install_status,
+    upsert_var, var_exists_conn, Db, SceneRecord, VarRecord,
 };
-use crate::{job_log, job_progress, AppState};
+use crate::paths::resolve_var_file_path;
+use crate::var_logic::vars_dependencies;
+use crate::{job_log, job_progress, system_ops, winfs, AppState};
 use chrono::{DateTime, Local};
 use regex::Regex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -25,6 +27,7 @@ const DELETED_DIR: &str = "___DeletedVars___";
 const INSTALL_LINK_DIR: &str = "___VarsLink___";
 const MISSING_LINK_DIR: &str = "___MissingVarLink___";
 const TEMP_LINK_DIR: &str = "___TempVarLink___";
+const VARS_FOR_INSTALL_FILE: &str = "varsForInstall.txt";
 
 pub async fn run_update_db_job(state: AppState, id: u64) -> Result<(), String> {
     let handle = Handle::current();
@@ -64,7 +67,30 @@ fn update_db_blocking(reporter: &JobReporter) -> Result<(), String> {
     reporter.log(format!("UpdateDB start: varspath={}", varspath.display()));
     reporter.progress(1);
 
-    tidy_vars(&varspath, vampath.as_ref(), reporter)?;
+    let addon_vars = match vampath.as_ref() {
+        Some(vampath) => collect_addonpackages_vars(vampath),
+        None => Vec::new(),
+    };
+
+    let mut vars_for_install = load_vars_for_install();
+    for varfile in &addon_vars {
+        if is_symlink(varfile) {
+            continue;
+        }
+        if let Some(name) = varfile.file_stem().and_then(|s| s.to_str()) {
+            if comply_var_name(name) {
+                vars_for_install.push(name.to_string());
+            }
+        }
+    }
+    vars_for_install = dedup_strings(vars_for_install);
+    save_vars_for_install(&vars_for_install)?;
+
+    tidy_vars(
+        &varspath,
+        if vampath.is_some() { Some(&addon_vars) } else { None },
+        reporter,
+    )?;
     reporter.progress(10);
 
     let db_path = crate::exe_dir().join("varManager.db");
@@ -130,8 +156,53 @@ fn update_db_blocking(reporter: &JobReporter) -> Result<(), String> {
         }
     }
 
-    cleanup_missing_vars(&tx, &exist_vars, reporter)?;
+    cleanup_missing_vars(&tx, &exist_vars, &varspath, reporter)?;
     tx.commit().map_err(|err| err.to_string())?;
+
+    reporter.progress(90);
+
+    if !vars_for_install.is_empty() {
+        if let Some(vampath) = vampath.as_ref() {
+            reporter.log(format!(
+                "Install pending vars (varsForInstall): {}",
+                vars_for_install.len()
+            ));
+            let pending = vars_dependencies(db.connection(), vars_for_install)?;
+            let total = pending.len();
+            for (idx, var_name) in pending.iter().enumerate() {
+                match install_var(db.connection(), &varspath, vampath, var_name) {
+                    Ok(InstallOutcome::Installed) => {
+                        reporter.log(format!("{} installed", var_name));
+                    }
+                    Ok(InstallOutcome::AlreadyInstalled) => {}
+                    Err(err) => {
+                        reporter.log(format!("install pending failed {} ({})", var_name, err));
+                    }
+                }
+                if total > 0 && (idx % 50 == 0 || idx + 1 == total) {
+                    let progress = 90 + ((idx + 1) * 5 / total) as u8;
+                    reporter.progress(progress.min(95));
+                }
+            }
+            let _ = clear_vars_for_install();
+        } else {
+            reporter.log("vampath not set; skip varsForInstall install".to_string());
+        }
+    }
+
+    reporter.progress(95);
+
+    if let Some(vampath) = vampath.as_ref() {
+        refresh_install_status(db.connection(), vampath, reporter)?;
+        reporter.progress(97);
+        match system_ops::rescan_packages(&reporter.state) {
+            Ok(true) => reporter.log("RescanPackages triggered".to_string()),
+            Ok(false) => reporter.log("RescanPackages skipped (VaM not running)".to_string()),
+            Err(err) => reporter.log(format!("RescanPackages failed ({})", err)),
+        }
+    } else {
+        reporter.log("vampath not set; skip UpdateVarsInstalled/RescanPackages".to_string());
+    }
 
     reporter.progress(100);
     reporter.log("UpdateDB completed".to_string());
@@ -163,7 +234,11 @@ fn normalize_path(value: &str) -> Option<PathBuf> {
     }
 }
 
-fn tidy_vars(varspath: &Path, vampath: Option<&PathBuf>, reporter: &JobReporter) -> Result<(), String> {
+fn tidy_vars(
+    varspath: &Path,
+    addon_vars: Option<&[PathBuf]>,
+    reporter: &JobReporter,
+) -> Result<(), String> {
     let tidied_path = varspath.join(TIDIED_DIR);
     let redundant_path = varspath.join(REDUNDANT_DIR);
     let not_comply_path = varspath.join(NOT_COMPLY_DIR);
@@ -184,14 +259,8 @@ fn tidy_vars(varspath: &Path, vampath: Option<&PathBuf>, reporter: &JobReporter)
         false,
     );
 
-    if let Some(vampath) = vampath {
-        let addon_path = vampath.join("AddonPackages");
-        let addon_vars = collect_var_files(
-            &addon_path,
-            &[INSTALL_LINK_DIR, MISSING_LINK_DIR, TEMP_LINK_DIR],
-            true,
-        );
-        vars.extend(addon_vars);
+    if let Some(addon_vars) = addon_vars {
+        vars.extend(addon_vars.iter().cloned());
     } else {
         reporter.log("vampath not set; skip AddonPackages scan".to_string());
     }
@@ -224,8 +293,18 @@ fn tidy_vars(varspath: &Path, vampath: Option<&PathBuf>, reporter: &JobReporter)
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| varname.clone() + ".var");
-        let dest = unique_path(&creator_path, &filename);
-        move_file(&varfile, &dest)?;
+        let dest = creator_path.join(&filename);
+        if dest.exists() {
+            let redundant_dest = unique_path(&redundant_path, &filename);
+            reporter.log(format!(
+                "{} has same filename in tidy dir, moved to {}",
+                varfile.display(),
+                redundant_dest.display()
+            ));
+            move_file(&varfile, &redundant_dest)?;
+        } else {
+            move_file(&varfile, &dest)?;
+        }
 
         if idx % 500 == 0 && total > 0 {
             reporter.log(format!("TidyVars progress: {}/{}", idx + 1, total));
@@ -339,6 +418,162 @@ fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path)
         .map(|meta| meta.file_type().is_symlink())
         .unwrap_or(false)
+}
+
+fn vars_for_install_path() -> PathBuf {
+    crate::exe_dir().join(VARS_FOR_INSTALL_FILE)
+}
+
+fn load_vars_for_install() -> Vec<String> {
+    let path = vars_for_install_path();
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(_) => return Vec::new(),
+    };
+    contents
+        .lines()
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect()
+}
+
+fn save_vars_for_install(vars: &[String]) -> Result<(), String> {
+    let path = vars_for_install_path();
+    if vars.is_empty() {
+        let _ = fs::remove_file(&path);
+        return Ok(());
+    }
+    let contents = vars.join("\r\n");
+    fs::write(&path, contents).map_err(|err| err.to_string())
+}
+
+fn clear_vars_for_install() -> Result<(), String> {
+    save_vars_for_install(&[])
+}
+
+fn dedup_strings(items: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for item in items {
+        let trimmed = item.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value = trimmed.to_string();
+        if seen.insert(value.clone()) {
+            out.push(value);
+        }
+    }
+    out
+}
+
+fn collect_addonpackages_vars(vampath: &Path) -> Vec<PathBuf> {
+    let addon_path = vampath.join("AddonPackages");
+    collect_var_files(
+        &addon_path,
+        &[INSTALL_LINK_DIR, MISSING_LINK_DIR, TEMP_LINK_DIR],
+        true,
+    )
+}
+
+fn refresh_install_status(
+    conn: &rusqlite::Connection,
+    vampath: &Path,
+    reporter: &JobReporter,
+) -> Result<(), String> {
+    conn.execute("DELETE FROM installStatus", [])
+        .map_err(|err| err.to_string())?;
+    let installed_links = collect_installed_links(vampath);
+    let mut installed = 0;
+    for (var_name, link_path) in installed_links {
+        if !var_exists_conn(conn, &var_name)? {
+            continue;
+        }
+        let disabled = link_path.with_extension("var.disabled").exists();
+        upsert_install_status(conn, &var_name, true, disabled)?;
+        installed += 1;
+    }
+    reporter.log(format!("UpdateVarsInstalled completed: {}", installed));
+    Ok(())
+}
+
+fn collect_installed_links(vampath: &Path) -> HashMap<String, PathBuf> {
+    let mut installed = HashMap::new();
+    let install_dir = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
+    for link in collect_symlink_vars(&install_dir, true) {
+        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
+            installed.insert(stem.to_string(), link);
+        }
+    }
+    for link in collect_symlink_vars(&vampath.join("AddonPackages"), false) {
+        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
+            installed.insert(stem.to_string(), link);
+        }
+    }
+    installed
+}
+
+fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
+    if !root.exists() {
+        return Vec::new();
+    }
+    let mut files = Vec::new();
+    let walker = WalkDir::new(root)
+        .follow_links(false)
+        .max_depth(if recursive { usize::MAX } else { 1 })
+        .into_iter();
+    for entry in walker {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        if entry.file_type().is_file() {
+            if let Some(ext) = entry.path().extension() {
+                if ext.eq_ignore_ascii_case("var") && is_symlink(entry.path()) {
+                    files.push(entry.path().to_path_buf());
+                }
+            }
+        }
+    }
+    files
+}
+
+enum InstallOutcome {
+    Installed,
+    AlreadyInstalled,
+}
+
+fn install_var(
+    conn: &rusqlite::Connection,
+    varspath: &Path,
+    vampath: &Path,
+    var_name: &str,
+) -> Result<InstallOutcome, String> {
+    let link_dir = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
+    fs::create_dir_all(&link_dir).map_err(|err| err.to_string())?;
+    let link_path = link_dir.join(format!("{}.var", var_name));
+
+    let disabled_path = link_path.with_extension("var.disabled");
+    if disabled_path.exists() {
+        fs::remove_file(&disabled_path).map_err(|err| err.to_string())?;
+    }
+
+    if link_path.exists() {
+        return Ok(InstallOutcome::AlreadyInstalled);
+    }
+
+    let dest = resolve_var_file_path(varspath, var_name)?;
+    winfs::create_symlink_file(&link_path, &dest)?;
+    set_link_times(&link_path, &dest)?;
+    upsert_install_status(conn, var_name, true, false)?;
+    Ok(InstallOutcome::Installed)
+}
+
+fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
+    let meta = fs::metadata(target).map_err(|err| err.to_string())?;
+    let modified = meta.modified().map_err(|err| err.to_string())?;
+    let created = meta.created().unwrap_or(modified);
+    winfs::set_symlink_file_times(link, created, modified)
 }
 
 struct ProcessedVar {
@@ -480,6 +715,7 @@ fn process_var_file(
 fn cleanup_missing_vars(
     tx: &rusqlite::Transaction<'_>,
     exist_vars: &HashSet<String>,
+    varspath: &Path,
     reporter: &JobReporter,
 ) -> Result<(), String> {
     let db_vars = list_vars(tx)?;
@@ -487,11 +723,30 @@ fn cleanup_missing_vars(
     for var_name in db_vars {
         if !exist_vars.contains(&var_name) {
             delete_var_related(tx, &var_name)?;
+            if let Err(err) = delete_preview_pics(varspath, &var_name) {
+                reporter.log(format!(
+                    "delete preview pics failed {} ({})",
+                    var_name, err
+                ));
+            }
             removed += 1;
         }
     }
     if removed > 0 {
         reporter.log(format!("Removed {} missing var records", removed));
+    }
+    Ok(())
+}
+
+fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
+    let types = [
+        "scenes", "looks", "hairstyle", "clothing", "assets", "morphs", "skin", "pose",
+    ];
+    for typename in types {
+        let dir = varspath.join(PREVIEW_DIR).join(typename).join(var_name);
+        if dir.exists() {
+            fs::remove_dir_all(&dir).map_err(|err| err.to_string())?;
+        }
     }
     Ok(())
 }
@@ -518,7 +773,8 @@ struct MetaJson {
     contents: String,
 }
 
-fn zip_datetime_to_string(dt: zip::DateTime) -> Option<String> {
+fn zip_datetime_to_string(dt: Option<zip::DateTime>) -> Option<String> {
+    let dt = dt?;
     Some(format!(
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
         dt.year(),

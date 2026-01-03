@@ -32,6 +32,7 @@ mod stale_jobs;
 mod system_jobs;
 mod system_ops;
 mod update_db;
+mod util;
 mod var_logic;
 mod vars_misc;
 mod vars_jobs;
@@ -207,9 +208,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health))
         .route("/config", get(get_config))
         .route("/jobs", post(start_job))
-        .route("/jobs/:id", get(get_job))
-        .route("/jobs/:id/logs", get(get_job_logs))
-        .route("/jobs/:id/result", get(get_job_result))
+        .route("/jobs/{id}", get(get_job))
+        .route("/jobs/{id}/logs", get(get_job_logs))
+        .route("/jobs/{id}/result", get(get_job_result))
         .route("/shutdown", post(shutdown))
         .with_state(state);
 

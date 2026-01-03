@@ -216,7 +216,9 @@ fn set_switch_blocking(reporter: &JobReporter, name: &str) -> Result<(), String>
 
         let meta = fs::symlink_metadata(&addon_path).map_err(|err| err.to_string())?;
         if meta.file_type().is_symlink() {
-            fs::remove_file(&addon_path).map_err(|err| err.to_string())?;
+            if fs::remove_file(&addon_path).is_err() {
+                fs::remove_dir_all(&addon_path).map_err(|err| err.to_string())?;
+            }
         } else {
             fs::remove_dir_all(&addon_path).map_err(|err| err.to_string())?;
         }

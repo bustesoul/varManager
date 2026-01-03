@@ -1,10 +1,10 @@
-use crate::paths::{addon_packages_dir, config_paths, loadscene_path};
+use crate::paths::{addon_packages_dir, loadscene_path};
 use crate::{exe_dir, util, AppState};
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use sysinfo::{ProcessExt, System, SystemExt};
+use sysinfo::{ProcessesToUpdate, System};
 
 const DEFAULT_VAM_EXEC: &str = "VaM (Desktop Mode).bat";
 const DEFAULT_DOWNLOADER_REL: &str = "plugin\\vam_downloader.exe";
@@ -30,7 +30,7 @@ pub fn run_downloader(state: &AppState, urls: &[String]) -> Result<(), String> {
     }
 
     let temp_file = util::temp_dir_file("vam_download")?;
-    fs::write(&temp_file, urls.join("\n")).map_err(|err| err.to_string())?;
+    fs::write(&temp_file, urls.join("\r\n")).map_err(|err| err.to_string())?;
 
     let status = Command::new(&exec_path)
         .current_dir(exe_dir())
@@ -49,8 +49,14 @@ pub fn run_downloader(state: &AppState, urls: &[String]) -> Result<(), String> {
 }
 
 pub fn start_vam(state: &AppState) -> Result<(), String> {
-    let (_, vampath) = config_paths(state)?;
-    let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
+    let vampath = state
+        .config
+        .vampath
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| "vampath is required in config.json".to_string())?;
     let exec_name = state
         .config
         .vam_exec
@@ -64,8 +70,9 @@ pub fn start_vam(state: &AppState) -> Result<(), String> {
     }
 
     if is_cmd_script(&exec_path) {
+        let exec = format!("\"{}\"", exec_path.to_string_lossy());
         Command::new("cmd")
-            .args(["/C", exec_path.to_string_lossy().as_ref()])
+            .args(["/C", exec.as_str()])
             .current_dir(&vampath)
             .spawn()
             .map_err(|err| err.to_string())?;
@@ -79,13 +86,19 @@ pub fn start_vam(state: &AppState) -> Result<(), String> {
 }
 
 pub fn rescan_packages(state: &AppState) -> Result<bool, String> {
-    let (_, vampath) = config_paths(state)?;
-    let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
+    let vampath = state
+        .config
+        .vampath
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| "vampath is required in config.json".to_string())?;
 
     let mut system = System::new();
-    system.refresh_processes();
+    system.refresh_processes(ProcessesToUpdate::All, false);
     let is_running = system.processes().values().any(|proc_| {
-        let name = proc_.name().to_ascii_lowercase();
+        let name = proc_.name().to_string_lossy().to_ascii_lowercase();
         name == "vam" || name == "vam.exe"
     });
     if !is_running {
@@ -150,8 +163,14 @@ fn resolve_downloader_save_path(state: &AppState) -> Result<PathBuf, String> {
         return Ok(exe_dir().join(candidate));
     }
 
-    let (_, vampath) = config_paths(state)?;
-    let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
+    let vampath = state
+        .config
+        .vampath
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| "vampath is required in config.json".to_string())?;
     Ok(addon_packages_dir(&vampath))
 }
 
