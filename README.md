@@ -1,8 +1,15 @@
 # varManager
+[English](README.md) | [简体中文](README_CN.md)
 varManager
 var Manager for virt-a-mate
 This tool is used to manage var files.
 The main method is to place all var files to the repository directory.Create a symlink link to the var file in the AddonPackages directory as needed.
+
+### Version 1.0.4.13 Update Tips:
+0. **Upgrade Notice**: Before deploying the new version, remove the old program directory. Cleanup guide (if you keep the folder): `varManager.mdb` (old Access DB), `varManager.exe`, `varManager.pdb`, `varManager.dll.config` (you can edit it to extract old settings), `varManager.db*`, `varManager.log`.
+1. **Upgrade**: Switch database to SQLite and upgrade to .NET 9.
+2. **First Run Notice**: On first run, please click `UPD_DB` to rebuild the database.
+3. **No Data Loss**: Your var files and profile settings are not stored in the database, so they will not be lost.
 
 ### Version 1.0.4.11 Update Tips:
 1. **Support Multiple Download**: Support download multiple var by once click in 

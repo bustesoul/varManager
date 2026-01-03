@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows.Forms;
+using varManager.Data;
 
 namespace varManager
 {
@@ -13,6 +14,7 @@ namespace varManager
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            VarManagerContext.EnsureCreatedOnce();
             Application.Run(new Form1());
         }
     }

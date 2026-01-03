@@ -20,7 +20,11 @@ namespace varManager
                 {
                     components.Dispose();
                 }
-                _dbContext?.Dispose();
+                foreach (var context in _dbContext.Values)
+                {
+                    context?.Dispose();
+                }
+                _dbContext.Dispose();
             }
             base.Dispose(disposing);
         }

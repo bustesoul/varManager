@@ -45,20 +45,9 @@ namespace varManager
         private static string missingVarLinkDirName = "___MissingVarLink___";
         private static string tempVarLinkDirName = "___TempVarLink___";
         private InvokeAddLoglist addlog;
-        private VarManagerContext? _dbContext;
-        private VarManagerContext dbContext 
-        { 
-            get 
-            { 
-                if (_dbContext == null)
-                {
-                    _dbContext = new VarManagerContext();
-                    // Ensure database is created
-                    _dbContext.Database.EnsureCreated();
-                }
-                return _dbContext; 
-            } 
-        }
+        private readonly ThreadLocal<VarManagerContext> _dbContext =
+            new ThreadLocal<VarManagerContext>(() => new VarManagerContext(), true);
+        private VarManagerContext dbContext => _dbContext.Value!;
         public Form1()
         {
             InitializeComponent();
@@ -719,6 +708,9 @@ namespace varManager
                 return;
             }
             mutex = new System.Threading.Mutex();
+
+            var (dbPath, provider) = VarManagerContext.GetDatabaseInfo();
+            this.BeginInvoke(addlog, new Object[] { $"DB config: {dbPath} | Provider: {provider}", LogLevel.INFO });
             
             // Set the sort after data source initialization to avoid .NET 9 issues
             try
@@ -1024,6 +1016,7 @@ namespace varManager
                         }
                         varsrow.MetaDate = metajson.DateTime;
                         int countscene = 0, countlook = 0, countclothing = 0, counthair = 0, countplugincs = 0, countplugincslist = 0, countasset = 0, countmorphs = 0, countpose = 0, countskin = 0;
+                        var newScenes = new List<Scene>();
                         //foreach (var zfile in varzipfile.Entries)
                         //varzipfile
                         foreach (ZipEntry zfile in varzipfile)
@@ -1157,8 +1150,8 @@ namespace varManager
                                     // if (ext == ".vap" || ext == ".json")
                                     if (typename == "scenes" || typename == "looks" || typename == "clothing" || typename == "hairstyle" || typename == "morphs" || typename == "pose" || typename == "skin")
                                     {
-                                        // Add scene to EF Core context
-                                        dbContext.Scenes.Add(new Scene
+                                        // Collect scenes for a single bulk insert
+                                        newScenes.Add(new Scene
                                         {
                                             VarName = basename,
                                             AtomType = typename,
@@ -1175,8 +1168,10 @@ namespace varManager
                                 this.BeginInvoke(addlog, new Object[] { zfile.Name + " " + ex.Message, LogLevel.ERROR });
                             }
                         }
-                        // Save scenes to database
-                        dbContext.SaveChanges();
+                        if (newScenes.Count > 0)
+                        {
+                            dbContext.Scenes.AddRange(newScenes);
+                        }
                         
                         varsrow.Scenes = countscene;
                         varsrow.Looks = countlook;
@@ -1188,12 +1183,11 @@ namespace varManager
                         if (countplugincslist > 0)
                             varsrow.Plugins = countplugincslist;
                         else
-                            varsrow.Plugins = countplugincs;
+                        varsrow.Plugins = countplugincs;
                         varsrow.Assets = countasset;
                         
-                        // Add var to context and save
+                        // Add var to context
                         dbContext.Vars.Add(varsrow);
-                        dbContext.SaveChanges();
 
 
                         List<string> dependencies = new List<string>();
@@ -1213,18 +1207,27 @@ namespace varManager
                         }
                         // Remove existing dependencies for this var
                         var existingDeps = dbContext.Dependencies.Where(d => d.VarName == basename).ToList();
-                        dbContext.Dependencies.RemoveRange(existingDeps);
+                        if (existingDeps.Count > 0)
+                        {
+                            dbContext.Dependencies.RemoveRange(existingDeps);
+                        }
                         
                         // Add new dependencies
-                        foreach (string dependencie in dependencies)
+                        if (dependencies.Count > 0)
                         {
-                            dbContext.Dependencies.Add(new Dependency
+                            var newDeps = new List<Dependency>(dependencies.Count);
+                            foreach (string dependencie in dependencies)
                             {
-                                VarName = basename,
-                                DependencyName = dependencie
-                            });
+                                newDeps.Add(new Dependency
+                                {
+                                    VarName = basename,
+                                    DependencyName = dependencie
+                                });
+                            }
+                            dbContext.Dependencies.AddRange(newDeps);
                         }
                         dbContext.SaveChanges();
+                        dbContext.ChangeTracker.Clear();
                     }
                     }
                 }
@@ -1234,6 +1237,7 @@ namespace varManager
                     {
                         varsrow.VarPath = curpath;
                         dbContext.SaveChanges();
+                        dbContext.ChangeTracker.Clear();
                     }
                 }
 
@@ -1262,7 +1266,6 @@ namespace varManager
                 curVarfile++;
                 this.BeginInvoke(mi, new Object[] { curVarfile, vars.Length });
             }
-            dbContext.SaveChanges();
 
             List<string> deletevars = new List<string>();
 

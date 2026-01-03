@@ -6,6 +6,42 @@ namespace varManager.Data
 {
     public class VarManagerContext : DbContext
     {
+        public const string ProviderName = "Microsoft.Data.Sqlite";
+        private static readonly object s_initLock = new object();
+        private static bool s_initialized;
+
+        public static string GetDatabasePath()
+        {
+            var baseDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)
+                ?? System.AppDomain.CurrentDomain.BaseDirectory;
+            return Path.Combine(baseDirectory, "varManager.db");
+        }
+
+        public static (string DbPath, string Provider) GetDatabaseInfo()
+        {
+            return (GetDatabasePath(), ProviderName);
+        }
+
+        public static void EnsureCreatedOnce()
+        {
+            if (s_initialized)
+            {
+                return;
+            }
+
+            lock (s_initLock)
+            {
+                if (s_initialized)
+                {
+                    return;
+                }
+
+                using var context = new VarManagerContext();
+                context.Database.EnsureCreated();
+                s_initialized = true;
+            }
+        }
+
         public DbSet<Dependency> Dependencies { get; set; }
         public DbSet<InstallStatus> InstallStatuses { get; set; }
         public DbSet<Var> Vars { get; set; }
@@ -18,8 +54,7 @@ namespace varManager.Data
             if (!optionsBuilder.IsConfigured)
             {
                 // Use project directory for database location to match original behavior
-                var baseDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? System.AppDomain.CurrentDomain.BaseDirectory;
-                var dbPath = Path.Combine(baseDirectory, "varManager.db");
+                var dbPath = GetDatabasePath();
                 optionsBuilder.UseSqlite($"Data Source={dbPath}");
             }
         }
