@@ -7,6 +7,16 @@ pub const MISSING_LINK_DIR: &str = "___MissingVarLink___";
 pub const TEMP_LINK_DIR: &str = "___TempVarLink___";
 pub const PREVIEW_DIR: &str = "___PreviewPics___";
 pub const DELETED_DIR: &str = "___DeletedVars___";
+pub const STALE_DIR: &str = "___StaleVars___";
+pub const OLD_VERSION_DIR: &str = "___OldVersionVars___";
+pub const ADDON_PACK_SWITCH_DIR: &str = "___AddonPacksSwitch ___";
+pub const ADDON_PACKAGES_DIR: &str = "AddonPackages";
+pub const ADDON_PREFS_DIR: &str = "AddonPackagesFilePrefs";
+pub const PLUGIN_DATA_DIR: &str = "Custom";
+pub const FEELFAR_DIR: &str = "PluginData";
+pub const FEELFAR_NAME: &str = "feelfar";
+pub const CACHE_DIR: &str = "Cache";
+pub const LOADSCENE_FILE: &str = "loadscene.json";
 
 pub fn config_paths(state: &AppState) -> Result<(PathBuf, Option<PathBuf>), String> {
     let varspath = state
@@ -51,4 +61,39 @@ pub fn resolve_var_file_path(varspath: &Path, var_name: &str) -> Result<PathBuf,
         return Ok(fallback);
     }
     Err(format!("var file not found for {}", var_name))
+}
+
+pub fn addon_packages_dir(vampath: &Path) -> PathBuf {
+    vampath.join(ADDON_PACKAGES_DIR)
+}
+
+pub fn missing_links_dir(vampath: &Path) -> PathBuf {
+    addon_packages_dir(vampath).join(MISSING_LINK_DIR)
+}
+
+pub fn install_links_dir(vampath: &Path) -> PathBuf {
+    addon_packages_dir(vampath).join(INSTALL_LINK_DIR)
+}
+
+pub fn temp_links_dir(vampath: &Path) -> PathBuf {
+    addon_packages_dir(vampath).join(TEMP_LINK_DIR)
+}
+
+pub fn addon_switch_root(vampath: &Path) -> PathBuf {
+    vampath.join(ADDON_PACK_SWITCH_DIR)
+}
+
+pub fn prefs_root(vampath: &Path) -> PathBuf {
+    vampath.join(ADDON_PREFS_DIR)
+}
+
+pub fn feelfar_dir(vampath: &Path) -> PathBuf {
+    vampath
+        .join(PLUGIN_DATA_DIR)
+        .join(FEELFAR_DIR)
+        .join(FEELFAR_NAME)
+}
+
+pub fn loadscene_path(vampath: &Path) -> PathBuf {
+    feelfar_dir(vampath).join(LOADSCENE_FILE)
 }

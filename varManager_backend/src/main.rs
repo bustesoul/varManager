@@ -21,12 +21,19 @@ use tracing_subscriber::EnvFilter;
 
 mod db;
 mod deps_jobs;
+mod hub;
 mod links;
 mod missing_deps;
+mod packswitch;
 mod paths;
 mod preview_jobs;
+mod scenes;
+mod stale_jobs;
+mod system_jobs;
+mod system_ops;
 mod update_db;
 mod var_logic;
+mod vars_misc;
 mod vars_jobs;
 mod winfs;
 
@@ -42,6 +49,12 @@ struct Config {
     varspath: Option<String>,
     #[serde(default)]
     vampath: Option<String>,
+    #[serde(default)]
+    vam_exec: Option<String>,
+    #[serde(default)]
+    downloader_path: Option<String>,
+    #[serde(default)]
+    downloader_save_path: Option<String>,
 }
 
 impl Default for Config {
@@ -53,6 +66,9 @@ impl Default for Config {
             job_concurrency: 2,
             varspath: None,
             vampath: None,
+            vam_exec: Some("VaM (Desktop Mode).bat".to_string()),
+            downloader_path: Some("plugin\\vam_downloader.exe".to_string()),
+            downloader_save_path: None,
         }
     }
 }
@@ -398,12 +414,49 @@ async fn run_job(
         "update_db" => update_db::run_update_db_job(state.clone(), id).await,
         "missing_deps" => missing_deps::run_missing_deps_job(state.clone(), id, args).await,
         "rebuild_links" => links::run_rebuild_links_job(state.clone(), id, args).await,
+        "links_move" => links::run_move_links_job(state.clone(), id, args).await,
+        "links_missing_create" => links::run_missing_links_create_job(state.clone(), id, args).await,
         "install_vars" => vars_jobs::run_install_vars_job(state.clone(), id, args).await,
         "uninstall_vars" => vars_jobs::run_uninstall_vars_job(state.clone(), id, args).await,
         "delete_vars" => vars_jobs::run_delete_vars_job(state.clone(), id, args).await,
+        "vars_export_installed" => vars_misc::run_export_installed_job(state.clone(), id, args).await,
+        "vars_install_batch" => vars_misc::run_install_batch_job(state.clone(), id, args).await,
+        "vars_toggle_install" => vars_misc::run_toggle_install_job(state.clone(), id, args).await,
+        "vars_locate" => vars_misc::run_locate_job(state.clone(), id, args).await,
+        "refresh_install_status" => vars_misc::run_refresh_install_status_job(state.clone(), id, args).await,
         "saves_deps" => deps_jobs::run_saves_deps_job(state.clone(), id, args).await,
         "log_deps" => deps_jobs::run_log_deps_job(state.clone(), id, args).await,
         "fix_previews" => preview_jobs::run_fix_previews_job(state.clone(), id, args).await,
+        "stale_vars" => stale_jobs::run_stale_vars_job(state.clone(), id, args).await,
+        "old_version_vars" => stale_jobs::run_old_version_vars_job(state.clone(), id, args).await,
+        "packswitch_add" => packswitch::run_packswitch_add_job(state.clone(), id, args).await,
+        "packswitch_delete" => packswitch::run_packswitch_delete_job(state.clone(), id, args).await,
+        "packswitch_rename" => packswitch::run_packswitch_rename_job(state.clone(), id, args).await,
+        "packswitch_set" => packswitch::run_packswitch_set_job(state.clone(), id, args).await,
+        "hub_missing_scan" => hub::run_hub_missing_scan_job(state.clone(), id, args).await,
+        "hub_updates_scan" => hub::run_hub_updates_scan_job(state.clone(), id, args).await,
+        "hub_download_all" => hub::run_hub_download_all_job(state.clone(), id, args).await,
+        "hub_info" => hub::run_hub_info_job(state.clone(), id).await,
+        "hub_resources" => hub::run_hub_resources_job(state.clone(), id, args).await,
+        "hub_resource_detail" => hub::run_hub_resource_detail_job(state.clone(), id, args).await,
+        "hub_find_packages" => hub::run_hub_find_packages_job(state.clone(), id, args).await,
+        "scene_load" => scenes::run_scene_load_job(state.clone(), id, args).await,
+        "scene_analyze" => scenes::run_scene_analyze_job(state.clone(), id, args).await,
+        "scene_preset_look" => scenes::run_scene_preset_look_job(state.clone(), id, args).await,
+        "scene_preset_plugin" => scenes::run_scene_preset_plugin_job(state.clone(), id, args).await,
+        "scene_preset_pose" => scenes::run_scene_preset_pose_job(state.clone(), id, args).await,
+        "scene_preset_animation" => scenes::run_scene_preset_animation_job(state.clone(), id, args).await,
+        "scene_preset_scene" => scenes::run_scene_preset_scene_job(state.clone(), id, args).await,
+        "scene_add_atoms" => scenes::run_scene_add_atoms_job(state.clone(), id, args).await,
+        "scene_add_subscene" => scenes::run_scene_add_subscene_job(state.clone(), id, args).await,
+        "scene_hide" => scenes::run_scene_hide_job(state.clone(), id, args).await,
+        "scene_fav" => scenes::run_scene_fav_job(state.clone(), id, args).await,
+        "scene_unhide" => scenes::run_scene_unhide_job(state.clone(), id, args).await,
+        "scene_unfav" => scenes::run_scene_unfav_job(state.clone(), id, args).await,
+        "cache_clear" => scenes::run_cache_clear_job(state.clone(), id, args).await,
+        "vam_start" => system_jobs::run_vam_start_job(state.clone(), id, args).await,
+        "rescan_packages" => system_jobs::run_rescan_packages_job(state.clone(), id, args).await,
+        "open_url" => system_jobs::run_open_url_job(state.clone(), id, args).await,
         _ => Err(format!("job kind not implemented: {}", kind)),
     }
 }
