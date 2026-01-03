@@ -49,19 +49,25 @@
 - Implemented endpoints: GET /health, GET /config, POST /shutdown.
 - Config file: config.json next to backend exe, auto-created if missing.
 - Config fields: listen_host, listen_port, log_level, job_concurrency, varspath, vampath.
-- Job framework: POST /jobs, GET /jobs/{id}, GET /jobs/{id}/logs (in-memory, capped logs).
-- Job kinds: "noop", "update_db".
+- Job framework: POST /jobs, GET /jobs/{id}, GET /jobs/{id}/logs, GET /jobs/{id}/result (in-memory, capped logs).
+- Job kinds: "noop", "update_db", "missing_deps" (args: scope=installed|all|filtered, var_names for filtered), "rebuild_links" (args: include_missing), "install_vars"/"uninstall_vars"/"delete_vars" (args: var_names, include_dependencies/include_implicated, temp, disabled), "saves_deps"/"log_deps", "fix_previews".
 - Windows native file ops module implemented (symlink create/read, set file time).
 - SQLite access layer implemented (schema ensure + CRUD helpers).
 - update_db uses config varspath/vampath, tidies var files, parses zip/meta.json, updates dependencies/scenes/vars.
 
 ## Implementation Progress
 - Done: backend service scaffold, config file generation, job framework, "update_db" job core flow.
+- Done: job result endpoint + missing_deps job (scope installed/all/filtered) with auto-install for installed scope.
+- Done: rebuild_links job（重建 ___VarsLink___/AddonPackages 顶层/___MissingVarLink___ 的符号链接）。
+- Done: 安装/卸载/删除作业（install_vars/uninstall_vars/delete_vars），依赖展开与影响链逻辑按 C# 实现复刻。
+- Done: 保存/日志依赖分析作业（saves_deps/log_deps），含依赖解析与自动安装。
+- Done: Fix Preview 作业（fix_previews），缺失预览图从 .var 内重新提取。
 - Done: Windows native symlink module (create/read/set file times).
 - Done: SQLite schema ensure + helpers for vars/dependencies/scenes.
 - In progress: update_db parity details and performance hardening.
-- Pending: remaining job kinds (missing deps, log/saves analysis, rebuild links, etc.).
+- Pending: remaining job kinds (log/saves analysis, rebuild links, etc.).
 - Pending: WinForms lifecycle integration (start/health/shutdown) and API call replacements.
+- Note: missing_deps install resolves var file path as `${varspath}\\___VarTidied___\\<creator>\\<varName>.var` with fallback to `${varspath}\\<varName>.var` because the current schema has no VarPath column.
 
 ## UI Button Map
 
@@ -71,16 +77,16 @@
 | Settings | buttonSetting_Click (varManager/Form1.cs) | Open FormSettings; restart app | Frontend-only; backend reads config.json | TODO |
 | UPD_DB | buttonUpdDB_Click | TidyVars -> UpdDB -> install pending -> UpdateVarsInstalled -> RescanPackages | POST /jobs (kind=update_db) | TODO |
 | Start VAM | buttonStartVam_Click | Start VaM.exe | POST /vam/start (optional) | TODO |
-| Missing Depends | buttonMissingDepends_Click | Check installed -> install or open MissingVars form | POST /jobs/missing-deps?scope=installed | TODO |
-| All Missing Depends | buttonAllMissingDepends_Click | Check all deps -> open MissingVars form | POST /jobs/missing-deps?scope=all | TODO |
-| Filtered Missing Depends | buttonFilteredMissingDepends_Click | Check deps for filtered list | POST /jobs/missing-deps?scope=filtered | TODO |
-| Rebuild Symlink | buttonFixRebuildLink_Click | ReparsePoint -> recreate links | POST /links/rebuild | TODO |
-| Saves Dependencies | buttonFixSavesDepend_Click | Parse Saves/Custom -> savedepens -> install | POST /jobs/saves-deps | TODO |
-| Log Analysis | buttonLogAnalysis_Click | Parse output_log.txt -> install | POST /jobs/log-deps | TODO |
+| Missing Depends | buttonMissingDepends_Click | Check installed -> install or open MissingVars form | POST /jobs (kind=missing_deps, args.scope=installed) | Backend done |
+| All Missing Depends | buttonAllMissingDepends_Click | Check all deps -> open MissingVars form | POST /jobs (kind=missing_deps, args.scope=all) | Backend done |
+| Filtered Missing Depends | buttonFilteredMissingDepends_Click | Check deps for filtered list | POST /jobs (kind=missing_deps, args.scope=filtered, args.var_names=filtered list) | Backend done |
+| Rebuild Symlink | buttonFixRebuildLink_Click | ReparsePoint -> recreate links | POST /jobs (kind=rebuild_links, args.include_missing=true) | Backend done |
+| Saves Dependencies | buttonFixSavesDepend_Click | Parse Saves/Custom -> savedepens -> install | POST /jobs (kind=saves_deps) | Backend done |
+| Log Analysis | buttonLogAnalysis_Click | Parse output_log.txt -> install | POST /jobs (kind=log_deps) | Backend done |
 | Stale Vars | buttonStaleVars_Click | Move stale/old versions | POST /jobs/stale-vars | TODO |
-| Install Selected | buttonInstall_Click | Install selected + deps | POST /vars/install | TODO |
-| Uninstall Selected | buttonUninstallSels_Click | Remove links for selected | POST /vars/uninstall | TODO |
-| Delete Selected | buttonDelete_Click | Move to ___DeletedVars___ + cleanup | POST /vars/delete | TODO |
+| Install Selected | buttonInstall_Click | Install selected + deps | POST /jobs (kind=install_vars, args.include_dependencies=true) | Backend done |
+| Uninstall Selected | buttonUninstallSels_Click | Remove links for selected | POST /jobs (kind=uninstall_vars, args.include_implicated=true) | Backend done |
+| Delete Selected | buttonDelete_Click | Move to ___DeletedVars___ + cleanup | POST /jobs (kind=delete_vars, args.include_implicated=true) | Backend done |
 | Move Links | buttonMove_Click | Move link files under ___VarsLink___ | POST /links/move | TODO |
 | Export Installed | buttonExpInsted_Click | Write installed list to txt | POST /vars/export-installed | TODO |
 | Install From Txt | buttonInstFormTxt_Click | Read list -> VarInstall | POST /vars/install-batch | TODO |
@@ -92,7 +98,7 @@
 | Preview Install/Remove | buttonpreviewinstall_Click | Install/Uninstall for selected var | POST /vars/toggle-install | TODO |
 | Analysis | buttonAnalysis_Click | Analyze scene atoms -> FormAnalysis | POST /scene/analyze | TODO |
 | Reset Filter | buttonResetFilter_Click | Reset UI filters | Frontend-only | TODO |
-| Fix Preview | buttonFixPreview_Click | Re-extract missing previews | POST /jobs/fix-previews | TODO |
+| Fix Preview | buttonFixPreview_Click | Re-extract missing previews | POST /jobs (kind=fix_previews) | Backend done |
 | Hub | buttonHub_Click | Open FormHub | Frontend-only | TODO |
 | Prepare Saves | prepareFormSavesToolStripMenuItem_Click | Open PrepareSaves | Frontend-only | TODO |
 | Clear Cache | buttonClearCache_Click | Delete current scene cache | POST /cache/clear | TODO |

@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Transaction};
 use std::path::{Path, PathBuf};
 
 pub struct Db {
@@ -142,6 +142,120 @@ pub fn var_exists(tx: &Transaction<'_>, var_name: &str) -> Result<bool, String> 
     Ok(exists.is_some())
 }
 
+pub fn var_exists_conn(conn: &Connection, var_name: &str) -> Result<bool, String> {
+    let exists: Option<i64> = conn
+        .query_row(
+            "SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1",
+            params![var_name],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|err| err.to_string())?;
+    Ok(exists.is_some())
+}
+
+pub fn list_var_versions(
+    conn: &Connection,
+    creator_name: &str,
+    package_name: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let mut stmt = conn
+        .prepare("SELECT varName, version FROM vars WHERE creatorName = ?1 AND packageName = ?2")
+        .map_err(|err| err.to_string())?;
+    let rows = stmt
+        .query_map(params![creator_name, package_name], |row| {
+            let name = row.get::<_, String>(0)?;
+            let version = row.get::<_, Option<String>>(1)?.unwrap_or_default();
+            Ok((name, version))
+        })
+        .map_err(|err| err.to_string())?;
+    let mut vars = Vec::new();
+    for row in rows {
+        vars.push(row.map_err(|err| err.to_string())?);
+    }
+    Ok(vars)
+}
+
+pub fn list_dependencies_all(conn: &Connection) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare("SELECT dependency FROM dependencies")
+        .map_err(|err| err.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, Option<String>>(0))
+        .map_err(|err| err.to_string())?;
+    let mut deps = Vec::new();
+    for row in rows {
+        if let Some(dep) = row.map_err(|err| err.to_string())? {
+            deps.push(dep);
+        }
+    }
+    Ok(deps)
+}
+
+pub fn list_dependencies_for_installed(conn: &Connection) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT d.dependency FROM dependencies d \
+             JOIN installStatus i ON d.varName = i.varName \
+             WHERE i.installed = 1",
+        )
+        .map_err(|err| err.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, Option<String>>(0))
+        .map_err(|err| err.to_string())?;
+    let mut deps = Vec::new();
+    for row in rows {
+        if let Some(dep) = row.map_err(|err| err.to_string())? {
+            deps.push(dep);
+        }
+    }
+    Ok(deps)
+}
+
+pub fn list_dependencies_for_vars(
+    conn: &Connection,
+    var_names: &[String],
+) -> Result<Vec<String>, String> {
+    if var_names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = std::iter::repeat("?")
+        .take(var_names.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT dependency FROM dependencies WHERE varName IN ({})",
+        placeholders
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|err| err.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(var_names.iter()), |row| {
+            row.get::<_, Option<String>>(0)
+        })
+        .map_err(|err| err.to_string())?;
+    let mut deps = Vec::new();
+    for row in rows {
+        if let Some(dep) = row.map_err(|err| err.to_string())? {
+            deps.push(dep);
+        }
+    }
+    Ok(deps)
+}
+
+pub fn upsert_install_status(
+    conn: &Connection,
+    var_name: &str,
+    installed: bool,
+    disabled: bool,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO installStatus (varName, installed, disabled) VALUES (?1, ?2, ?3)",
+        params![var_name, installed as i64, disabled as i64],
+    )
+    .map_err(|err| err.to_string())?;
+    Ok(())
+}
+
 pub fn upsert_var(tx: &Transaction<'_>, record: &VarRecord) -> Result<(), String> {
     tx.execute(
         r#"
@@ -253,6 +367,16 @@ pub fn delete_var_related(tx: &Transaction<'_>, var_name: &str) -> Result<(), St
     tx.execute("DELETE FROM scenes WHERE varName = ?1", params![var_name])
         .map_err(|err| err.to_string())?;
     tx.execute("DELETE FROM vars WHERE varName = ?1", params![var_name])
+        .map_err(|err| err.to_string())?;
+    Ok(())
+}
+
+pub fn delete_var_related_conn(conn: &Connection, var_name: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM dependencies WHERE varName = ?1", params![var_name])
+        .map_err(|err| err.to_string())?;
+    conn.execute("DELETE FROM scenes WHERE varName = ?1", params![var_name])
+        .map_err(|err| err.to_string())?;
+    conn.execute("DELETE FROM vars WHERE varName = ?1", params![var_name])
         .map_err(|err| err.to_string())?;
     Ok(())
 }

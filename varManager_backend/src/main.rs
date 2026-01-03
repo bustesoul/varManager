@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -20,7 +20,14 @@ use tokio::sync::{oneshot, Mutex, Semaphore};
 use tracing_subscriber::EnvFilter;
 
 mod db;
+mod deps_jobs;
+mod links;
+mod missing_deps;
+mod paths;
+mod preview_jobs;
 mod update_db;
+mod var_logic;
+mod vars_jobs;
 mod winfs;
 
 const LOG_CAPACITY: usize = 1000;
@@ -78,6 +85,7 @@ struct Job {
     error: Option<String>,
     logs: VecDeque<String>,
     log_offset: usize,
+    result: Option<Value>,
 }
 
 impl Job {
@@ -91,6 +99,7 @@ impl Job {
             error: None,
             logs: VecDeque::new(),
             log_offset: 0,
+            result: None,
         }
     }
 }
@@ -105,6 +114,7 @@ struct JobView {
     error: Option<String>,
     log_offset: usize,
     log_count: usize,
+    result_available: bool,
 }
 
 impl From<&Job> for JobView {
@@ -118,6 +128,7 @@ impl From<&Job> for JobView {
             error: job.error.clone(),
             log_offset: job.log_offset,
             log_count: job.logs.len(),
+            result_available: job.result.is_some(),
         }
     }
 }
@@ -125,6 +136,8 @@ impl From<&Job> for JobView {
 #[derive(Deserialize)]
 struct StartJobRequest {
     kind: String,
+    #[serde(default)]
+    args: Option<Value>,
 }
 
 #[derive(Serialize)]
@@ -145,6 +158,12 @@ struct JobLogsResponse {
     next: usize,
     dropped: bool,
     lines: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct JobResultResponse {
+    id: u64,
+    result: Value,
 }
 
 #[derive(Serialize)]
@@ -174,6 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/jobs", post(start_job))
         .route("/jobs/:id", get(get_job))
         .route("/jobs/:id/logs", get(get_job_logs))
+        .route("/jobs/:id/result", get(get_job_result))
         .route("/shutdown", post(shutdown))
         .with_state(state);
 
@@ -225,7 +245,7 @@ async fn start_job(
         jobs.insert(id, job);
     }
 
-    spawn_job(state.clone(), id, kind.to_string());
+    spawn_job(state.clone(), id, kind.to_string(), req.args);
 
     Ok(Json(StartJobResponse {
         id,
@@ -280,6 +300,32 @@ async fn get_job_logs(
     }))
 }
 
+async fn get_job_result(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+) -> Result<Json<JobResultResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let jobs = state.jobs.lock().await;
+    let job = jobs.get(&id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "job not found".to_string(),
+            }),
+        )
+    })?;
+
+    let result = job.result.clone().ok_or_else(|| {
+        (
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "job result not ready".to_string(),
+            }),
+        )
+    })?;
+
+    Ok(Json(JobResultResponse { id, result }))
+}
+
 async fn shutdown_signal(mut rx: oneshot::Receiver<()>) {
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::select! {
@@ -315,7 +361,7 @@ pub(crate) fn exe_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn spawn_job(state: AppState, id: u64, kind: String) {
+fn spawn_job(state: AppState, id: u64, kind: String, args: Option<Value>) {
     tokio::spawn(async move {
         let permit = state.job_semaphore.acquire().await;
         if permit.is_err() {
@@ -324,7 +370,7 @@ fn spawn_job(state: AppState, id: u64, kind: String) {
         }
         let _permit = permit.unwrap();
         job_start(&state, id, &format!("job started: {}", kind)).await;
-        if let Err(err) = run_job(&state, id, &kind).await {
+        if let Err(err) = run_job(&state, id, &kind, args).await {
             job_fail(&state, id, err).await;
             return;
         }
@@ -332,9 +378,15 @@ fn spawn_job(state: AppState, id: u64, kind: String) {
     });
 }
 
-async fn run_job(state: &AppState, id: u64, kind: &str) -> Result<(), String> {
+async fn run_job(
+    state: &AppState,
+    id: u64,
+    kind: &str,
+    args: Option<Value>,
+) -> Result<(), String> {
     match kind {
         "noop" => {
+            let _args = args;
             for step in 0..=5 {
                 let progress = (step * 20) as u8;
                 job_progress(state, id, progress).await;
@@ -344,6 +396,14 @@ async fn run_job(state: &AppState, id: u64, kind: &str) -> Result<(), String> {
             Ok(())
         }
         "update_db" => update_db::run_update_db_job(state.clone(), id).await,
+        "missing_deps" => missing_deps::run_missing_deps_job(state.clone(), id, args).await,
+        "rebuild_links" => links::run_rebuild_links_job(state.clone(), id, args).await,
+        "install_vars" => vars_jobs::run_install_vars_job(state.clone(), id, args).await,
+        "uninstall_vars" => vars_jobs::run_uninstall_vars_job(state.clone(), id, args).await,
+        "delete_vars" => vars_jobs::run_delete_vars_job(state.clone(), id, args).await,
+        "saves_deps" => deps_jobs::run_saves_deps_job(state.clone(), id, args).await,
+        "log_deps" => deps_jobs::run_log_deps_job(state.clone(), id, args).await,
+        "fix_previews" => preview_jobs::run_fix_previews_job(state.clone(), id, args).await,
         _ => Err(format!("job kind not implemented: {}", kind)),
     }
 }
@@ -354,6 +414,7 @@ pub(crate) async fn job_start(state: &AppState, id: u64, message: &str) {
         job.status = JobStatus::Running;
         job.message = message.to_string();
         push_log(job, message.to_string());
+        job.result = None;
     }
 }
 
@@ -389,6 +450,13 @@ pub(crate) async fn job_log(state: &AppState, id: u64, line: String) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         push_log(job, line);
+    }
+}
+
+pub(crate) async fn job_set_result(state: &AppState, id: u64, result: Value) {
+    let mut jobs = state.jobs.lock().await;
+    if let Some(job) = jobs.get_mut(&id) {
+        job.result = Some(result);
     }
 }
 
