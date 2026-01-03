@@ -14,9 +14,17 @@ namespace varManager
         /// <param name="disposing">如果应释放托管资源，为 true；否则为 false。</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+                foreach (var context in _dbContext.Values)
+                {
+                    context?.Dispose();
+                }
+                _dbContext.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -80,7 +88,6 @@ namespace varManager
             skin = new DataGridViewTextBoxColumn();
             disabledDataGridViewCheckBoxColumn = new DataGridViewCheckBoxColumn();
             varsViewBindingSource = new BindingSource(components);
-            varManagerDataSet = new varManagerDataSet();
             flowLayoutPanel2 = new FlowLayoutPanel();
             buttonInstall = new Button();
             buttonUninstallSels = new Button();
@@ -149,15 +156,8 @@ namespace varManager
             saveFileDialogExportInstalled = new SaveFileDialog();
             varsBindingSource = new BindingSource(components);
             dependenciesBindingSource = new BindingSource(components);
-            dependenciesTableAdapter = new varManagerDataSetTableAdapters.dependenciesTableAdapter();
-            varsTableAdapter = new varManagerDataSetTableAdapters.varsTableAdapter();
-            tableAdapterManager = new varManagerDataSetTableAdapters.TableAdapterManager();
-            installStatusTableAdapter = new varManagerDataSetTableAdapters.installStatusTableAdapter();
             installStatusBindingSource = new BindingSource(components);
             scenesBindingSource = new BindingSource(components);
-            scenesTableAdapter = new varManagerDataSetTableAdapters.scenesTableAdapter();
-            varsViewTableAdapter = new varManagerDataSetTableAdapters.varsViewTableAdapter();
-            savedepensTableAdapter = new varManagerDataSetTableAdapters.savedepensTableAdapter();
             tableLayoutPanel1.SuspendLayout();
             panel1.SuspendLayout();
             groupBoxSwitch.SuspendLayout();
@@ -170,7 +170,6 @@ namespace varManager
             splitContainer1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)varsViewDataGridView).BeginInit();
             ((System.ComponentModel.ISupportInitialize)varsViewBindingSource).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)varManagerDataSet).BeginInit();
             flowLayoutPanel2.SuspendLayout();
             flowLayoutPanel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)varsBindingNavigator).BeginInit();
@@ -737,14 +736,8 @@ namespace varManager
             // varsViewBindingSource
             // 
             varsViewBindingSource.DataMember = "varsView";
-            varsViewBindingSource.DataSource = varManagerDataSet;
-            varsViewBindingSource.Sort = "metaDate Desc";
-            // 
-            // varManagerDataSet
-            // 
-            varManagerDataSet.DataSetName = "varManagerDataSet";
-            varManagerDataSet.Namespace = "http://tempuri.org/varManagerDataSet.xsd";
-            varManagerDataSet.SchemaSerializationMode = System.Data.SchemaSerializationMode.IncludeSchema;
+            // DataSource will be set in code using EF Core
+            // varsViewBindingSource.Sort = "metaDate Desc"; // Moved to Form1_Load to avoid .NET 9 initialization issues
             // 
             // flowLayoutPanel2
             // 
@@ -1475,56 +1468,22 @@ namespace varManager
             // varsBindingSource
             // 
             varsBindingSource.DataMember = "vars";
-            varsBindingSource.DataSource = varManagerDataSet;
+            // DataSource will be set in code using EF Core
             // 
             // dependenciesBindingSource
             // 
             dependenciesBindingSource.DataMember = "dependencies";
-            dependenciesBindingSource.DataSource = varManagerDataSet;
-            // 
-            // dependenciesTableAdapter
-            // 
-            dependenciesTableAdapter.ClearBeforeFill = true;
-            // 
-            // varsTableAdapter
-            // 
-            varsTableAdapter.ClearBeforeFill = true;
-            // 
-            // tableAdapterManager
-            // 
-            tableAdapterManager.BackupDataSetBeforeUpdate = false;
-            tableAdapterManager.dependenciesTableAdapter = dependenciesTableAdapter;
-            tableAdapterManager.installStatusTableAdapter = installStatusTableAdapter;
-            tableAdapterManager.savedepensTableAdapter = null;
-            tableAdapterManager.scenesTableAdapter = null;
-            tableAdapterManager.UpdateOrder = varManagerDataSetTableAdapters.TableAdapterManager.UpdateOrderOption.InsertUpdateDelete;
-            tableAdapterManager.varsTableAdapter = varsTableAdapter;
-            // 
-            // installStatusTableAdapter
-            // 
-            installStatusTableAdapter.ClearBeforeFill = true;
+            // DataSource will be set in code using EF Core
             // 
             // installStatusBindingSource
             // 
             installStatusBindingSource.DataMember = "installStatus";
-            installStatusBindingSource.DataSource = varManagerDataSet;
+            // DataSource will be set in code using EF Core
             // 
             // scenesBindingSource
             // 
             scenesBindingSource.DataMember = "scenes";
-            scenesBindingSource.DataSource = varManagerDataSet;
-            // 
-            // scenesTableAdapter
-            // 
-            scenesTableAdapter.ClearBeforeFill = true;
-            // 
-            // varsViewTableAdapter
-            // 
-            varsViewTableAdapter.ClearBeforeFill = true;
-            // 
-            // savedepensTableAdapter
-            // 
-            savedepensTableAdapter.ClearBeforeFill = true;
+            // DataSource will be set in code using EF Core
             // 
             // Form1
             // 
@@ -1553,7 +1512,6 @@ namespace varManager
             splitContainer1.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)varsViewDataGridView).EndInit();
             ((System.ComponentModel.ISupportInitialize)varsViewBindingSource).EndInit();
-            ((System.ComponentModel.ISupportInitialize)varManagerDataSet).EndInit();
             flowLayoutPanel2.ResumeLayout(false);
             flowLayoutPanel1.ResumeLayout(false);
             flowLayoutPanel1.PerformLayout();
@@ -1606,14 +1564,7 @@ namespace varManager
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.TextBox textBoxFilter;
         private System.Windows.Forms.BindingSource dependenciesBindingSource;
-        private varManagerDataSet varManagerDataSet;
 
-        private varManagerDataSetTableAdapters.dependenciesTableAdapter dependenciesTableAdapter;
-        private System.Windows.Forms.BindingSource varsBindingSource;
-        private varManagerDataSetTableAdapters.varsTableAdapter varsTableAdapter;
-        private varManagerDataSetTableAdapters.TableAdapterManager tableAdapterManager;
-        private System.Windows.Forms.BindingSource installStatusBindingSource;
-        private varManagerDataSetTableAdapters.installStatusTableAdapter installStatusTableAdapter;
         private System.Windows.Forms.CheckBox checkBoxInstalled;
         private System.Windows.Forms.Button buttonInstall;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanelPreview;
@@ -1623,7 +1574,6 @@ namespace varManager
         private System.Windows.Forms.ToolStrip toolStripPreview;
         private System.Windows.Forms.Button buttonScenesManager;
         private System.Windows.Forms.BindingSource scenesBindingSource;
-        private varManagerDataSetTableAdapters.scenesTableAdapter scenesTableAdapter;
         private System.Windows.Forms.ToolStripLabel toolStripLabelPreviewCountItem;
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.ToolTip toolTip1;
@@ -1632,7 +1582,6 @@ namespace varManager
         private System.ComponentModel.BackgroundWorker backgroundWorkerPreview;
         private System.Windows.Forms.Button buttonDelete;
         private System.Windows.Forms.Button buttonMissingDepends;
-        private varManagerDataSetTableAdapters.varsViewTableAdapter varsViewTableAdapter;
         private System.Windows.Forms.DataGridView varsViewDataGridView;
         private System.Windows.Forms.BindingSource varsViewBindingSource;
         private System.Windows.Forms.Button buttonMove;
@@ -1642,7 +1591,6 @@ namespace varManager
         private System.Windows.Forms.Button buttonInstFormTxt;
         private System.Windows.Forms.OpenFileDialog openFileDialogInstByTXT;
         private System.Windows.Forms.SaveFileDialog saveFileDialogExportInstalled;
-        private varManagerDataSetTableAdapters.savedepensTableAdapter savedepensTableAdapter;
         private System.Windows.Forms.GroupBox groupBoxSwitch;
         private System.Windows.Forms.ComboBox comboBoxPacksSwitch;
         private System.Windows.Forms.Button buttonPacksDelete;
@@ -1705,6 +1653,8 @@ namespace varManager
         private System.Windows.Forms.DataGridViewTextBoxColumn assetsDataGridViewTextBoxColumn;
         private System.Windows.Forms.DataGridViewCheckBoxColumn disabledDataGridViewCheckBoxColumn;
         private System.Windows.Forms.Button buttonClearCache;
+        private System.Windows.Forms.BindingSource varsBindingSource;
+        private System.Windows.Forms.BindingSource installStatusBindingSource;
     }
 }
 

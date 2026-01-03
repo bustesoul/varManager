@@ -8,6 +8,8 @@ using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
 using varManager.Properties;
+using varManager.Data;
+using varManager.Models;
 
 namespace varManager
 {
@@ -16,16 +18,17 @@ namespace varManager
         public string operationType;
         public string previewpicsDirName;
         public string deleVarsDirName;
+        private VarManagerContext dbContext;
+        
         public FormUninstallVars()
         {
             InitializeComponent();
-
+            dbContext = new VarManagerContext();
         }
 
         private void FormUninstallVars_Load(object sender, EventArgs e)
         {
-            // TODO: 这行代码将数据加载到表“varManagerDataSet.dependencies”中。您可以根据需要移动或删除它。
-            this.dependenciesTableAdapter.Fill(this.varManagerDataSet.dependencies);
+            // Load data using EF Core instead of TableAdapter
             switch (operationType)
             {
                 case "delete":
@@ -39,12 +42,18 @@ namespace varManager
 
         private void dataGridViewVars_SelectionChanged(object sender, EventArgs e)
         {
-            dependenciesBindingSource.Filter = "1=2";
+            // Get selected var names for dependency filtering
+            List<string> selectedVarNames = new List<string>();
             foreach (DataGridViewRow row in dataGridViewVars.SelectedRows)
             {
-                string varName = row.Cells["varNameDataGridViewTextBoxColumn"].Value.ToString().Replace("'", "''");
-                dependenciesBindingSource.Filter += $" or varName='{varName}'";
+                string varName = row.Cells["varNameDataGridViewTextBoxColumn"].Value.ToString();
+                selectedVarNames.Add(varName);
             }
+            
+            // Update dependencies display using EF Core
+            var dependencies = dbContext.Dependencies.Where(d => selectedVarNames.Contains(d.VarName)).ToList();
+            dependenciesBindingSource.DataSource = dependencies;
+            
             UpdatePreviewPics();
             tableLayoutPanelPreview.Visible = false;
         }

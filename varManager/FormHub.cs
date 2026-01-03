@@ -18,10 +18,8 @@ namespace varManager
     {
         private static SimpleLogger simpLog = new SimpleLogger();
         public Form1 form1;
-        //private varManagerDataSet varManagerDataSet;
         private static HttpClient httpClient;
         private static CancellationToken cancellationToken;
-        //public varManagerDataSet VarManagerDataSet { get => varManagerDataSet; set => varManagerDataSet = value; }
         private List<string> listPayType, listLocation, listSort, listTags, listCategory, listCreator;
         private bool downlistHide = true;
         Dictionary<string, string> downloadUrls = new Dictionary<string, string>();

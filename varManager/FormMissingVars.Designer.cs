@@ -14,9 +14,13 @@ namespace varManager
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+                dbContext?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -41,9 +45,6 @@ namespace varManager
             System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle8 = new System.Windows.Forms.DataGridViewCellStyle();
             System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle9 = new System.Windows.Forms.DataGridViewCellStyle();
             this.varsBindingSource = new System.Windows.Forms.BindingSource(this.components);
-            this.varManagerDataSet = new varManager.varManagerDataSet();
-            this.varsTableAdapter = new varManager.varManagerDataSetTableAdapters.varsTableAdapter();
-            this.tableAdapterManager = new varManager.varManagerDataSetTableAdapters.TableAdapterManager();
             this.panel2 = new System.Windows.Forms.Panel();
             this.textBoxFilter = new System.Windows.Forms.TextBox();
             this.comboBoxCreater = new System.Windows.Forms.ComboBox();
@@ -92,7 +93,6 @@ namespace varManager
             this.varDate = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.ColumnLocateExistVar = new System.Windows.Forms.DataGridViewButtonColumn();
             ((System.ComponentModel.ISupportInitialize)(this.varsBindingSource)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.varManagerDataSet)).BeginInit();
             this.panel2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.varsDataGridView)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMissingVars)).BeginInit();
@@ -109,28 +109,7 @@ namespace varManager
             // varsBindingSource
             // 
             this.varsBindingSource.DataMember = "vars";
-            this.varsBindingSource.DataSource = this.varManagerDataSet;
             // 
-            // varManagerDataSet
-            // 
-            this.varManagerDataSet.DataSetName = "varManagerDataSet";
-            this.varManagerDataSet.SchemaSerializationMode = System.Data.SchemaSerializationMode.IncludeSchema;
-            // 
-            // varsTableAdapter
-            // 
-            this.varsTableAdapter.ClearBeforeFill = true;
-            // 
-            // tableAdapterManager
-            // 
-            this.tableAdapterManager.BackupDataSetBeforeUpdate = false;
-            this.tableAdapterManager.dependenciesTableAdapter = null;
-            this.tableAdapterManager.installStatusTableAdapter = null;
-            this.tableAdapterManager.savedepensTableAdapter = null;
-            this.tableAdapterManager.scenesTableAdapter = null;
-            this.tableAdapterManager.UpdateOrder = varManager.varManagerDataSetTableAdapters.TableAdapterManager.UpdateOrderOption.InsertUpdateDelete;
-            this.tableAdapterManager.varsTableAdapter = this.varsTableAdapter;
-            // 
-            // panel2
             // 
             this.panel2.Controls.Add(this.groupBox2);
             this.panel2.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -720,7 +699,6 @@ namespace varManager
             this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.Load += new System.EventHandler(this.FormMissingVars_Load);
             ((System.ComponentModel.ISupportInitialize)(this.varsBindingSource)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.varManagerDataSet)).EndInit();
             this.panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.varsDataGridView)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMissingVars)).EndInit();
@@ -741,10 +719,7 @@ namespace varManager
         }
 
         #endregion
-        private varManagerDataSet varManagerDataSet;
         private System.Windows.Forms.BindingSource varsBindingSource;
-        private varManagerDataSetTableAdapters.varsTableAdapter varsTableAdapter;
-        private varManagerDataSetTableAdapters.TableAdapterManager tableAdapterManager;
         private System.Windows.Forms.Panel panel2;
         private System.Windows.Forms.TextBox textBoxFilter;
         private System.Windows.Forms.ComboBox comboBoxCreater;

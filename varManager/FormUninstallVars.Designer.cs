@@ -14,9 +14,13 @@ namespace varManager
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+                dbContext?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -46,7 +50,6 @@ namespace varManager
             this.hairstyleDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.pluginsDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.assetsDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.varManagerDataSet = new varManager.varManagerDataSet();
             this.panel2 = new System.Windows.Forms.Panel();
             this.tableLayoutPanelPreview = new System.Windows.Forms.TableLayoutPanel();
             this.pictureBoxPreview = new System.Windows.Forms.PictureBox();
@@ -71,13 +74,10 @@ namespace varManager
             this.varNameDataGridViewTextBoxColumn1 = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.dependencyDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.dependenciesBindingSource = new System.Windows.Forms.BindingSource(this.components);
-            this.dependenciesTableAdapter = new varManager.varManagerDataSetTableAdapters.dependenciesTableAdapter();
-            this.tableAdapterManager = new varManager.varManagerDataSetTableAdapters.TableAdapterManager();
             this.backgroundWorkerPreview = new System.ComponentModel.BackgroundWorker();
             this.tableLayoutPanel1.SuspendLayout();
             this.panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewVars)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.varManagerDataSet)).BeginInit();
             this.panel2.SuspendLayout();
             this.tableLayoutPanelPreview.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxPreview)).BeginInit();
@@ -177,7 +177,6 @@ namespace varManager
             this.pluginsDataGridViewTextBoxColumn,
             this.assetsDataGridViewTextBoxColumn});
             this.dataGridViewVars.DataMember = "varsView";
-            this.dataGridViewVars.DataSource = this.varManagerDataSet;
             this.dataGridViewVars.Dock = System.Windows.Forms.DockStyle.Fill;
             this.dataGridViewVars.Location = new System.Drawing.Point(2, 2);
             this.dataGridViewVars.Margin = new System.Windows.Forms.Padding(2);
@@ -275,10 +274,6 @@ namespace varManager
             this.assetsDataGridViewTextBoxColumn.ReadOnly = true;
             this.assetsDataGridViewTextBoxColumn.Width = 40;
             // 
-            // varManagerDataSet
-            // 
-            this.varManagerDataSet.DataSetName = "varManagerDataSet";
-            this.varManagerDataSet.SchemaSerializationMode = System.Data.SchemaSerializationMode.IncludeSchema;
             // 
             // panel2
             // 
@@ -535,21 +530,7 @@ namespace varManager
             // dependenciesBindingSource
             // 
             this.dependenciesBindingSource.DataMember = "dependencies";
-            this.dependenciesBindingSource.DataSource = this.varManagerDataSet;
             // 
-            // dependenciesTableAdapter
-            // 
-            this.dependenciesTableAdapter.ClearBeforeFill = true;
-            // 
-            // tableAdapterManager
-            // 
-            this.tableAdapterManager.BackupDataSetBeforeUpdate = false;
-            this.tableAdapterManager.dependenciesTableAdapter = this.dependenciesTableAdapter;
-            this.tableAdapterManager.installStatusTableAdapter = null;
-            this.tableAdapterManager.savedepensTableAdapter = null;
-            this.tableAdapterManager.scenesTableAdapter = null;
-            this.tableAdapterManager.UpdateOrder = varManager.varManagerDataSetTableAdapters.TableAdapterManager.UpdateOrderOption.InsertUpdateDelete;
-            this.tableAdapterManager.varsTableAdapter = null;
             // 
             // backgroundWorkerPreview
             // 
@@ -575,7 +556,7 @@ namespace varManager
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewVars)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.varManagerDataSet)).EndInit();
+            // DataSet EndInit removed
             this.panel2.ResumeLayout(false);
             this.panel2.PerformLayout();
             this.tableLayoutPanelPreview.ResumeLayout(false);
@@ -610,12 +591,9 @@ namespace varManager
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Button buttonpreviewback;
         private System.Windows.Forms.PictureBox pictureBoxPreview;
-        public varManagerDataSet varManagerDataSet;
         private System.Windows.Forms.ImageList imageListPreviewPics;
         private System.Windows.Forms.DataGridView dataGridView1;
         private System.Windows.Forms.BindingSource dependenciesBindingSource;
-        private varManagerDataSetTableAdapters.dependenciesTableAdapter dependenciesTableAdapter;
-        private varManagerDataSetTableAdapters.TableAdapterManager tableAdapterManager;
         private System.Windows.Forms.DataGridViewTextBoxColumn iDDataGridViewTextBoxColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn varNameDataGridViewTextBoxColumn1;
         private System.Windows.Forms.DataGridViewTextBoxColumn dependencyDataGridViewTextBoxColumn;

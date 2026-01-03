@@ -190,7 +190,7 @@
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.groupBoxSaves);
             this.Font = new System.Drawing.Font("Cambria", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
             this.Name = "PrepareSaves";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             this.Text = "PrepareSaves";

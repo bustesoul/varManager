@@ -14,9 +14,13 @@ namespace varManager
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+                dbContext?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -97,10 +101,7 @@ namespace varManager
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.progressBar1 = new System.Windows.Forms.ProgressBar();
             this.backgroundWorkerGenerate = new System.ComponentModel.BackgroundWorker();
-            this.varManagerDataSet = new varManager.varManagerDataSet();
-            this.scenesTableAdapter = new varManager.varManagerDataSetTableAdapters.scenesTableAdapter();
-            this.installStatusTableAdapter = new varManager.varManagerDataSetTableAdapters.installStatusTableAdapter();
-            this.varsTableAdapter = new varManager.varManagerDataSetTableAdapters.varsTableAdapter();
+            // DataSet components removed - using EF Core
             this.tableLayoutPanel1.SuspendLayout();
             this.panel5.SuspendLayout();
             this.panel6.SuspendLayout();
@@ -120,7 +121,7 @@ namespace varManager
             this.groupBoxPersonOrder.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxPreview)).BeginInit();
             this.panel1.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.varManagerDataSet)).BeginInit();
+            // DataSet init removed
             this.SuspendLayout();
             // 
             // tableLayoutPanel1
@@ -906,23 +907,6 @@ namespace varManager
             this.backgroundWorkerGenerate.DoWork += new System.ComponentModel.DoWorkEventHandler(this.backgroundWorkerGenerate_DoWork);
             this.backgroundWorkerGenerate.RunWorkerCompleted += new System.ComponentModel.RunWorkerCompletedEventHandler(this.backgroundWorkerGenerate_RunWorkerCompleted);
             // 
-            // varManagerDataSet
-            // 
-            this.varManagerDataSet.DataSetName = "varManagerDataSet";
-            this.varManagerDataSet.SchemaSerializationMode = System.Data.SchemaSerializationMode.IncludeSchema;
-            // 
-            // scenesTableAdapter
-            // 
-            this.scenesTableAdapter.ClearBeforeFill = true;
-            // 
-            // installStatusTableAdapter
-            // 
-            this.installStatusTableAdapter.ClearBeforeFill = true;
-            // 
-            // varsTableAdapter
-            // 
-            this.varsTableAdapter.ClearBeforeFill = true;
-            // 
             // FormScenes
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 17F);
@@ -962,7 +946,7 @@ namespace varManager
             this.groupBoxPersonOrder.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxPreview)).EndInit();
             this.panel1.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.varManagerDataSet)).EndInit();
+            // DataSet init removed
             this.ResumeLayout(false);
 
         }
@@ -972,7 +956,6 @@ namespace varManager
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
         private System.Windows.Forms.Panel panel5;
         private System.Windows.Forms.Panel panel6;
-        private varManagerDataSet varManagerDataSet;
         private System.Windows.Forms.Button buttonRemoveHide;
         private System.Windows.Forms.Button buttonAddHide;
         private System.Windows.Forms.Button buttonAddFav;
@@ -986,10 +969,7 @@ namespace varManager
         private System.Windows.Forms.PictureBox pictureBoxPreview;
         private System.Windows.Forms.ToolTip toolTip1;
         private System.Windows.Forms.ProgressBar progressBar1;
-        private varManagerDataSetTableAdapters.scenesTableAdapter scenesTableAdapter;
         private System.Windows.Forms.Button buttonLoadscene;
-        private varManagerDataSetTableAdapters.installStatusTableAdapter installStatusTableAdapter;
-        private varManagerDataSetTableAdapters.varsTableAdapter varsTableAdapter;
         private System.ComponentModel.BackgroundWorker backgroundWorkerGenerate;
         private System.Windows.Forms.Panel panel2;
         private System.Windows.Forms.Label labelPreviewVarName;

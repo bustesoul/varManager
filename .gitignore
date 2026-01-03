@@ -3,6 +3,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+.claude*
+.idea*
+CAsign
 ./.idea
 
 # User-specific files
