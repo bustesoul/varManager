@@ -8,11 +8,16 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using varManager.Backend;
 using varManager.Properties;
 using varManager.Data;
 using varManager.Models;
+using static SimpleLogger;
 
 namespace varManager
 {
@@ -28,6 +33,43 @@ namespace varManager
         static string vam_download_exe = "vam_downloader.exe";
         static string vam_download_path = Path.Combine(".\\plugin\\", vam_download_exe);
         static string vam_download_save_path = Path.Combine(Settings.Default.vampath, "AddonPackages");
+
+        private void LogBackendLine(string line)
+        {
+            if (form1 == null)
+            {
+                return;
+            }
+            LogLevel level = LogLevel.INFO;
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.ERROR;
+            }
+            form1.BeginInvoke(new Form1.InvokeAddLoglist(form1.UpdateAddLoglist), new object[] { line, level });
+        }
+
+        private Task<BackendJobResult> RunBackendJobAsync(string kind, object? args)
+        {
+            return BackendSession.RunJobAsync(kind, args, LogBackendLine, CancellationToken.None);
+        }
+
+        private T? DeserializeResult<T>(BackendJobResult result)
+        {
+            if (!result.Result.HasValue)
+            {
+                return default;
+            }
+            return JsonSerializer.Deserialize<T>(result.Result.Value.GetRawText());
+        }
+
+        private sealed class HubDownloadList
+        {
+            [JsonPropertyName("download_urls")]
+            public Dictionary<string, string> DownloadUrls { get; set; } = new Dictionary<string, string>();
+
+            [JsonPropertyName("download_urls_no_version")]
+            public Dictionary<string, string> DownloadUrlsNoVersion { get; set; } = new Dictionary<string, string>();
+        }
         
         public FormMissingVars()
         {
@@ -77,78 +119,17 @@ namespace varManager
                                 "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            // 3. Create a temporary file to store URLs
-            string tempFilePath = string.Empty;
             try
             {
-                tempFilePath = Path.GetTempFileName(); // Creates a 0-byte file with a unique name
-                File.WriteAllLines(tempFilePath, allUrlsToDownload);
-                // 4. Prepare to call the external downloader
-                string execPath = vam_download_path; // Your downloader executable path
-                if (!File.Exists(execPath))
-                {
-                    MessageBox.Show($"Downloader executable not found: {execPath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-                // The downloader now takes the temp file path as the "URL" argument
-                // The second argument is still the save path
-                string arguments = $"\"{tempFilePath}\" \"{vam_download_save_path}\"";
-                // 5. Execute the downloader process
-                var startInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = execPath,
-                    Arguments = arguments,
-                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory, // Or specify another working directory if needed
-                    // UseShellExecute = false, // Set to true if you want to see the downloader's window and it's a GUI app
-                    // CreateNoWindow = true,  // Set to false if UseShellExecute is true or you want to see a console window
-                };
-                
-                // Decide on UseShellExecute based on your downloader.
-                // If it's a console app and you want to hide it and manage output, UseShellExecute = false.
-                // If it's a GUI app or you want Windows to handle opening it, UseShellExecute = true.
-                // For simplicity and consistency with your single download, let's assume it can run visibly or non-visibly.
-                // If your single download code has specific settings for RedirectStandardOutput etc., mirror them if appropriate.
-                // For now, let's assume a simple launch.
-                
-                using (var process = System.Diagnostics.Process.Start(startInfo))
-                {
-                    // You might want to make this asynchronous if downloads take a long time
-                    // For now, we wait synchronously
-                    process.WaitForExit(); 
-                    if (process.ExitCode == 0)
-                    {
-                        MessageBox.Show($"All {allUrlsToDownload.Count} items have been queued for download.\n" +
-                                        "Download process complete. Please click the 'UPD_DB' button to update the database after downloads finish.",
-                                        "Download All Complete, Don't Need Repeat Download", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Download All process failed with exit code: {process.ExitCode}.\n" +
-                                        $"Arguments: {arguments}",
-                                        "Download Occur Error, But there may has particular var file download success, you need manually check it !", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
+                await RunBackendJobAsync("hub_download_all", new { urls = allUrlsToDownload.ToList() });
+                MessageBox.Show($"All {allUrlsToDownload.Count} items have been queued for download.\n" +
+                                "Download process complete. Please click the 'UPD_DB' button to update the database after downloads finish.",
+                                "Download All Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"An error occurred during the Download All process: {ex.Message}",
                                 "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                // 6. Clean up the temporary file
-                if (!string.IsNullOrEmpty(tempFilePath) && File.Exists(tempFilePath))
-                {
-                    try
-                    {
-                        File.Delete(tempFilePath);
-                    }
-                    catch (IOException ioEx)
-                    {
-                        // Log or inform user that temp file couldn't be deleted
-                        Console.WriteLine($"Warning: Could not delete temporary file {tempFilePath}: {ioEx.Message}");
-                    }
-                }
             }
         }
         
@@ -174,36 +155,21 @@ namespace varManager
         
         private async void FillColumnDownloadText()
         {
-            string packages = string.Join(",", missingVars);
-            var reponse = await FindPackages(packages);
-            JSONNode jsonResult = JSON.Parse(reponse);
-            JSONClass packageArray = jsonResult["packages"] as JSONClass;
-            if (packageArray.Count > 0)
+            var result = await RunBackendJobAsync("hub_find_packages", new { packages = missingVars });
+            var payload = DeserializeResult<HubDownloadList>(result);
+            downloadUrls = payload?.DownloadUrls ?? new Dictionary<string, string>();
+            downloadUrlsNoVersion = payload?.DownloadUrlsNoVersion ?? new Dictionary<string, string>();
+
+            if (form1 != null)
             {
-                foreach (var package in packageArray.Childs)
-                {
-                    string downloadurl = package["downloadUrl"];
-                    string filename = package["filename"];
-                    if (!string.IsNullOrEmpty(downloadurl) && downloadurl != "null")
-                    {
-                        int fileIndex = downloadurl.IndexOf("?file=");
-                        if (fileIndex == -1 || (fileIndex != -1 && downloadurl.Length > fileIndex + 6))
-                        {
-                            if (!string.IsNullOrEmpty(filename) && filename != "null")
-                            {
-                                filename = filename.Substring(0, filename.IndexOf(".var"));
-                                if (!form1.FindByvarName(filename))
-                                {
-                                    //if (!downloadUrls.ContainsKey(filename))
-                                    downloadUrls[filename] = downloadurl;
-                                    downloadUrlsNoVersion[filename.Substring(0, filename.LastIndexOf('.'))] = downloadurl;
-                                }
-                            }
-                        }
-                    }
-                }
-                //downloadurls = downloadurls.Distinct();
+                downloadUrls = downloadUrls
+                    .Where(kvp => !form1.FindByvarName(kvp.Key))
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                downloadUrlsNoVersion = downloadUrlsNoVersion
+                    .Where(kvp => !form1.FindByvarName(kvp.Key))
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             }
+
             foreach (DataGridViewRow row in dataGridViewMissingVars.Rows)
             {
                 string rowVarName = row.Cells["ColumnVarName"].Value.ToString();
@@ -360,7 +326,7 @@ namespace varManager
             }
         }
 
-        private void dataGridViewMissingVars_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        private async void dataGridViewMissingVars_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.ColumnIndex == 2)
             {
@@ -370,101 +336,39 @@ namespace varManager
             {
                 string varname = dataGridViewMissingVars.Rows[e.RowIndex].Cells[0].Value.ToString().Replace(".latest", ".1");
                 string url = "https://www.google.com/search?q=" + varname + " var";
-
                 try
                 {
-                    ProcessStartInfo psi = new ProcessStartInfo
-                    {
-                        FileName = url,
-                        UseShellExecute = true
-                    };
-                    Process.Start(psi);
+                    await RunBackendJobAsync("open_url", new { url = url });
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("An error occurred trying to start process: " + ex.Message);
+                    MessageBox.Show("An error occurred trying to open url: " + ex.Message);
                 }
             }
             if (e.ColumnIndex == 4)
             {
                 string varname = dataGridViewMissingVars.Rows[e.RowIndex].Cells[0].Value.ToString();
                 string varnameNoVersion = varname.Substring(0, varname.LastIndexOf('.'));
-                string execPath = vam_download_path;
-                
-                if (!File.Exists(execPath))
-                {
-                    MessageBox.Show($"Executable not found: {execPath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-                
                 if (downloadUrls.TryGetValue(varname, out var var_url))
                 {
-                    // // For Debug
-                    // MessageBox.Show("All has "+downloadUrls.Count+" Missing var, Now find this :\n" 
-                    //                 + varname + " fetch link: " + var_url);
-                    string arguments = $"\"{var_url}\" \"{vam_download_save_path}\"";
-
                     try
                     {
-                        var startInfo = new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = execPath,
-                            Arguments = arguments,
-                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
-                            // RedirectStandardOutput = true,
-                            // RedirectStandardError = true,
-                            // UseShellExecute = false,
-                            // CreateNoWindow = false
-                        };
-
-                        using (var process = System.Diagnostics.Process.Start(startInfo))
-                        {
-                            process.WaitForExit();
-
-                            if (process.ExitCode != 0)
-                            {
-                                MessageBox.Show($"Download {varname} from:\n{var_url}\nto {vam_download_save_path} failed with exit code: {process.ExitCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            }
-                        }
+                        await RunBackendJobAsync("hub_download_all", new { urls = new List<string> { var_url } });
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Failed to start application. ExecPath: {execPath}, Arguments: {arguments}, Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show($"Download {varname} failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
                 else if (downloadUrlsNoVersion.TryGetValue(varnameNoVersion, out var var_noversion_url))
                 {
-                    // // For Debug
-                    // MessageBox.Show("All has "+downloadUrlsNoVersion.Count+" Missing var, Now find this (version NOT same) :\n" 
-                    //                 + varnameNoVersion + " fetch link: " + var_noversion_url);
-                    string arguments = $"\"{var_noversion_url}\" \"{vam_download_save_path}\"";
-
                     try
                     {
-                        var startInfo = new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = execPath,
-                            Arguments = arguments,
-                            WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
-                            // RedirectStandardOutput = true,
-                            // RedirectStandardError = true,
-                            // UseShellExecute = false,
-                            // CreateNoWindow = false
-                        };
-
-                        using (var process = System.Diagnostics.Process.Start(startInfo))
-                        {
-                            process.WaitForExit();
-
-                            if (process.ExitCode != 0)
-                            {
-                                MessageBox.Show($"Download {varnameNoVersion} from:\n{var_noversion_url}\nto {vam_download_save_path} failed with exit code: {process.ExitCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            }
-                        }
+                        await RunBackendJobAsync("hub_download_all", new { urls = new List<string> { var_noversion_url } });
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Failed to start application. ExecPath: {execPath}, Arguments: {arguments}, Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show($"Download {varnameNoVersion} failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
                 else
@@ -478,9 +382,28 @@ namespace varManager
             }
         }
 
-        private void buttonOK_Click(object sender, EventArgs e)
+        private async void buttonOK_Click(object sender, EventArgs e)
         {
-            Createlink();
+            var links = new List<object>();
+            foreach (DataGridViewRow row in dataGridViewMissingVars.Rows)
+            {
+                string missingvarname = row.Cells[0].Value.ToString();
+                string destvarname = row.Cells[1].Value.ToString();
+                if (!string.IsNullOrEmpty(missingvarname) && !string.IsNullOrEmpty(destvarname))
+                {
+                    links.Add(new { missing_var = missingvarname, dest_var = destvarname });
+                }
+            }
+
+            try
+            {
+                await RunBackendJobAsync("links_missing_create", new { links = links });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Create link failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
 
             this.Close();
         }
@@ -572,12 +495,14 @@ namespace varManager
         {
             if (saveFileDialogSaveTxt.ShowDialog() == DialogResult.OK)
             {
-                List<string> varNames = new List<string>();
-                foreach (var varstatus in dbContext.InstallStatuses.Where(i => i.Installed))
+                try
                 {
-                    varNames.Add(varstatus.VarName!);
+                    BackendSession.RunJob("vars_export_installed", new { path = saveFileDialogSaveTxt.FileName }, LogBackendLine, CancellationToken.None);
                 }
-                File.WriteAllLines(saveFileDialogSaveTxt.FileName, varNames.ToArray());
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Export failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
         private void buttonSaveTxt_Click(object sender, EventArgs e)
@@ -636,9 +561,14 @@ namespace varManager
                 if (dependentName.StartsWith("\\"))
                 {
                     dependentName = dependentName.Substring(1);
-                    string destsavedfile = Path.Combine(Settings.Default.vampath, dependentName);
-                    Comm.LocateFile(destsavedfile);
-
+                    try
+                    {
+                        BackendSession.RunJob("vars_locate", new { path = dependentName.Replace('/', '\\') }, LogBackendLine, CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Locate failed: {ex.Message}");
+                    }
                 }
                 else
                 {

@@ -10,7 +10,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SimpleJSON;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using varManager.Backend;
 using varManager.Properties;
+using static SimpleLogger;
 
 namespace varManager
 {
@@ -42,6 +46,25 @@ namespace varManager
             InitializeComponent();
             listJsonPerson = new List<JSONClass>();
             parentAtoms = new Dictionary<string, List<string>>();
+        }
+
+        private void LogBackendLine(string line)
+        {
+            if (form1 == null)
+            {
+                return;
+            }
+            LogLevel level = LogLevel.INFO;
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.ERROR;
+            }
+            form1.BeginInvoke(new Form1.InvokeAddLoglist(form1.UpdateAddLoglist), new object[] { line, level });
+        }
+
+        private BackendJobResult RunBackendJob(string kind, object? args)
+        {
+            return BackendSession.RunJob(kind, args, LogBackendLine, CancellationToken.None);
         }
         public static string GetCharacterGender(string character)
         {
@@ -277,26 +300,33 @@ namespace varManager
                     checkBoxBreast.Checked || checkBoxGlute.Checked)
 
                 {
-                    /*using (StreamReader sr = new StreamReader(listJsonPerson[listBoxAtom.SelectedIndex]))
-                    {
-                        string json = sr.ReadToEnd();
-                        JSONClass atomitem = (JSONClass)JSON.Parse(json);
-                        SavePreset(atomitem, checkBoxMorphs.Checked, checkBoxHair.Checked,
-                           checkBoxClothing.Checked, checkBoxSkin.Checked,
-                           checkBoxBreast.Checked, checkBoxGlute.Checked);
-                    }*/
-                    //JSONClass atomitem =(JSONClass) JSONNode.LoadFromFile(listJsonPerson[listBoxAtom.SelectedIndex]);
                     GetPersonOrder();
-                    saveNames = new List<JSONClass>();
-                    SavePreset(listJsonPerson[listBoxAtom.SelectedIndex], checkBoxMorphs.Checked, checkBoxHair.Checked,
-                           checkBoxClothing.Checked, checkBoxSkin.Checked,
-                           checkBoxBreast.Checked, checkBoxGlute.Checked);
-
-                    
+                    string atomName = listBoxAtom.SelectedItem.ToString();
+                    try
+                    {
+                        RunBackendJob("scene_preset_look", new
+                        {
+                            var_name = varName,
+                            entry_name = entryName,
+                            atom_name = atomName,
+                            morphs = checkBoxMorphs.Checked,
+                            hair = checkBoxHair.Checked,
+                            clothing = checkBoxClothing.Checked,
+                            skin = checkBoxSkin.Checked,
+                            breast = checkBoxBreast.Checked,
+                            glute = checkBoxGlute.Checked,
+                            ignore_gender = ignoreGender,
+                            person_order = PersonOrder
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Load Look failed: {ex.Message}");
+                        return;
+                    }
                     labelMessage.Text = "Load Look Preset completed!";
                     labelMessage.Visible = true;
                     timer1.Enabled = true;
-                    GenLoadscenetxt();
                 }
                 else
                 {
@@ -921,13 +951,24 @@ namespace varManager
                     tn.Checked = true;
                 }
             }
-            saveNames = new List<JSONClass>();
-            AddPresetResouce("emptyscene", "");
-            //AddPresetResouce("scenes", saveName.Replace('\\', '/'));
-            //GenLoadscenetxt();
-            //Thread.Sleep(2000);
-            //saveNames = new List<JSONClass>();
-            AddToScene();
+            GetPersonOrder();
+            List<string> atomPaths = CollectCheckedAtomPaths();
+            try
+            {
+                RunBackendJob("scene_preset_scene", new
+                {
+                    var_name = varName,
+                    entry_name = entryName,
+                    atom_paths = atomPaths,
+                    ignore_gender = ignoreGender,
+                    person_order = PersonOrder
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Load Scene failed: {ex.Message}");
+                return;
+            }
             labelMessage.Text = "Load Scene completed!";
             labelMessage.Visible = true;
             timer1.Enabled = true;
@@ -1000,6 +1041,34 @@ namespace varManager
                 CheckedTreeViewNodes(n.Nodes, sceneFoldername, atomSubscene);
             }
         }
+
+        private List<string> CollectCheckedAtomPaths()
+        {
+            string sceneFoldername = Path.Combine(Directory.GetCurrentDirectory(), "Cache",
+                           Comm.ValidFileName(varName), Comm.ValidFileName(entryName.Replace('\\', '_').Replace('/', '_')));
+            List<string> paths = new List<string>();
+            CollectCheckedAtomPaths(triStateTreeViewAtoms.Nodes, sceneFoldername, paths);
+            return paths.Distinct().ToList();
+        }
+
+        private void CollectCheckedAtomPaths(TreeNodeCollection nodes, string sceneFoldername, List<string> paths)
+        {
+            foreach (TreeNode n in nodes)
+            {
+                if (n.Checked && n.Nodes.Count == 0)
+                {
+                    string path = n.FullPath;
+                    int splitIndex = path.IndexOf('\\');
+                    if (splitIndex >= 0)
+                    {
+                        path = path.Substring(splitIndex + 1);
+                    }
+                    string fullPath = Path.Combine(sceneFoldername, "atoms", path);
+                    paths.Add(fullPath);
+                }
+                CollectCheckedAtomPaths(n.Nodes, sceneFoldername, paths);
+            }
+        }
         private void buttonClearCache_Click(object sender, EventArgs e)
         {
         }
@@ -1009,12 +1078,25 @@ namespace varManager
             if (listBoxAtom.SelectedIndex >= 0 && listBoxAtom.SelectedIndex < listJsonPerson.Count)
             {
                 GetPersonOrder();
-                saveNames = new List<JSONClass>();
-                SavePluginPreset(listJsonPerson[listBoxAtom.SelectedIndex]);
-                labelMessage.Text = "Load Plugin completed!";
-                labelMessage.Visible = true;
-                timer1.Enabled = true;
-                GenLoadscenetxt();
+                string atomName = listBoxAtom.SelectedItem.ToString();
+                try
+                {
+                    RunBackendJob("scene_preset_plugin", new
+                    {
+                        var_name = varName,
+                        entry_name = entryName,
+                        atom_name = atomName,
+                        ignore_gender = ignoreGender,
+                        person_order = PersonOrder
+                    });
+                    labelMessage.Text = "Load Plugin completed!";
+                    labelMessage.Visible = true;
+                    timer1.Enabled = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Load Plugin failed: {ex.Message}");
+                }
             }
             else
             {
@@ -1028,12 +1110,25 @@ namespace varManager
             if (listBoxAtom.SelectedIndex >= 0 && listBoxAtom.SelectedIndex < listJsonPerson.Count)
             {
                 GetPersonOrder();
-                saveNames = new List<JSONClass>();
-                SavePosePreset(listJsonPerson[listBoxAtom.SelectedIndex]);
-                labelMessage.Text = "Load Pose completed!";
-                labelMessage.Visible = true;
-                timer1.Enabled = true;
-                GenLoadscenetxt();
+                string atomName = listBoxAtom.SelectedItem.ToString();
+                try
+                {
+                    RunBackendJob("scene_preset_pose", new
+                    {
+                        var_name = varName,
+                        entry_name = entryName,
+                        atom_name = atomName,
+                        ignore_gender = ignoreGender,
+                        person_order = PersonOrder
+                    });
+                    labelMessage.Text = "Load Pose completed!";
+                    labelMessage.Visible = true;
+                    timer1.Enabled = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Load Pose failed: {ex.Message}");
+                }
             }
             else
             {
@@ -1047,14 +1142,25 @@ namespace varManager
             if (listBoxAtom.SelectedIndex >= 0 && listBoxAtom.SelectedIndex < listJsonPerson.Count)
             {
                 GetPersonOrder();
-                saveNames = new List<JSONClass>();
-                SavePosePreset(listJsonPerson[listBoxAtom.SelectedIndex]);
-                SaveAnimationPreset(listJsonPerson[listBoxAtom.SelectedIndex]);
-
-                labelMessage.Text = "Load Animation completed!";
-                labelMessage.Visible = true;
-                timer1.Enabled = true;
-                GenLoadscenetxt();
+                string atomName = listBoxAtom.SelectedItem.ToString();
+                try
+                {
+                    RunBackendJob("scene_preset_animation", new
+                    {
+                        var_name = varName,
+                        entry_name = entryName,
+                        atom_name = atomName,
+                        ignore_gender = ignoreGender,
+                        person_order = PersonOrder
+                    });
+                    labelMessage.Text = "Load Animation completed!";
+                    labelMessage.Visible = true;
+                    timer1.Enabled = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Load Animation failed: {ex.Message}");
+                }
             }
             else
             {
@@ -1096,16 +1202,28 @@ namespace varManager
 
         private void AddToScene(bool asSubScene=false)
         {
-            string sceneFoldername = Path.Combine(Directory.GetCurrentDirectory(), "Cache",
-                           Comm.ValidFileName(varName), Comm.ValidFileName(entryName.Replace('\\', '_').Replace('/', '_')));
-            
-            string pathPlugindata = Path.Combine(Settings.Default.vampath, "Custom\\PluginData\\feelfar");
-            Directory.Delete(pathPlugindata, true);
-            CheckedTreeViewNodes(triStateTreeViewAtoms.Nodes, sceneFoldername, asSubScene);
+            GetPersonOrder();
+            List<string> atomPaths = CollectCheckedAtomPaths();
+            string jobKind = asSubScene ? "scene_add_subscene" : "scene_add_atoms";
+            try
+            {
+                RunBackendJob(jobKind, new
+                {
+                    var_name = varName,
+                    entry_name = entryName,
+                    atom_paths = atomPaths,
+                    ignore_gender = ignoreGender,
+                    person_order = PersonOrder
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Add atoms failed: {ex.Message}");
+                return;
+            }
             labelMessage.Text = "Add Selected Atoms to Scene completed!";
             labelMessage.Visible = true;
             timer1.Enabled = true;
-            GenLoadscenetxt();
         }
 
         private void buttonAddAsSubscene_Click(object sender, EventArgs e)

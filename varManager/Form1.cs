@@ -13,11 +13,13 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-//using System.Text.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using varManager.Backend;
 using varManager.Data;
 using varManager.Models;
 using varManager.Properties;
@@ -45,6 +47,7 @@ namespace varManager
         private static string missingVarLinkDirName = "___MissingVarLink___";
         private static string tempVarLinkDirName = "___TempVarLink___";
         private InvokeAddLoglist addlog;
+        private readonly CancellationTokenSource backendCts = new CancellationTokenSource();
         private readonly ThreadLocal<VarManagerContext> _dbContext =
             new ThreadLocal<VarManagerContext>(() => new VarManagerContext(), true);
         private VarManagerContext dbContext => _dbContext.Value!;
@@ -61,12 +64,8 @@ namespace varManager
 
         private static void OpenSetting()
         {
-            FormSettings formSettings = new FormSettings();
-            if (formSettings.ShowDialog() == DialogResult.OK)
-            {
-                Application.Restart();
-                Environment.Exit(0);
-            }
+            using FormSettings formSettings = new FormSettings();
+            formSettings.ShowDialog();
         }
 
         public static bool ComplyVarFile(string varfile)
@@ -701,22 +700,40 @@ namespace varManager
         private System.Threading.Mutex mut = new Mutex();
 
         
-        private void Form1_Load(object sender, EventArgs e)
+        private async void Form1_Load(object sender, EventArgs e)
         {
             this.Text = "VarManager  v" + Assembly.GetEntryAssembly().GetName().Version.ToString();
-            if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
+            UseWaitCursor = true;
+            Enabled = false;
+            if (!await EnsureBackendReadyAsync().ConfigureAwait(true))
             {
-                OpenSetting();
+                Close();
+                return;
             }
+            UseWaitCursor = false;
+            Enabled = true;
+
+            if (string.IsNullOrWhiteSpace(Settings.Default.vampath) ||
+                string.IsNullOrWhiteSpace(Settings.Default.varspath))
+            {
+                MessageBox.Show("后端配置缺少 varspath 或 vampath，请编辑 config.json 后重启。");
+                OpenSetting();
+                Close();
+                return;
+            }
+
             if (!File.Exists(Path.Combine(Settings.Default.vampath, "VaM.exe")))
             {
-                this.Close();
+                MessageBox.Show("vampath 无效，请编辑 config.json 后重启。");
+                OpenSetting();
+                Close();
                 return;
             }
             mutex = new System.Threading.Mutex();
 
             var (dbPath, provider) = VarManagerContext.GetDatabaseInfo();
             this.BeginInvoke(addlog, new Object[] { $"DB config: {dbPath} | Provider: {provider}", LogLevel.INFO });
+            this.BeginInvoke(addlog, new Object[] { $"Backend config: varspath={Settings.Default.varspath}, vampath={Settings.Default.vampath}", LogLevel.INFO });
             
             // Set the sort after data source initialization to avoid .NET 9 issues
             try
@@ -762,42 +779,13 @@ namespace varManager
                     comboBoxPacksSwitch.Items.Add(packname);
             }
 
-            DirectoryInfo dipackpath = new DirectoryInfo(packpath);
-
-            if (dipackpath.Exists)
-            {
-                if (!dipackpath.Attributes.HasFlag(FileAttributes.ReparsePoint))
-                {
-                    Comm.DirectoryMoveAll(packpath, Path.Combine(packsSwitchpath, "default"));
-                }
-            }
-            dipackpath = new DirectoryInfo(packpath);
-            if (dipackpath.Exists)
-            {
-                if (!dipackpath.Attributes.HasFlag(FileAttributes.ReparsePoint))
-                {
-                    dipackpath.MoveTo(Path.Combine(Settings.Default.vampath, $"AddonPackages_{DateTime.Now.ToString("yyyyMMddHHmmss")}"));
-                }
-
-            }
-            dipackpath = new DirectoryInfo(packpath);
-            if (!dipackpath.Exists)
-            {
-                Comm.CreateSymbolicLink(packpath, Path.Combine(packsSwitchpath, "default"), Comm.SYMBOLIC_LINK_FLAG.Directory);
-            }
-
+            string currentSwitch = "default";
             try
             {
                 DirectoryInfo diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
-                if (!diswitch.Exists)
+                if (diswitch.Exists)
                 {
-                    dipackpath.Delete();
-                    Comm.CreateSymbolicLink(packpath, Path.Combine(packsSwitchpath, "default"), Comm.SYMBOLIC_LINK_FLAG.Directory);
-                }
-                diswitch = new DirectoryInfo(Comm.ReparsePoint(packpath));
-                if (comboBoxPacksSwitch.Items.IndexOf(diswitch.Name) >= 0)
-                {
-                    comboBoxPacksSwitch.SelectedItem = diswitch.Name;
+                    currentSwitch = diswitch.Name;
                 }
             }
             catch (Exception ex)
@@ -805,7 +793,23 @@ namespace varManager
                 this.BeginInvoke(addlog, new Object[] { $"Warning: {ex.Message}", LogLevel.INFO });
             }
 
-            UpdateVarsInstalled();
+            if (comboBoxPacksSwitch.Items.IndexOf(currentSwitch) >= 0)
+            {
+                comboBoxPacksSwitch.SelectedItem = currentSwitch;
+            }
+            else
+            {
+                comboBoxPacksSwitch.SelectedItem = "default";
+            }
+
+            try
+            {
+                RunBackendJob("refresh_install_status", null);
+            }
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"刷新安装状态失败: {ex.Message}", LogLevel.ERROR });
+            }
             comboBoxCreater.Items.Add("____ALL");
             var creators = dbContext.Vars
                 .GroupBy(v => v.CreatorName)
@@ -827,6 +831,7 @@ namespace varManager
             varsViewBindingSource.DataSource = dataSet;
             varsViewBindingSource.DataMember = "varsView";
             dgvFilterManager = new DgvFilterManager(varsViewDataGridView);
+            RefreshVarsViewUi();
             if (ExistAddonpackagesVar())
             {
                 MessageBox.Show("There are unorganized var files in the current switch, please run UPD_DB first");
@@ -900,6 +905,110 @@ namespace varManager
             listBoxLog.TopIndex = listBoxLog.Items.Count - 1;
         }
 
+        private async Task<bool> EnsureBackendReadyAsync()
+        {
+            try
+            {
+                await BackendSession.EnsureStartedAsync(LogBackendLine, backendCts.Token).ConfigureAwait(true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                BeginInvoke(addlog, new Object[] { $"后端启动失败: {ex.Message}", LogLevel.ERROR });
+                MessageBox.Show($"后端启动失败: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        private void LogBackendLine(string line)
+        {
+            LogLevel level = LogLevel.INFO;
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.ERROR;
+            }
+            BeginInvoke(addlog, new Object[] { line, level });
+        }
+
+        private BackendJobResult RunBackendJob(string kind, object? args)
+        {
+            return BackendSession.RunJob(kind, args, LogBackendLine, backendCts.Token);
+        }
+
+        private Task<BackendJobResult> RunBackendJobAsync(string kind, object? args)
+        {
+            return BackendSession.RunJobAsync(kind, args, LogBackendLine, backendCts.Token);
+        }
+
+        private T? DeserializeResult<T>(BackendJobResult result)
+        {
+            if (!result.Result.HasValue)
+            {
+                return default;
+            }
+            return JsonSerializer.Deserialize<T>(result.Result.Value.GetRawText());
+        }
+
+        private void ResetDbContext()
+        {
+            if (_dbContext.IsValueCreated)
+            {
+                _dbContext.Value?.Dispose();
+            }
+            _dbContext.Value = new VarManagerContext();
+        }
+
+        private void RefreshVarsViewUi()
+        {
+            ResetDbContext();
+            UpdateVarsViewDataGridView();
+        }
+
+        private sealed class MissingDepsResult
+        {
+            [JsonPropertyName("scope")]
+            public string Scope { get; set; } = string.Empty;
+
+            [JsonPropertyName("missing")]
+            public List<string> Missing { get; set; } = new List<string>();
+
+            [JsonPropertyName("installed")]
+            public List<string> Installed { get; set; } = new List<string>();
+
+            [JsonPropertyName("install_failed")]
+            public List<string> InstallFailed { get; set; } = new List<string>();
+
+            [JsonPropertyName("dependency_count")]
+            public int DependencyCount { get; set; }
+        }
+
+        private sealed class DepsJobResult
+        {
+            [JsonPropertyName("missing")]
+            public List<string> Missing { get; set; } = new List<string>();
+
+            [JsonPropertyName("installed")]
+            public List<string> Installed { get; set; } = new List<string>();
+
+            [JsonPropertyName("dependency_count")]
+            public int DependencyCount { get; set; }
+        }
+
+        private sealed class SceneAnalyzeResult
+        {
+            [JsonPropertyName("var_name")]
+            public string VarName { get; set; } = string.Empty;
+
+            [JsonPropertyName("entry_name")]
+            public string EntryName { get; set; } = string.Empty;
+
+            [JsonPropertyName("cache_dir")]
+            public string CacheDir { get; set; } = string.Empty;
+
+            [JsonPropertyName("character_gender")]
+            public string CharacterGender { get; set; } = string.Empty;
+        }
+
         private void buttonClearLog_Click(object sender, EventArgs e)
         {
             listBoxLog.Items.Clear();
@@ -957,15 +1066,9 @@ namespace varManager
             
             if (result == DialogResult.Yes)
             {
-                string execPath = Path.Combine(Settings.Default.vampath, Settings.Default.defaultVamExec);
                 try
                 {
-                    var startInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = execPath,
-                        WorkingDirectory = Settings.Default.vampath
-                    };
-                    System.Diagnostics.Process.Start(startInfo);
+                    RunBackendJob("vam_start", null);
                 }
                 catch (Exception ex)
                 {
@@ -1401,88 +1504,121 @@ namespace varManager
         private void backgroundWorkerInstall_DoWork(object sender, DoWorkEventArgs e)
         {
             mutex.WaitOne();
-            if ((string)e.Argument == "FillDataTables")
+            try
             {
-                /*
-                Thread thread1 = new Thread(new ThreadStart(fillscenes));
-                thread1.Start();
-                Thread thread2 = new Thread(new ThreadStart(fillvars));
-                thread2.Start();
-                Thread thread3 = new Thread(new ThreadStart(filldependencies));
-                thread3.Start();
-                thread1.Join();
-                thread2.Join();
-                thread3.Join();
-                */
-                FillDataTables();
-            } 
-            if ((string)e.Argument == "UpdDB")
-            {
-                TidyVars();
-                UpdDB();
-
-                if (varsForInstall.Count() > 0)
+                string arg = (string)e.Argument;
+                if (arg == "FillDataTables")
                 {
-                    var varNames = VarsDependencies(varsForInstall);
-                    varsForInstall.Clear();
-                    File.Delete("varsForInstall.txt");
-                    foreach (string varname in varNames)
-                    {
-                        VarInstall(varname);
-                    }
+                    FillDataTables();
+                    return;
                 }
-                UpdateVarsInstalled();
-                RescanPackages();
-                //Application.Restart();
-                //Environment.Exit(0);
-
+                if (arg == "UpdDB")
+                {
+                    RunBackendJob("update_db", null);
+                    BeginInvoke(new Action(RefreshVarsViewUi));
+                    return;
+                }
+                if (arg == "rebuildLink")
+                {
+                    RunBackendJob("rebuild_links", new { include_missing = true });
+                    return;
+                }
+                if (arg == "fixPreview")
+                {
+                    RunBackendJob("fix_previews", null);
+                    BeginInvoke(new Action(() => MessageBox.Show("Fix preview finish")));
+                    BeginInvoke(new Action(RefreshVarsViewUi));
+                    return;
+                }
+                if (arg == "savesDepend")
+                {
+                    var result = RunBackendJob("saves_deps", null);
+                    var payload = DeserializeResult<DepsJobResult>(result);
+                    if (payload != null && payload.Missing.Count > 0)
+                    {
+                        BeginInvoke(new InvokeShowformMissingVars(ShowformMissingVars), payload.Missing);
+                    }
+                    RunBackendJob("rescan_packages", null);
+                    BeginInvoke(new Action(RefreshVarsViewUi));
+                    return;
+                }
+                if (arg == "LogAnalysis")
+                {
+                    var result = RunBackendJob("log_deps", null);
+                    var payload = DeserializeResult<DepsJobResult>(result);
+                    if (payload != null && payload.Missing.Count > 0)
+                    {
+                        BeginInvoke(new InvokeShowformMissingVars(ShowformMissingVars), payload.Missing);
+                    }
+                    RunBackendJob("rescan_packages", null);
+                    BeginInvoke(new Action(RefreshVarsViewUi));
+                    return;
+                }
+                if (arg == "MissingDepends")
+                {
+                    var result = RunBackendJob("missing_deps", new { scope = "installed" });
+                    var payload = DeserializeResult<MissingDepsResult>(result);
+                    if (payload != null && payload.Missing.Count > 0)
+                    {
+                        BeginInvoke(new InvokeShowformMissingVars(ShowformMissingVars), payload.Missing);
+                    }
+                    else
+                    {
+                        BeginInvoke(new Action(() =>
+                            MessageBox.Show("No missing dependencies found", "INFO",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information)));
+                    }
+                    RunBackendJob("rescan_packages", null);
+                    BeginInvoke(new Action(RefreshVarsViewUi));
+                    return;
+                }
+                if (arg == "AllMissingDepends")
+                {
+                    var result = RunBackendJob("missing_deps", new { scope = "all" });
+                    var payload = DeserializeResult<MissingDepsResult>(result);
+                    if (payload != null && payload.Missing.Count > 0)
+                    {
+                        BeginInvoke(new InvokeShowformMissingVars(ShowformMissingVars), payload.Missing);
+                    }
+                    return;
+                }
+                if (arg == "FilteredMissingDepends")
+                {
+                    var varNames = new List<string>();
+                    System.Collections.IList listDatarow = varsViewBindingSource.List;
+                    foreach (DataRowView varrowview in listDatarow)
+                    {
+                        varNames.Add(varrowview.Row.Field<string>("varName"));
+                    }
+                    var result = RunBackendJob("missing_deps", new { scope = "filtered", var_names = varNames });
+                    var payload = DeserializeResult<MissingDepsResult>(result);
+                    if (payload != null && payload.Missing.Count > 0)
+                    {
+                        BeginInvoke(new InvokeShowformMissingVars(ShowformMissingVars), payload.Missing);
+                    }
+                    return;
+                }
+                if (arg == "StaleVars")
+                {
+                    RunBackendJob("stale_vars", null);
+                    BeginInvoke(new Action(RefreshVarsViewUi));
+                    return;
+                }
+                if (arg == "OldVersionVars")
+                {
+                    RunBackendJob("old_version_vars", null);
+                    BeginInvoke(new Action(RefreshVarsViewUi));
+                    return;
+                }
             }
-
-            if ((string)e.Argument == "rebuildLink")
+            catch (Exception ex)
             {
-                FixRebuildLink();
-            } 
-            if ((string)e.Argument == "fixPreview")
-            {
-                FixPreview();
-                MessageBox.Show("Fix preview finish");
+                BeginInvoke(addlog, new Object[] { $"后端作业失败: {ex.Message}", LogLevel.ERROR });
             }
-            if ((string)e.Argument == "savesDepend")
+            finally
             {
-                FixSavseDependencies();
-                UpdateVarsInstalled();
-                RescanPackages();
+                mutex.ReleaseMutex();
             }
-            if ((string)e.Argument == "LogAnalysis")
-            {
-                LogAnalysis();
-                UpdateVarsInstalled();
-                RescanPackages();
-            }
-            if ((string)e.Argument == "MissingDepends")
-            {
-                MissingDepends();
-                UpdateVarsInstalled();
-                RescanPackages();
-            }
-            if ((string)e.Argument == "AllMissingDepends")
-            {
-                AllMissingDepends();
-            }
-            if ((string)e.Argument == "FilteredMissingDepends")
-            {
-                FilteredMissingDepends();
-            }
-            if ((string)e.Argument == "StaleVars")
-            {
-                StaleVars();
-            }
-            if ((string)e.Argument == "OldVersionVars")
-            {
-                StaleVars();
-                OldVersionVars();
-            }
-            mutex.ReleaseMutex();
         }
 
         private void backgroundWorkerInstall_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
@@ -2489,11 +2625,16 @@ namespace varManager
                                           MessageBoxDefaultButton.Button2);
                     if (result == DialogResult.Yes)
                     {
-                        List<string> varnames = new List<string>();
-                        varnames.Add(varName);
-                        UnintallVars(varnames);
-                        UpdateVarsInstalled();
-                        RescanPackages();
+                        try
+                        {
+                            RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
+                            RefreshVarsViewUi();
+                            RunBackendJob("rescan_packages", null);
+                        }
+                        catch (Exception ex)
+                        {
+                            BeginInvoke(addlog, new Object[] { $"卸载失败: {ex.Message}", LogLevel.ERROR });
+                        }
                     }
 
                 }
@@ -2507,15 +2648,16 @@ namespace varManager
                                           MessageBoxDefaultButton.Button2);
                     if (result == DialogResult.Yes)
                     {
-                        List<string> varnames = new List<string>();
-                        varnames.Add(varName);
-                        varnames = VarsDependencies(varnames);
-                        foreach (string varname in varnames)
+                        try
                         {
-                            VarInstall(varname);
+                            RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
+                            RefreshVarsViewUi();
+                            RunBackendJob("rescan_packages", null);
                         }
-                        UpdateVarsInstalled();
-                        RescanPackages();
+                        catch (Exception ex)
+                        {
+                            BeginInvoke(addlog, new Object[] { $"安装失败: {ex.Message}", LogLevel.ERROR });
+                        }
                     }
                 }
             }
@@ -2597,12 +2739,15 @@ namespace varManager
                                   MessageBoxDefaultButton.Button2);
             if (result == DialogResult.Yes)
             {
-                varNames = VarsDependencies(varNames);
-                foreach (string varname in varNames)
+                try
                 {
-                    VarInstall(varname);
+                    RunBackendJob("install_vars", new { var_names = varNames, include_dependencies = true });
+                    RefreshVarsViewUi();
                 }
-                UpdateVarsInstalled();
+                catch (Exception ex)
+                {
+                    BeginInvoke(addlog, new Object[] { $"安装失败: {ex.Message}", LogLevel.ERROR });
+                }
             }
         }
         public List<string> GetDependents(string dependName)
@@ -2871,8 +3016,16 @@ namespace varManager
                                   MessageBoxDefaultButton.Button2);
             if (result == DialogResult.Yes)
             {
-                UnintallVars(varNames);
-                UpdateVarsInstalled();
+                try
+                {
+                    RunBackendJob("uninstall_vars", new { var_names = varNames, include_implicated = true });
+                    RefreshVarsViewUi();
+                    RunBackendJob("rescan_packages", null);
+                }
+                catch (Exception ex)
+                {
+                    BeginInvoke(addlog, new Object[] { $"卸载失败: {ex.Message}", LogLevel.ERROR });
+                }
             }
         }
 
@@ -2900,9 +3053,16 @@ namespace varManager
                                   MessageBoxDefaultButton.Button2);
             if (result == DialogResult.Yes)
             {
-                DeleteVars(varNames);
-                UpdateVarsInstalled();
-                RescanPackages();
+                try
+                {
+                    RunBackendJob("delete_vars", new { var_names = varNames, include_implicated = true });
+                    RefreshVarsViewUi();
+                    RunBackendJob("rescan_packages", null);
+                }
+                catch (Exception ex)
+                {
+                    BeginInvoke(addlog, new Object[] { $"删除失败: {ex.Message}", LogLevel.ERROR });
+                }
             }
         }
 
@@ -2927,30 +3087,13 @@ namespace varManager
             fvm.VarsToMove = varNames;
             if (fvm.ShowDialog() == DialogResult.OK)
             {
-                string movetovarspath = Path.Combine(Settings.Default.vampath, "AddonPackages", installLinkDirName, fvm.MovetoDirName);
-                if (!Directory.Exists(movetovarspath))
-                    Directory.CreateDirectory(movetovarspath);
-
-                foreach (string varname in varNames)
+                try
                 {
-                    string[] operalinks = Directory.GetFiles(Path.Combine(Settings.Default.vampath, "AddonPackages", installLinkDirName), varname + ".var", SearchOption.AllDirectories);
-                    if (operalinks.Length > 0)
-                    {
-                        string operav = operalinks[0];
-                        string movetodv = Path.Combine(movetovarspath, varname + ".var");
-                        if (!File.Exists(movetodv))
-                        {
-                            try
-                            {
-                                File.Move(operav, movetodv);
-                                //CleanVar(varname);
-                            }
-                            catch (Exception ex)
-                            {
-                                this.BeginInvoke(addlog, new Object[] { $"{operav} move failed,{ex.Message}", LogLevel.ERROR });
-                            }
-                        }
-                    }
+                    RunBackendJob("links_move", new { var_names = varNames, target_dir = fvm.MovetoDirName });
+                }
+                catch (Exception ex)
+                {
+                    BeginInvoke(addlog, new Object[] { $"移动失败: {ex.Message}", LogLevel.ERROR });
                 }
             }
 
@@ -2960,12 +3103,14 @@ namespace varManager
         {
             if (saveFileDialogExportInstalled.ShowDialog() == DialogResult.OK)
             {
-                List<string> varNames = new List<string>();
-                foreach (var varstatus in dbContext.InstallStatuses.Where(i => i.Installed))
+                try
                 {
-                    varNames.Add(varstatus.VarName!);
+                    RunBackendJob("vars_export_installed", new { path = saveFileDialogExportInstalled.FileName });
                 }
-                File.WriteAllLines(saveFileDialogExportInstalled.FileName, varNames.ToArray());
+                catch (Exception ex)
+                {
+                    BeginInvoke(addlog, new Object[] { $"导出失败: {ex.Message}", LogLevel.ERROR });
+                }
             }
         }
 
@@ -2973,13 +3118,16 @@ namespace varManager
         {
             if (openFileDialogInstByTXT.ShowDialog() == DialogResult.OK)
             {
-                string[] varNames = File.ReadAllLines(openFileDialogInstByTXT.FileName);
-                foreach (string varname in varNames)
+                try
                 {
-                    VarInstall(varname);
+                    RunBackendJob("vars_install_batch", new { path = openFileDialogInstByTXT.FileName });
+                    RunBackendJob("rescan_packages", null);
+                    RefreshVarsViewUi();
                 }
-                UpdateVarsInstalled();
-                RescanPackages();
+                catch (Exception ex)
+                {
+                    BeginInvoke(addlog, new Object[] { $"批量安装失败: {ex.Message}", LogLevel.ERROR });
+                }
             }
         }
 
@@ -3001,41 +3149,15 @@ namespace varManager
 
         private void varpacksSwitch(string sw)
         {
-            string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
-            DirectoryInfo diswitch = new DirectoryInfo(Path.Combine(packsSwitchpath, sw));
             this.BeginInvoke(addlog, new Object[] { $"Point the Addonpackages symbo-link to '{sw}'", LogLevel.INFO });
-            if (!diswitch.Exists) diswitch.Create();
-            DirectoryInfo dipack = new DirectoryInfo(Path.Combine(Settings.Default.vampath, "AddonPackages"));
-            if (dipack.Exists)
+            try
             {
-                if (Comm.ReparsePoint(dipack.FullName).ToLower() != diswitch.FullName.ToLower())
-                {
-                    dipack.Delete();
-                    if (!Comm.CreateSymbolicLink(dipack.FullName, diswitch.FullName, Comm.SYMBOLIC_LINK_FLAG.Directory))
-                    {
-                        MessageBox.Show("Error: create AddonPackages symbolic link. " +
-                                "(Error Code: " + Marshal.GetLastWin32Error() + ")");
-                    }
-                    else
-                    {
-                       
-                        UpdateVarsInstalled();
-                        RescanPackages();
-                    }
-                }
+                RunBackendJob("packswitch_set", new { name = sw });
+                RefreshVarsViewUi();
             }
-            else
+            catch (Exception ex)
             {
-                if (!Comm.CreateSymbolicLink(dipack.FullName, diswitch.FullName, Comm.SYMBOLIC_LINK_FLAG.Directory))
-                {
-                    MessageBox.Show("Error: create AddonPackages symbolic link. " +
-                            "(Error Code: " + Marshal.GetLastWin32Error() + ")");
-                }
-                else
-                {
-                    UpdateVarsInstalled();
-                    RescanPackages();
-                }
+                BeginInvoke(addlog, new Object[] { $"切换失败: {ex.Message}", LogLevel.ERROR });
             }
         }
 
@@ -3061,16 +3183,19 @@ namespace varManager
             FormSwitchAdd formSwitchAdd = new FormSwitchAdd();
             if (formSwitchAdd.ShowDialog() == DialogResult.OK)
             {
-                if (comboBoxPacksSwitch.Items.IndexOf(formSwitchAdd.SwitchName) < 0)
+                try
                 {
-                    comboBoxPacksSwitch.Items.Add(formSwitchAdd.SwitchName);
+                    RunBackendJob("packswitch_add", new { name = formSwitchAdd.SwitchName });
+                    if (comboBoxPacksSwitch.Items.IndexOf(formSwitchAdd.SwitchName) < 0)
+                    {
+                        comboBoxPacksSwitch.Items.Add(formSwitchAdd.SwitchName);
+                    }
                     comboBoxPacksSwitch.SelectedItem = formSwitchAdd.SwitchName;
                 }
-                else
+                catch (Exception ex)
                 {
-                    MessageBox.Show("Switch space already exists!");
+                    MessageBox.Show($"Switch create failed: {ex.Message}");
                 }
-
             }
         }
 
@@ -3081,11 +3206,16 @@ namespace varManager
             {
                 if (MessageBox.Show($"Will delete {curswitch} AddonPackagesSwitch, sure?", "delete switch", MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
-                    string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
-                    DirectoryInfo diswitch = new DirectoryInfo(Path.Combine(packsSwitchpath, curswitch));
-                    diswitch.Delete(true);
-                    comboBoxPacksSwitch.Items.Remove(curswitch);
-                    comboBoxPacksSwitch.SelectedItem = "default";
+                    try
+                    {
+                        RunBackendJob("packswitch_delete", new { name = curswitch });
+                        comboBoxPacksSwitch.Items.Remove(curswitch);
+                        comboBoxPacksSwitch.SelectedItem = "default";
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Switch delete failed: {ex.Message}");
+                    }
                 }
             }
 
@@ -3101,11 +3231,16 @@ namespace varManager
                 if (formSwitchRename.ShowDialog() == DialogResult.OK)
                 {
                     string newName = formSwitchRename.NewName;
-                    string packsSwitchpath = new DirectoryInfo(Path.Combine(Settings.Default.vampath, addonPacksSwitch)).FullName.ToLower();
-                    DirectoryInfo diswitch = new DirectoryInfo(Path.Combine(packsSwitchpath, curswitch));
-                    diswitch.MoveTo(Path.Combine(packsSwitchpath, newName));
-                    comboBoxPacksSwitch.Items[comboBoxPacksSwitch.SelectedIndex] = newName;
-                    this.varpacksSwitch(newName);
+                    try
+                    {
+                        RunBackendJob("packswitch_rename", new { old_name = curswitch, new_name = newName });
+                        comboBoxPacksSwitch.Items[comboBoxPacksSwitch.SelectedIndex] = newName;
+                        comboBoxPacksSwitch.SelectedItem = newName;
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Switch rename failed: {ex.Message}");
+                    }
                 }
             }
         }
@@ -3146,42 +3281,29 @@ namespace varManager
             }
             tableLayoutPanelPreview.Visible = false;
             Cursor = Cursors.WaitCursor;
-            LoadScene(jsonLoadScene, merge, ignoreGender, characterGender, personOrder);
+            try
+            {
+                LoadScene(jsonLoadScene, merge, ignoreGender, characterGender, personOrder);
+            }
+            catch (Exception ex)
+            {
+                BeginInvoke(addlog, new Object[] { $"Load scene failed: {ex.Message}", LogLevel.ERROR });
+            }
             Cursor = Cursors.Arrow;
             UpdateButtonClearCache();
         }
 
         public void LoadScene(JSONClass jc,bool merge, bool ignoreGender, string characterGender, int personOrder)
         {
-            JSONArray resources = jc["resources"].AsArray;
-            string saveName = "";
-
-            if (resources.Count > 0)
+            var jsonElement = JsonSerializer.Deserialize<JsonElement>(jc.ToString());
+            RunBackendJob("scene_load", new
             {
-                JSONClass resource = (JSONClass)resources[0];
-                saveName = resource["saveName"].Value;
-                (string varName, string entryName) = SaveNameSplit(saveName);
-                string sceneFolder = Path.Combine(Directory.GetCurrentDirectory(), "Cache",
-                     Comm.ValidFileName(varName), Comm.ValidFileName(entryName.Replace('\\', '_').Replace('/', '_')));
-                string dependfFilename = Path.Combine(sceneFolder, "depend.txt");
-                if (!File.Exists(dependfFilename))
-                {
-                    ReadSaveName(saveName, characterGender);
-                }
-                List<string> depends = new List<string>();
-                using (StreamReader sr = new StreamReader(dependfFilename))
-                {
-                    string depend;
-                    while ((depend = sr.ReadLine()) != null)
-                    {
-                        depends.Add(depend);
-                    }
-                }
-                string genderFilename = Path.Combine(sceneFolder, "gender.txt");
-                using (StreamReader srgender = new StreamReader(genderFilename))
-                    characterGender= srgender.ReadLine();
-                GenLoadscenetxt(jc, merge, depends, characterGender, ignoreGender, personOrder);
-            }
+                json = jsonElement,
+                merge = merge,
+                ignore_gender = ignoreGender,
+                character_gender = characterGender,
+                person_order = personOrder
+            });
         }
 
         public bool FindByvarName(string varName)
@@ -3344,11 +3466,13 @@ namespace varManager
 
         public void LocateVar(string varName)
         {
-            var varsrow = dbContext.Vars.FirstOrDefault(v => v.VarName == varName);
-            if (varsrow != null)
+            try
             {
-                string destvarfile = Path.Combine(Settings.Default.varspath, varsrow.VarPath!, varsrow.VarName + ".var");
-                Comm.LocateFile(destvarfile);
+                RunBackendJob("vars_locate", new { var_name = varName });
+            }
+            catch (Exception ex)
+            {
+                BeginInvoke(addlog, new Object[] { $"定位失败: {ex.Message}", LogLevel.ERROR });
             }
         }
 
@@ -3365,9 +3489,15 @@ namespace varManager
                                       MessageBoxDefaultButton.Button2);
                 if (result == DialogResult.Yes)
                 {
-                    List<string> varnames = new List<string>();
-                    varnames.Add(varName);
-                    UnintallVars(varnames);
+                    try
+                    {
+                        RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        BeginInvoke(addlog, new Object[] { $"卸载失败: {ex.Message}", LogLevel.ERROR });
+                        return;
+                    }
                 }
             }
             else
@@ -3380,27 +3510,40 @@ namespace varManager
                                       MessageBoxDefaultButton.Button2);
                 if (result == DialogResult.Yes)
                 {
-                    List<string> varnames = new List<string>();
-                    varnames.Add(varName);
-                    varnames = VarsDependencies(varnames);
-                    foreach (string varname in varnames)
+                    try
                     {
-                        VarInstall(varname);
+                        RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
                     }
-
+                    catch (Exception ex)
+                    {
+                        BeginInvoke(addlog, new Object[] { $"安装失败: {ex.Message}", LogLevel.ERROR });
+                        return;
+                    }
                 }
             }
-            UpdateVarsInstalled();
-            RescanPackages();
+            RefreshVarsViewUi();
+            try
+            {
+                RunBackendJob("rescan_packages", null);
+            }
+            catch (Exception ex)
+            {
+                BeginInvoke(addlog, new Object[] { $"Rescan failed: {ex.Message}", LogLevel.ERROR });
+            }
         }
 
         private void buttonAnalysis_Click(object sender, EventArgs e)
         {
-            Analysisscene(jsonLoadScene);
+            string characterGender = "female";
+            if (checkBoxForMale.Visible)
+            {
+                characterGender = checkBoxForMale.Checked ? "male" : "female";
+            }
+            Analysisscene(jsonLoadScene, characterGender);
             UpdateButtonClearCache();
         }
 
-        public void Analysisscene(JSONClass jsonLS)
+        public void Analysisscene(JSONClass jsonLS, string characterGender = "female")
         {
             JSONClass jsonls = (JSONClass)JSONNode.Parse(jsonLS.ToString());
             JSONArray resources = jsonls["resources"].AsArray;
@@ -3409,27 +3552,38 @@ namespace varManager
             {
                 JSONClass resource = (JSONClass)resources[0];
                 saveName = resource["saveName"].Value;
-                (string varName, string entryName) = SaveNameSplit(saveName);
-                string sceneFolder = Path.Combine(Directory.GetCurrentDirectory(), "Cache",
-                    Comm.ValidFileName(varName), Comm.ValidFileName(entryName.Replace('\\', '_').Replace('/', '_')));
-                string atomsFoldername = Path.Combine(sceneFolder, "atoms");
-
-                if (!Directory.Exists(atomsFoldername))
-                {
-                    ReadSaveName(saveName, "female",true);
-                }
-                
-                FormAnalysis formAnalysis = new FormAnalysis();
-                formAnalysis.form1 = this;
-                formAnalysis.VarName = varName;
-                formAnalysis.EntryName = entryName;
-                if (formAnalysis.ShowDialog() == DialogResult.OK)
-                {
-                    
-                }
             }
-            
+            if (string.IsNullOrEmpty(saveName))
+            {
+                return;
+            }
 
+            BackendJobResult result;
+            try
+            {
+                result = RunBackendJob("scene_analyze", new
+                {
+                    save_name = saveName,
+                    character_gender = characterGender
+                });
+            }
+            catch (Exception ex)
+            {
+                BeginInvoke(addlog, new Object[] { $"分析失败: {ex.Message}", LogLevel.ERROR });
+                return;
+            }
+            var payload = DeserializeResult<SceneAnalyzeResult>(result);
+            if (payload == null)
+            {
+                return;
+            }
+
+            FormAnalysis formAnalysis = new FormAnalysis();
+            formAnalysis.form1 = this;
+            formAnalysis.VarName = payload.VarName;
+            formAnalysis.EntryName = payload.EntryName;
+            formAnalysis.CharacterGender = payload.CharacterGender;
+            formAnalysis.ShowDialog();
         }
         public static string GetCharacterGender(string character)
         {
@@ -3740,12 +3894,29 @@ namespace varManager
         {
             if (MessageBox.Show("The cache can improve the speed of secondary analysis, normally you don't need to clear it, unless you modify the scene file. This operation only clears the cache of the current scene, if you need to clear all the cache, please delete the cache directory manually.", "Clear Cache", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                string sceneFoldername = Path.Combine(Directory.GetCurrentDirectory(), "Cache",
-                           Comm.ValidFileName(curVarName), Comm.ValidFileName(curEntryName.Replace('\\', '_').Replace('/', '_')));
-                try { Directory.Delete(sceneFoldername, true); }
-                catch { }
+                try
+                {
+                    RunBackendJob("cache_clear", new { var_name = curVarName, entry_name = curEntryName });
+                }
+                catch (Exception ex)
+                {
+                    BeginInvoke(addlog, new Object[] { $"清理缓存失败: {ex.Message}", LogLevel.ERROR });
+                }
                 UpdateButtonClearCache();
             }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            backendCts.Cancel();
+            try
+            {
+                BackendSession.ShutdownAsync(LogBackendLine, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch
+            {
+            }
+            base.OnFormClosing(e);
         }
     }
 }

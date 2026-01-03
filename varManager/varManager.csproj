@@ -78,6 +78,8 @@
 <!--  </ItemGroup>-->
   <ItemGroup>
     <Compile Include="Comm.cs" />
+    <Compile Include="Backend\BackendClient.cs" />
+    <Compile Include="Backend\BackendSession.cs" />
     <Content Include="Custom\Scripts\loadscene.cs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

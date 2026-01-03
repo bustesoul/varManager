@@ -10,6 +10,10 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using varManager.Backend;
 
 namespace varManager
 {
@@ -25,6 +29,30 @@ namespace varManager
 
         public string InRepository { get => inRepository; set => inRepository = value; }
         public string PackageName { get => packageName; set => packageName = value; }
+        public Action<string>? LogSink { get; set; }
+
+        private void LogBackendLine(string line)
+        {
+            LogSink?.Invoke(line);
+        }
+
+        private T? DeserializeResult<T>(BackendJobResult result)
+        {
+            if (!result.Result.HasValue)
+            {
+                return default;
+            }
+            return JsonSerializer.Deserialize<T>(result.Result.Value.GetRawText());
+        }
+
+        private sealed class HubDownloadList
+        {
+            [JsonPropertyName("download_urls")]
+            public Dictionary<string, string> DownloadUrls { get; set; } = new Dictionary<string, string>();
+
+            [JsonPropertyName("download_urls_no_version")]
+            public Dictionary<string, string> DownloadUrlsNoVersion { get; set; } = new Dictionary<string, string>();
+        }
 
         public HubItem()
         {
@@ -37,39 +65,36 @@ namespace varManager
         }
         private bool GetResourceDetail()
         {
-            bool success = false;
             try
             {
-                string reponse = Task<int>.Run(()=>GetResourceDetail(resource_id)).Result;
-                if (string.IsNullOrEmpty(reponse)) return false;
-                JSONNode jsonResult = JSON.Parse(reponse);
-                Dictionary<string, string> varDownloadUrl = new Dictionary<string, string>();
-                var hubFiles = jsonResult["hubFiles"].AsArray;
-
-                foreach (JSONClass hubFile in hubFiles)
+                var result = BackendSession.RunJob("hub_resource_detail", new { resource_id = resource_id }, LogBackendLine, CancellationToken.None);
+                var payload = DeserializeResult<HubDownloadList>(result);
+                if (payload == null)
                 {
-                    var filename = hubFile["filename"].Value;
-                    if (filename.EndsWith(".var")) filename = filename.Substring(0, filename.Length - 4);
-                    varDownloadUrl[filename] = hubFile["urlHosted"];
+                    return false;
                 }
-                JSONClass dependenciesFiles = jsonResult["dependencies"] as JSONClass;
-                foreach (var hubFile in dependenciesFiles.Keys)
+                Dictionary<string, string> varDownloadUrl = new Dictionary<string, string>();
+                foreach (var kvp in payload.DownloadUrls)
                 {
-                    JSONArray dependencies = dependenciesFiles[hubFile].AsArray;
-                    foreach (JSONClass dependencie in dependencies)
+                    if (!string.IsNullOrEmpty(kvp.Value))
                     {
-                        if (!string.IsNullOrEmpty(dependencie["downloadUrl"].Value)&&!(dependencie["downloadUrl"].Value=="null"))
-                        varDownloadUrl[dependencie["filename"]] = dependencie["downloadUrl"];
+                        varDownloadUrl[kvp.Key] = kvp.Value;
+                    }
+                }
+                foreach (var kvp in payload.DownloadUrlsNoVersion)
+                {
+                    if (!string.IsNullOrEmpty(kvp.Value) && !varDownloadUrl.ContainsKey(kvp.Key))
+                    {
+                        varDownloadUrl[kvp.Key] = kvp.Value;
                     }
                 }
                 RaiseGenLinkListFilterEvent(varDownloadUrl);
-                success = true;
+                return true;
             }
-            catch (Exception)
+            catch
             {
-
+                return false;
             }
-            return success;
         }
         private static async Task<string> GetResourceDetail(string resourceid)
         {
@@ -117,7 +142,16 @@ namespace varManager
             if (buttonInRepository.Text.StartsWith("Go To "))
             {
                 if (!string.IsNullOrEmpty(download_url))
-                    System.Diagnostics.Process.Start($"{download_url}");
+                {
+                    try
+                    {
+                        BackendSession.RunJob("open_url", new { url = download_url }, LogBackendLine, CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Open url failed: {ex.Message}");
+                    }
+                }
             }
         }
         void RaiseGenLinkListFilterEvent(Dictionary<string, string> varDownloadUrl)
@@ -224,47 +258,12 @@ namespace varManager
         {
             // Construct the URL to open based on the resource_id
             string urlToOpen = $"https://hub.virtamate.com/resources/{resource_id}/";
-
             try
             {
-                // Attempt to start the process (open the URL in the default browser)
-                // Use ShellExecute=true to rely on the operating system's default action for the URL
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(urlToOpen) { UseShellExecute = true });
-            }
-            catch (System.ComponentModel.Win32Exception winEx)
-            {
-                // Catch exceptions specifically related to Win32 API calls,
-                // which is common for Process.Start failures when the system cannot find the associated program.
-
-                // Error code 2 (ERROR_FILE_NOT_FOUND) is the most likely reason
-                // when the system cannot find the program associated with the file/protocol (like a browser for http/s).
-                if (winEx.NativeErrorCode == 2)
-                {
-                    // Display a specific error message for the "file not found" case,
-                    // suggesting the user check their system's default browser settings.
-                    MessageBox.Show(
-                        $"Unable to open link: The system could not find the program associated with this link.\nPlease check your default browser settings and protocol associations.\nLink: {urlToOpen}",
-                        "Open Link Error", // Title of the message box
-                        MessageBoxButtons.OK, // Button(s) on the message box
-                        MessageBoxIcon.Error // Icon for the message box
-                    );
-                }
-                else
-                {
-                    // Handle other types of Win32Exceptions
-                    // Display a more general Win32 error message including the native error code.
-                    MessageBox.Show(
-                        $"A system error occurred while trying to open the link (Code: {winEx.NativeErrorCode}): {winEx.Message}\nLink: {urlToOpen}",
-                        "Open Link Error",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                }
+                BackendSession.RunJob("open_url", new { url = urlToOpen }, LogBackendLine, CancellationToken.None);
             }
             catch (Exception ex)
             {
-                // Catch any other unexpected exceptions that might occur
-                // Display a general error message for any other exception type.
                 MessageBox.Show(
                     $"An unexpected error occurred while trying to open the link: {ex.Message}\nLink: {urlToOpen}",
                     "Open Link Error",

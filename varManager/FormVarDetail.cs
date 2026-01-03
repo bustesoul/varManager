@@ -8,6 +8,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Threading;
+using varManager.Backend;
+using static SimpleLogger;
 using varManager.Properties;
 
 namespace varManager
@@ -21,6 +24,25 @@ namespace varManager
         public List<string> DependentVarList;
         public List<string> DependentJsonList;
         private Size _layoutClientSize;
+
+        private void LogBackendLine(string line)
+        {
+            if (form1 == null)
+            {
+                return;
+            }
+            LogLevel level = LogLevel.INFO;
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.ERROR;
+            }
+            form1.BeginInvoke(new Form1.InvokeAddLoglist(form1.UpdateAddLoglist), new object[] { line, level });
+        }
+
+        private BackendJobResult RunBackendJob(string kind, object? args)
+        {
+            return BackendSession.RunJob(kind, args, LogBackendLine, CancellationToken.None);
+        }
         public FormVarDetail()
         {
             InitializeComponent();
@@ -102,7 +124,14 @@ namespace varManager
 
         private void buttonLocate_Click(object sender, EventArgs e)
         {
-            form1.LocateVar(strVarName);
+            try
+            {
+                RunBackendJob("vars_locate", new { var_name = strVarName });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Locate failed: {ex.Message}");
+            }
         }
 
         private void buttonFilter_Click(object sender, EventArgs e)
@@ -121,7 +150,14 @@ namespace varManager
                 if (dependVar == "missing")
                 {
                     string varname = dependName.Replace(".latest", ".1");
-                    System.Diagnostics.Process.Start("https://www.google.com/search?q=" + varname + " var");
+                    try
+                    {
+                        RunBackendJob("open_url", new { url = "https://www.google.com/search?q=" + varname + " var" });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Open url failed: {ex.Message}");
+                    }
                 }
                 else
                 {
@@ -150,8 +186,14 @@ namespace varManager
                 if(saved.StartsWith("\\"))
                     saved = saved.Substring(1);
 
-                string destsavedfile = Path.Combine(Settings.Default.vampath, saved);
-                Comm.LocateFile(destsavedfile);
+                try
+                {
+                    RunBackendJob("vars_locate", new { path = saved.Replace('/', '\\') });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Locate failed: {ex.Message}");
+                }
 
             }
         }

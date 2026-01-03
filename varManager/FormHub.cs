@@ -8,7 +8,10 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows.Forms;
+using varManager.Backend;
 using varManager.Properties;
 using static SimpleLogger;
 
@@ -28,6 +31,44 @@ namespace varManager
         static string vam_download_exe = "vam_downloader.exe";
         static string vam_download_path = Path.Combine(".\\plugin\\", vam_download_exe);
         static string vam_download_save_path = Path.Combine(Settings.Default.vampath, "AddonPackages");
+
+        private void LogBackendLine(string line)
+        {
+            LogLevel level = LogLevel.INFO;
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.ERROR;
+            }
+            BeginInvoke(addlog, new Object[] { line, level });
+        }
+
+        private Task<BackendJobResult> RunBackendJobAsync(string kind, object? args)
+        {
+            return BackendSession.RunJobAsync(kind, args, LogBackendLine, CancellationToken.None);
+        }
+
+        private BackendJobResult RunBackendJob(string kind, object? args)
+        {
+            return BackendSession.RunJob(kind, args, LogBackendLine, CancellationToken.None);
+        }
+
+        private T? DeserializeResult<T>(BackendJobResult result)
+        {
+            if (!result.Result.HasValue)
+            {
+                return default;
+            }
+            return JsonSerializer.Deserialize<T>(result.Result.Value.GetRawText());
+        }
+
+        private sealed class HubDownloadList
+        {
+            [JsonPropertyName("download_urls")]
+            public Dictionary<string, string> DownloadUrls { get; set; } = new Dictionary<string, string>();
+
+            [JsonPropertyName("download_urls_no_version")]
+            public Dictionary<string, string> DownloadUrlsNoVersion { get; set; } = new Dictionary<string, string>();
+        }
         
         public FormHub()
         {
@@ -60,65 +101,43 @@ namespace varManager
         }
         private async void AllMissingDepends()
         {
-           
             this.BeginInvoke(addlog, new Object[] { "Search for dependencies...", LogLevel.INFO });
-           
-            List<string> missingvars = form1.MissingDependencies();
-            if (missingvars.Count > 0)
+            try
             {
-                string packages = string.Join(",", missingvars);
-                this.BeginInvoke(addlog, new Object[] { " Search downloadable dependencies in the HUB.", LogLevel.INFO });
-                var reponse = await FindPackages(packages);
-                JSONNode jsonResult = JSON.Parse(reponse);
-                JSONClass packageArray = jsonResult["packages"] as JSONClass;
-                // List<string> downloadurls = new List<string>();
-                //Dictionary< string, string> downloadurls = new Dictionary<string, string>();
-                if (packageArray.Count > 0)
+                var result = await RunBackendJobAsync("hub_missing_scan", null);
+                var payload = DeserializeResult<HubDownloadList>(result);
+                downloadUrls = payload?.DownloadUrls ?? new Dictionary<string, string>();
+                if (payload != null)
                 {
-                    this.BeginInvoke(addlog, new Object[] { $"{packageArray.Count} return records will be analyzed", LogLevel.INFO });
-                    foreach (var package in packageArray.Childs)
+                    foreach (var kvp in payload.DownloadUrlsNoVersion)
                     {
-                        string downloadurl = package["downloadUrl"];
-                        string filename = package["filename"];
-                        if (!string.IsNullOrEmpty(downloadurl) && downloadurl != "null")
+                        if (!downloadUrls.ContainsKey(kvp.Key))
                         {
-                            if (!string.IsNullOrEmpty(filename) && filename != "null")
-                            {
-                                filename = filename.Substring(0, filename.IndexOf(".var"));
-                                if (!form1.FindByvarName(filename))
-                                {
-                                    this.BeginInvoke(addlog, new Object[] { $"Find {filename} in the HUB", LogLevel.INFO });
-                                    //if (!downloadUrls.ContainsKey(filename))
-                                    downloadUrls[filename] = downloadurl;
-                                }
-                            }
+                            downloadUrls[kvp.Key] = kvp.Value;
                         }
                     }
-                    //downloadurls = downloadurls.Distinct();
                 }
+                if (form1 != null)
+                {
+                    downloadUrls = downloadUrls
+                        .Where(kvp => !form1.FindByvarName(kvp.Key))
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                }
+
                 if (downloadUrls.Count > 0)
                 {
                     this.BeginInvoke(addlog, new Object[] { $"Total {downloadUrls.Count} download links found", LogLevel.INFO });
                     ShowDownList();
                     DrawDownloadListView();
-                    // listBoxDownList.Items.AddRange(downloadurls.ToArray());
-                    //textBoxDownList.Text += string.Join("\r\n", downloadurls);
-                    /*
-                    string hubvars = Guid.NewGuid().ToString() + ".txt";
-                    StreamWriter sw = new StreamWriter(hubvars);
-                    foreach (var downloadurl in downloadurls)
-                    {
-                        sw.WriteLine(downloadurl);
-                    }
-                    sw.Close();
-                    System.Diagnostics.Process.Start(hubvars);
-                    */
-
                 }
                 else
                 {
                     this.BeginInvoke(addlog, new Object[] { "No download link found", LogLevel.INFO });
                 }
+            }
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"Hub scan failed: {ex.Message}", LogLevel.ERROR });
             }
         }
 
@@ -151,11 +170,11 @@ namespace varManager
             }
         }
 
-        private void FormHub_Load(object sender, EventArgs e)
+        private async void FormHub_Load(object sender, EventArgs e)
         {
             this.Enabled = false;
             this.UseWaitCursor = true;
-           if(!GetInfoList())
+            if(!await GetInfoListAsync())
             {
                 MessageBox.Show("Error getting HUB information!");
                 this.Close();
@@ -207,6 +226,7 @@ namespace varManager
             for (int i = 0; i < intPerPage; i++)
             {
                 HubItem item = new HubItem();
+                item.LogSink = LogBackendLine;
                 item.ClickFilter += Item_ClickFilter;
                 item.GenLinkList += Item_GenLinkList;
                 item.RetPackageName += Item_RetPackageName;
@@ -218,7 +238,7 @@ namespace varManager
             ClearFilter();
             this.UseWaitCursor = false;
             this.Enabled = true;
-            GenerateHabItems();
+            await GenerateHabItemsAsync();
             EnableFilterEvent();
             
         }
@@ -309,7 +329,7 @@ namespace varManager
                 comboBoxCreator.Text = e.Creator;
             }
             EnableFilterEvent();
-            GenerateHabItems();
+            _ = GenerateHabItemsAsync();
         }
 
         private void ComboBoxSelectedChanged(object sender, EventArgs e)
@@ -317,15 +337,15 @@ namespace varManager
 
             if (comboBoxPages == sender)
             {
-                GenerateHabItems(false);
+                _ = GenerateHabItemsAsync(false);
             }
             else
             {
-                GenerateHabItems();
+                _ = GenerateHabItemsAsync();
             }
         }
 
-        private void GenerateHabItems(bool genePages = true)
+        private async Task GenerateHabItemsAsync(bool genePages = true)
         {
             string location = comboBoxHosted.Text, paytype = comboBoxPayType.Text,
              category = comboBoxCategory.Text, username = comboBoxCreator.Text,
@@ -343,22 +363,29 @@ namespace varManager
                 if (comboBoxPages.SelectedIndex >= 0)
                     page = comboBoxPages.SelectedIndex + 1;
             }
-            // string reponse = Task<int>.Run(() => GetResources(48, location, paytype, category, username, tags, search, sort, page)).Result;
-            try { GetResources(intPerPage, location, paytype, category, username, tags, search, sort, page); }
-            catch (Exception)
+            try
             {
-
+                string response = await GetResourcesAsync(intPerPage, location, paytype, category, username, tags, search, sort, page);
+                if (!string.IsNullOrEmpty(response))
+                {
+                    RefreshResource(response);
+                }
+            }
+            catch
+            {
             }
         }
 
-        private bool GetInfoList()
+        private async Task<bool> GetInfoListAsync()
         {
-            bool success = false;
             try
             {
-                string reponse = Task<int>.Run(GetInfo).Result;
-                if(string.IsNullOrEmpty(reponse)) return false;
-                JSONNode jsonResult = JSON.Parse(reponse);
+                var result = await RunBackendJobAsync("hub_info", null);
+                if (!result.Result.HasValue)
+                {
+                    return false;
+                }
+                JSONNode jsonResult = JSON.Parse(result.Result.Value.GetRawText());
                 JSONArray jArray = jsonResult["category"] as JSONArray;
                 listPayType = new List<string>();
                 foreach (var item in jArray.Childs)
@@ -397,13 +424,12 @@ namespace varManager
                 {
                     listCreator.Add(item);
                 }
-                success=true;
+                return true;
             }
-            catch (Exception)
+            catch
             {
-
+                return false;
             }
-            return success;
         }
 
         private void buttonFirstPage_Click(object sender, EventArgs e)
@@ -428,65 +454,28 @@ namespace varManager
 
         private void buttonRefresh_Click(object sender, EventArgs e)
         {
-            GenerateHabItems();
+            _ = GenerateHabItemsAsync();
         }
 
-        private void GetResources(int perpage = intPerPage,
+        private async Task<string> GetResourcesAsync(int perpage = intPerPage,
             string location = "Hub And Dependencies", string paytype = "Free",
             string category = "", string username = "", string tags = "", string search = "",
             string sort = "Latest Update",
             int page = 1)
         {
-            string url = "https://hub.virtamate.com/citizenx/api.php";
-
-            JSONClass jns = new JSONClass();
-            jns.Add("source", "VaM");
-            jns.Add("action", "getResources");
-            jns.Add("latest_image", "Y");
-
-            //if(!string.IsNullOrEmpty(location) && location != "All")
-            jns.Add("location", location);
-            //if (!string.IsNullOrEmpty(paytype) && paytype != "All")
-            jns.Add("category", paytype);
-            if (!string.IsNullOrEmpty(category) && category != "All")
-                jns.Add("type", category);
-            if (!string.IsNullOrEmpty(username) && username != "All")
-                jns.Add("username", username);
-            if (!string.IsNullOrEmpty(tags) && tags != "All")
-                jns.Add("tags", tags);
-            if (!string.IsNullOrEmpty(search))
-                jns.Add("search", search);
-            jns.Add("searchall", "true");
-            jns.Add("sort", sort);
-            jns.Add("perpage", perpage.ToString());
-            jns.Add("page", page.ToString());
-
-            var data = new StringContent(jns.ToString(), Encoding.UTF8, "application/json");
-            try
+            var result = await RunBackendJobAsync("hub_resources", new
             {
-                GetResponseAsync(url, data);
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
-
-        }
-
-        public void GetResponseAsync(string url, StringContent data)
-        {
-            httpClient.CancelPendingRequests();
-            httpClient.PostAsync(url, data).ContinueWith(
-              (requestTask) =>
-              {
-                  if (requestTask.Status == TaskStatus.RanToCompletion)
-                  {
-                      HttpResponseMessage response = requestTask.Result;                    // 确认响应成功，否则抛出异常
-                      if (response.IsSuccessStatusCode)
-                          // 异步读取响应为字符串
-                          response.Content.ReadAsStringAsync().ContinueWith(ResponseTask);
-                  }
-              });
+                perpage = perpage,
+                location = location,
+                paytype = paytype,
+                category = category,
+                username = username,
+                tags = tags,
+                search = search,
+                sort = sort,
+                page = page
+            });
+            return result.Result.HasValue ? result.Result.Value.GetRawText() : string.Empty;
         }
 
         public delegate void InvokeRefreshResource(string response);
@@ -496,7 +485,7 @@ namespace varManager
             DisableFilterEvent();
             ClearFilter();
             EnableFilterEvent();
-            GenerateHabItems();
+            _ = GenerateHabItemsAsync();
         }
 
         private void buttonEmptySearch_Click(object sender, EventArgs e)
@@ -533,97 +522,41 @@ namespace varManager
         private async void UpdatAllPackages()
         {
             this.BeginInvoke(addlog, new Object[] { "Search for upgradable vars...", LogLevel.INFO });
-            var reponse = await GetHubPackages();
-            JSONClass jsonPackages = JSON.Parse(reponse) as JSONClass;
-            this.BeginInvoke(addlog, new Object[] { $"Total {jsonPackages.Count} Packages found in the HUB.", LogLevel.INFO }); 
-            Dictionary<string, PackVerDownID> hubPackages = new Dictionary<string, PackVerDownID>();
-            foreach (string package in jsonPackages.Keys)
+            try
             {
-                string  packageIdenty = package;
-                if (packageIdenty.EndsWith(".var"))
-                    packageIdenty = packageIdenty.Substring(0, packageIdenty.Length - 4);
-                int splitindex = packageIdenty.LastIndexOf('.');
-                if (splitindex >= 0)
+                var result = await RunBackendJobAsync("hub_updates_scan", null);
+                var payload = DeserializeResult<HubDownloadList>(result);
+                downloadUrls = payload?.DownloadUrls ?? new Dictionary<string, string>();
+                if (payload != null)
                 {
-                    string packageName= packageIdenty.Substring(0, splitindex);
-                    int version = -1;
-                    int.TryParse(packageIdenty.Substring(splitindex + 1), out version);
-                    if (hubPackages.ContainsKey(packageName))
+                    foreach (var kvp in payload.DownloadUrlsNoVersion)
                     {
-                        if (version > hubPackages[packageName].ver)
+                        if (!downloadUrls.ContainsKey(kvp.Key))
                         {
-                            string downid = jsonPackages[package].Value;
-                            hubPackages[packageName]= new PackVerDownID(version, downid);
-                        }
-                    }
-                    else
-                    {
-                        string downid = jsonPackages[package].Value;
-                        hubPackages.Add(packageName, new PackVerDownID(version, downid));
-                    }
-                }
-            }
-            List<string> toBeUpdVars= new List<string>(); 
-            foreach (var hubpackage in hubPackages)
-            {
-                string varlastname = form1.VarExistName(hubpackage.Key + ".latest");
-                if (varlastname != "missing")
-                {
-                    int splitindex = varlastname.LastIndexOf('.');
-                    if (splitindex >= 0)
-                    {
-                        int version = -1;
-                        int.TryParse(varlastname.Substring(splitindex + 1), out version);
-                        if (hubpackage.Value.ver > version)
-                        {
-                            this.BeginInvoke(addlog, new Object[] { $"Find the upgradeable package,{varlastname} ", LogLevel.INFO });
-                            toBeUpdVars.Add(hubpackage.Key + ".latest");
+                            downloadUrls[kvp.Key] = kvp.Value;
                         }
                     }
                 }
-            }
-            if (toBeUpdVars.Count > 0)
-            {
-                string packages = string.Join(",", toBeUpdVars);
-                this.BeginInvoke(addlog, new Object[] { $"Total {toBeUpdVars.Count} upgradable var files found in the HUB.", LogLevel.INFO });
-                reponse = await FindPackages(packages);
-                JSONNode jsonResult = JSON.Parse(reponse);
-                JSONClass packageArray = jsonResult["packages"] as JSONClass;
-                //List<string> downloadurls = new List<string>();
-                if (packageArray.Count > 0)
+                if (form1 != null)
                 {
-                    this.BeginInvoke(addlog, new Object[] { $"{packageArray.Count} return records will be analyzed", LogLevel.INFO });
-                    foreach (var package in packageArray.Childs)
-                    {
-                        string downloadurl = package["downloadUrl"];
-                        string filename = package["filename"];
-                        if (!string.IsNullOrEmpty(downloadurl) && downloadurl != "null")
-                        {
-                            if (!string.IsNullOrEmpty(filename) && filename != "null")
-                            {
-                                filename = filename.Substring(0, filename.IndexOf(".var"));
-                                if (!form1.FindByvarName(filename))
-                                {
-                                    this.BeginInvoke(addlog, new Object[] { $"Find {filename} in the HUB", LogLevel.INFO });
-                                    if (!downloadUrls.ContainsKey(filename))
-                                        downloadUrls.Add(filename, downloadurl);
-                                }
-                            }
-                        }
-                    }
-                    //downloadurls = downloadurls.Distinct().ToList();
+                    downloadUrls = downloadUrls
+                        .Where(kvp => !form1.FindByvarName(kvp.Key))
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 }
                 if (downloadUrls.Count > 0)
                 {
                     this.BeginInvoke(addlog, new Object[] { $"Total {downloadUrls.Count} updatable download links found", LogLevel.INFO });
                     ShowDownList();
                     DrawDownloadListView();
-                    
                 }
                 else
                 {
                     this.BeginInvoke(addlog, new Object[] { "No download link found", LogLevel.WARNING });
                 }
+            }
+            catch (Exception ex)
+            {
+                this.BeginInvoke(addlog, new Object[] { $"Hub update scan failed: {ex.Message}", LogLevel.ERROR });
             }
         }
 
@@ -717,63 +650,15 @@ namespace varManager
                                 "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            // 3. Create a temporary file to store URLs
-            string tempFilePath = string.Empty;
             try
             {
-                tempFilePath = Path.GetTempFileName(); // Creates a 0-byte file with a unique name
-                File.WriteAllLines(tempFilePath, allUrlsToDownload);
-                // 4. Prepare to call the external downloader
-                // You need to have access to these variables in FormHub.cs
-                // Make sure vam_download_path and vam_download_save_path are defined and set in FormHub
-                string execPath = vam_download_path; // Your downloader executable path
-                string savePath = vam_download_save_path; // Your download save path
-                if (string.IsNullOrEmpty(execPath) || !File.Exists(execPath))
-                {
-                    MessageBox.Show($"Downloader executable path is not set or file not found: {execPath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-                 if (string.IsNullOrEmpty(savePath) || !Directory.Exists(savePath))
-                {
-                    MessageBox.Show($"Download save path is not set or directory not found: {savePath}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-                // The downloader now takes the temp file path as the "URL" argument
-                // The second argument is still the save path
-                string arguments = $"\"{tempFilePath}\" \"{savePath}\"";
-                // 5. Execute the downloader process
-                var startInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = execPath,
-                    Arguments = arguments,
-                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory, // Or specify another working directory
-                    // Set UseShellExecute and CreateNoWindow based on your downloader type
-                    // UseShellExecute = false, 
-                    // CreateNoWindow = true,
-                };
-                
-                // Optional: Disable buttons while downloading
                 this.buttonDownloadAll.Enabled = false;
                 this.buttonCopytoClip.Enabled = false;
                 this.button1.Enabled = false; // Assuming button1 is the Clear button
-                using (var process = System.Diagnostics.Process.Start(startInfo))
-                {
-                    // Wait synchronously for the downloader to finish
-                    process.WaitForExit(); 
-                    if (process.ExitCode == 0)
-                    {
-                        MessageBox.Show($"All {allUrlsToDownload.Count} items have been queued for download.\n" +
-                                        "Download process complete.",
-                                        "Download All Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        // You might want to suggest updating something here if applicable to FormHub's context
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Download All process failed with exit code: {process.ExitCode}.\n" +
-                                        $"Arguments: {arguments}",
-                                        "Download All Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
+                await RunBackendJobAsync("hub_download_all", new { urls = allUrlsToDownload.ToList() });
+                MessageBox.Show($"All {allUrlsToDownload.Count} items have been queued for download.\n" +
+                                "Download process complete.",
+                                "Download All Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -782,18 +667,6 @@ namespace varManager
             }
             finally
             {
-                // 6. Clean up the temporary file
-                if (!string.IsNullOrEmpty(tempFilePath) && File.Exists(tempFilePath))
-                {
-                    try
-                    {
-                        File.Delete(tempFilePath);
-                    }
-                    catch (IOException ioEx)
-                    {
-                        Console.WriteLine($"Warning: Could not delete temporary file {tempFilePath}: {ioEx.Message}");
-                    }
-                }
                 // Re-enable buttons
                 this.buttonDownloadAll.Enabled = true;
                 this.buttonCopytoClip.Enabled = true;

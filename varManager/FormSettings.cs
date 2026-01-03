@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
+using varManager.Backend;
 using varManager.Properties;
 
 namespace varManager
@@ -36,35 +38,38 @@ namespace varManager
             }
         }
 
-        private void FormSettings_Load(object sender, EventArgs e)
+        private async void FormSettings_Load(object sender, EventArgs e)
         {
-            textBoxVarspath.Text = Properties.Settings.Default.varspath;
-            textBoxVamPath.Text = Properties.Settings.Default.vampath;
-            textBoxExec.Text = Properties.Settings.Default.defaultVamExec;
+            try
+            {
+                await BackendSession.EnsureStartedAsync(null, CancellationToken.None).ConfigureAwait(true);
+            }
+            catch
+            {
+            }
+
+            var cfg = BackendSession.Config;
+            textBoxVarspath.Text = cfg?.Varspath ?? Properties.Settings.Default.varspath;
+            textBoxVamPath.Text = cfg?.Vampath ?? Properties.Settings.Default.vampath;
+            textBoxExec.Text = cfg?.VamExec ?? Properties.Settings.Default.defaultVamExec;
+
+            SetReadOnlyUi();
+        }
+
+        private void SetReadOnlyUi()
+        {
+            textBoxVarspath.ReadOnly = true;
+            textBoxVamPath.ReadOnly = true;
+            textBoxExec.ReadOnly = true;
+            buttonVarspath.Enabled = false;
+            buttonVamPath.Enabled = false;
+            buttonExec.Enabled = false;
+            buttonSave.Text = "Close";
         }
 
         private void buttonSave_Click(object sender, EventArgs e)
         {
-            string varspath = new DirectoryInfo(textBoxVarspath.Text).FullName.ToLower();
-            string packpath = new DirectoryInfo(Path.Combine(textBoxVamPath.Text, "AddonPackages")).FullName.ToLower();
-            if (!File.Exists(Path.Combine(textBoxVamPath.Text, "VaM.exe")))
-            {
-                MessageBox.Show("VAM path is incorrect.");
-                this.DialogResult = DialogResult.None;
-                return;
-            }
-            if (varspath == packpath)
-            {
-                MessageBox.Show("Vars Path can't be {VamInstallDir}\\AddonPackages");
-                this.DialogResult = DialogResult.None;
-                return;
-            }
-            Properties.Settings.Default.varspath = textBoxVarspath.Text;
-            Properties.Settings.Default.vampath = textBoxVamPath.Text;
-            Properties.Settings.Default.defaultVamExec = Path.GetFileName(textBoxExec.Text);
-            Properties.Settings.Default.Save();
-            if(!Directory.Exists(Properties.Settings.Default.varspath))
-                Directory.CreateDirectory(Properties.Settings.Default.varspath);
+            MessageBox.Show("配置由后端管理，请编辑 config.json 后重启。");
             this.DialogResult = DialogResult.OK;
             this.Close();
         }

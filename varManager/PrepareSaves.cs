@@ -10,6 +10,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using varManager.Backend;
+using static SimpleLogger;
 using varManager.Properties;
 
 namespace varManager
@@ -23,6 +28,46 @@ namespace varManager
             treeViewSaves.Nodes.Add("nodeScenes", "[Scenes]: ./Saves/scene");
             treeViewSaves.Nodes.Add("NodeAppearances", "[Appearance]: ./Saves/Person/appearance");
             treeViewSaves.Nodes.Add("NodePresets", "[Apperance Presets]: ./Custom/Atom/Person/Appearance");
+        }
+
+        private void LogBackendLine(string line)
+        {
+            if (form1 == null)
+            {
+                return;
+            }
+            LogLevel level = LogLevel.INFO;
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.ERROR;
+            }
+            form1.BeginInvoke(new Form1.InvokeAddLoglist(form1.UpdateAddLoglist), new object[] { line, level });
+        }
+
+        private Task<BackendJobResult> RunBackendJobAsync(string kind, object? args)
+        {
+            return BackendSession.RunJobAsync(kind, args, LogBackendLine, CancellationToken.None);
+        }
+
+        private T? DeserializeResult<T>(BackendJobResult result)
+        {
+            if (!result.Result.HasValue)
+            {
+                return default;
+            }
+            return JsonSerializer.Deserialize<T>(result.Result.Value.GetRawText());
+        }
+
+        private sealed class DepsJobResult
+        {
+            [JsonPropertyName("missing")]
+            public List<string> Missing { get; set; } = new List<string>();
+
+            [JsonPropertyName("installed")]
+            public List<string> Installed { get; set; } = new List<string>();
+
+            [JsonPropertyName("dependency_count")]
+            public int DependencyCount { get; set; }
         }
 
         private void PrepareSaves_Load(object sender, EventArgs e)
@@ -53,34 +98,25 @@ namespace varManager
             treeViewSaves.Nodes["NodePresets"].Checked = true;
         }
 
-        private void buttonAnalysis_Click(object sender, EventArgs e)
+        private async void buttonAnalysis_Click(object sender, EventArgs e)
         {
             listBoxVars.Items.Clear();
-            //listBoxCustom.Items.Clear();
-            List<string> jsonfiles = new List<string>();
-            foreach (TreeNode node in treeViewSaves.Nodes["nodeScenes"].Nodes)
+            try
             {
-                if (node.Checked)
+                var result = await RunBackendJobAsync("saves_deps", null);
+                var payload = DeserializeResult<DepsJobResult>(result);
+                if (payload != null)
                 {
-                    jsonfiles.Add(node.Name);
+                    foreach (var missing in payload.Missing)
+                    {
+                        listBoxVars.Items.Add(missing);
+                    }
                 }
             }
-            foreach (TreeNode node in treeViewSaves.Nodes["NodeAppearances"].Nodes)
+            catch (Exception ex)
             {
-                if (node.Checked)
-                {
-                    jsonfiles.Add(node.Name);
-                }
+                MessageBox.Show($"Analysis failed: {ex.Message}");
             }
-            foreach (TreeNode node in treeViewSaves.Nodes["NodePresets"].Nodes)
-            {
-                if (node.Checked)
-                {
-                    jsonfiles.Add(node.Name);
-                }
-            }
-            List<string> jsonfilesOK = new List<string>();
-            dependFiles(ref jsonfiles, ref jsonfilesOK,true);
         }
 
         private void dependFiles(ref List<string> jsonfiles, ref List<string> jsonfilesOK,bool progress=false)

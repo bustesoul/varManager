@@ -72,7 +72,8 @@
 - Done: Windows native symlink module (create/read/set file times).
 - Done: SQLite schema ensure + helpers for vars/dependencies/scenes.
 - Done: update_db 对齐 C# 流程（varsForInstall 记录 + 重复包移入 ___VarRedundant___ + UpdateVarsInstalled/RescanPackages + 缺失预览清理）。
-- Pending: WinForms lifecycle integration (start/health/shutdown) and API call replacements.
+- Done: WinForms lifecycle integration (start/health/shutdown), config 同步为只读展示，API 调用替换完成。
+- Done: 后端 job 日志回写到现有日志列表（含失败兜底日志）。
 - Note: missing_deps install resolves var file path as `${varspath}\\___VarTidied___\\<creator>\\<varName>.var` with fallback to `${varspath}\\<varName>.var` because the current schema has no VarPath column.
 
 ## UI Button Map
@@ -80,7 +81,7 @@
 ### Main Form (Form1)
 | UI | Handler (file) | Current logic (short) | Rust backend plan | Status |
 | --- | --- | --- | --- | --- |
-| Settings | buttonSetting_Click (varManager/Form1.cs) | Open FormSettings; restart app | Frontend-only; backend reads config.json | TODO |
+| Settings | buttonSetting_Click (varManager/Form1.cs) | Open FormSettings (read-only config) | Frontend-only; backend reads config.json | Done |
 | UPD_DB | buttonUpdDB_Click | TidyVars -> UpdDB -> install pending -> UpdateVarsInstalled -> RescanPackages | POST /jobs (kind=update_db) | Backend done |
 | Start VAM | buttonStartVam_Click | Start VaM.exe | POST /jobs (kind=vam_start) | Backend done |
 | Missing Depends | buttonMissingDepends_Click | Check installed -> install or open MissingVars form | POST /jobs (kind=missing_deps, args.scope=installed) | Backend done |
@@ -113,10 +114,10 @@
 ### Settings (FormSettings)
 | UI | Handler (file) | Current logic (short) | Rust backend plan | Status |
 | --- | --- | --- | --- | --- |
-| Vars Path | buttonVarspath_Click (varManager/FormSettings.cs) | Browse folder | Frontend-only | TODO |
-| VaM Path | buttonVamPath_Click | Browse folder | Frontend-only | TODO |
-| Exec Path | buttonExec_Click | Select VaM exe | Frontend-only | TODO |
-| Save | buttonSave_Click | Persist Settings.Default | Frontend-only; backend uses config.json | TODO |
+| Vars Path | buttonVarspath_Click (varManager/FormSettings.cs) | Read-only display | Frontend-only | Done |
+| VaM Path | buttonVamPath_Click | Read-only display | Frontend-only | Done |
+| Exec Path | buttonExec_Click | Read-only display | Frontend-only | Done |
+| Save | buttonSave_Click | Close dialog (no local save) | Frontend-only; backend uses config.json | Done |
 
 ### Missing Vars (FormMissingVars)
 | UI | Handler (file) | Current logic (short) | Rust backend plan | Status |
@@ -207,7 +208,7 @@
 - SetSymboLinkFileTime: used to sync creation/write time on links.
 - Rust should use CreateSymbolicLinkW with ALLOW_UNPRIVILEGED_CREATE and return clear error if it fails.
 
-## Backend Service Lifecycle (Planned)
+## Backend Service Lifecycle (Current)
 - Frontend starts backend exe.
 - Poll /health until ready.
 - Call APIs; for long jobs use /jobs/start + /jobs/{id}.

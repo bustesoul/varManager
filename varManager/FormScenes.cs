@@ -8,10 +8,13 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
+using System.Threading.Tasks;
+using varManager.Backend;
 using varManager.Properties;
 using varManager.Data;
 using varManager.Models;
 using static DragNDrop.DragAndDropListView;
+using static SimpleLogger;
 
 namespace varManager
 {
@@ -68,6 +71,45 @@ namespace varManager
         private List<dynamic> listFilterCreatorSceneHide = new List<dynamic>();
         private List<dynamic> listFilterCreatorSceneNormal = new List<dynamic>();
         private List<dynamic> listFilterCreatorSceneFav = new List<dynamic>();
+
+        private void LogBackendLine(string line)
+        {
+            if (form1 == null)
+            {
+                return;
+            }
+            LogLevel level = LogLevel.INFO;
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.ERROR;
+            }
+            form1.BeginInvoke(new Form1.InvokeAddLoglist(form1.UpdateAddLoglist), new object[] { line, level });
+        }
+
+        private Task<BackendJobResult> RunBackendJobAsync(string kind, object? args)
+        {
+            return BackendSession.RunJobAsync(kind, args, LogBackendLine, CancellationToken.None);
+        }
+
+        private BackendJobResult RunBackendJob(string kind, object? args)
+        {
+            return BackendSession.RunJob(kind, args, LogBackendLine, CancellationToken.None);
+        }
+
+        private void RunSceneHideJob(string kind, string varName, string scene)
+        {
+            string? varNameArg = string.IsNullOrWhiteSpace(varName) || varName.StartsWith("(save)", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : varName;
+            try
+            {
+                RunBackendJob(kind, new { var_name = varNameArg, scene_path = scene });
+            }
+            catch (Exception ex)
+            {
+                LogBackendLine($"scene hide/fav failed: {ex.Message}");
+            }
+        }
         private void FormScenes_Load(object sender, EventArgs e)
         {
             dbContext = new VarManagerContext();
@@ -673,7 +715,7 @@ namespace varManager
                 {
                     string varName = listFilterCreatorSceneNormal[itemindex].VarName;
                     string scene = listFilterCreatorSceneNormal[itemindex].ScenePath;
-                    SetHideFav(varName, scene,-1);
+                    RunSceneHideJob("scene_hide", varName, scene);
                     UpdateHidefav(varName, scene);
                 }
                 //UpdateFileHidefav();
@@ -732,7 +774,7 @@ namespace varManager
                 {
                     string varName = listFilterCreatorSceneNormal[itemindex].VarName;
                     string scene = listFilterCreatorSceneNormal[itemindex].ScenePath;
-                    SetHideFav(varName, scene, 1);
+                    RunSceneHideJob("scene_fav", varName, scene);
                     UpdateHidefav(varName, scene);
                 }
                 //UpdateFileHidefav();
@@ -748,7 +790,7 @@ namespace varManager
                 {
                     string varName = listFilterCreatorSceneHide[itemindex].VarName;
                     string scene = listFilterCreatorSceneHide[itemindex].ScenePath;
-                    SetHideFav(varName, scene, 0);
+                    RunSceneHideJob("scene_unhide", varName, scene);
                     UpdateHidefav(varName, scene);
                 }
                 //UpdateFileHidefav();
@@ -764,7 +806,7 @@ namespace varManager
                 {
                     string varName = listFilterCreatorSceneFav[itemindex].VarName;
                     string scene = listFilterCreatorSceneFav[itemindex].ScenePath;
-                    SetHideFav(varName, scene, 0);
+                    RunSceneHideJob("scene_unfav", varName, scene);
                     UpdateHidefav(varName, scene);
                 }
                 //UpdateFileHidefav();
@@ -889,7 +931,7 @@ namespace varManager
             {
                 string varName = listfilter[itemindex].VarName;
                 string scene = listfilter[itemindex].ScenePath;
-                SetHideFav(varName, scene, 0);
+                RunSceneHideJob("scene_unhide", varName, scene);
                 UpdateHidefav(varName, scene);
             }
             GenerateItems();
@@ -911,7 +953,7 @@ namespace varManager
             {
                 string varName = listfilter[itemindex].VarName;
                 string scene = listfilter[itemindex].ScenePath;
-                SetHideFav(varName, scene, -1);
+                RunSceneHideJob("scene_hide", varName, scene);
                 UpdateHidefav(varName, scene);
             }
             GenerateItems();
@@ -933,7 +975,7 @@ namespace varManager
             {
                 string varName = listfilter[itemindex].VarName;
                 string scene = listfilter[itemindex].ScenePath;
-                SetHideFav(varName, scene, 1);
+                RunSceneHideJob("scene_fav", varName, scene);
                 UpdateHidefav(varName, scene);
             }
             GenerateItems();
@@ -972,7 +1014,14 @@ namespace varManager
                 saveName = resource["saveName"].Value;
             }
             
-            form1.LoadScene(jsonLoadScene, merge, ignoreGender, characterGender, personOrder);
+            try
+            {
+                form1.LoadScene(jsonLoadScene, merge, ignoreGender, characterGender, personOrder);
+            }
+            catch (Exception ex)
+            {
+                LogBackendLine($"load scene failed: {ex.Message}");
+            }
             Cursor = Cursors.Arrow;
             UpdateButtonClearCache();
         }
@@ -1024,8 +1073,14 @@ namespace varManager
             }
             else
             {
-                varName = Path.Combine(Settings.Default.vampath, varName.Replace('/','\\'));
-                Comm.LocateFile(varName);
+                try
+                {
+                    RunBackendJob("vars_locate", new { path = varName.Replace('/', '\\') });
+                }
+                catch (Exception ex)
+                {
+                    LogBackendLine($"locate failed: {ex.Message}");
+                }
             }
         }
 
@@ -1164,7 +1219,14 @@ namespace varManager
 
         private void buttonAnalysis_Click(object sender, EventArgs e)
         {
-            form1.Analysisscene(jsonLoadScene);
+            try
+            {
+                form1.Analysisscene(jsonLoadScene);
+            }
+            catch (Exception ex)
+            {
+                LogBackendLine($"analysis failed: {ex.Message}");
+            }
             UpdateButtonClearCache();
         }
 
@@ -1179,10 +1241,14 @@ namespace varManager
         {
             if (MessageBox.Show("The cache can improve the speed of secondary analysis, normally you don't need to clear it, unless you modify the scene file. This operation only clears the cache of the current scene, if you need to clear all the cache, please delete the cache directory manually.", "Clear Cache", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                string sceneFoldername = Path.Combine(Directory.GetCurrentDirectory(), "Cache",
-                          Comm.ValidFileName(curVarName == "(save)." ? "save" : curVarName), Comm.ValidFileName(curEntryName.Replace('\\', '_').Replace('/', '_')));
-                try { Directory.Delete(sceneFoldername, true); }
-                catch { }
+                try
+                {
+                    RunBackendJob("cache_clear", new { var_name = curVarName, entry_name = curEntryName });
+                }
+                catch (Exception ex)
+                {
+                    LogBackendLine($"cache clear failed: {ex.Message}");
+                }
                 UpdateButtonClearCache();
             }
         }
