@@ -17,10 +17,11 @@ use std::{
     },
 };
 use tokio::sync::{oneshot, Mutex, Semaphore};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 mod db;
 mod deps_jobs;
+mod fs_util;
 mod hub;
 mod links;
 mod missing_deps;
@@ -193,7 +194,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = load_or_write_config()?;
     let env_filter =
         EnvFilter::try_new(config.log_level.as_str()).unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    let log_dir = exe_dir();
+    let file_appender = tracing_appender::rolling::never(&log_dir, "backend.log");
+    let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
+    let stdout_layer = tracing_subscriber::fmt::layer().with_filter(env_filter);
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .with_writer(file_writer)
+        .with_filter(EnvFilter::new("debug"));
+    tracing_subscriber::registry()
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+    let _file_guard = file_guard;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let state = AppState {
@@ -469,27 +482,37 @@ pub(crate) async fn job_start(state: &AppState, id: u64, message: &str) {
         job.message = message.to_string();
         push_log(job, message.to_string());
         job.result = None;
+        tracing::info!(job_id = id, job_kind = %job.kind, msg = %message, "job started");
     }
 }
 
 pub(crate) async fn job_finish(state: &AppState, id: u64, message: String) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
+        let log_message = message;
         job.status = JobStatus::Succeeded;
         job.progress = 100;
-        job.message = message.clone();
+        job.message = log_message.clone();
         job.error = None;
-        push_log(job, message);
+        push_log(job, log_message.clone());
+        tracing::info!(job_id = id, job_kind = %job.kind, msg = %log_message, "job completed");
     }
 }
 
 pub(crate) async fn job_fail(state: &AppState, id: u64, error: String) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
+        let error_message = error;
         job.status = JobStatus::Failed;
         job.message = "job failed".to_string();
-        job.error = Some(error.clone());
-        push_log(job, format!("error: {}", error));
+        job.error = Some(error_message.clone());
+        push_log(job, format!("error: {}", error_message));
+        tracing::error!(
+            job_id = id,
+            job_kind = %job.kind,
+            error = %error_message,
+            "job failed"
+        );
     }
 }
 
@@ -497,12 +520,19 @@ pub(crate) async fn job_progress(state: &AppState, id: u64, progress: u8) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         job.progress = progress.min(100);
+        tracing::debug!(
+            job_id = id,
+            job_kind = %job.kind,
+            progress = job.progress,
+            "job progress"
+        );
     }
 }
 
 pub(crate) async fn job_log(state: &AppState, id: u64, line: String) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
+        tracing::debug!(job_id = id, job_kind = %job.kind, line = %line, "job log");
         push_log(job, line);
     }
 }
@@ -511,6 +541,7 @@ pub(crate) async fn job_set_result(state: &AppState, id: u64, result: Value) {
     let mut jobs = state.jobs.lock().await;
     if let Some(job) = jobs.get_mut(&id) {
         job.result = Some(result);
+        tracing::debug!(job_id = id, job_kind = %job.kind, "job result set");
     }
 }
 

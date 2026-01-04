@@ -1,13 +1,12 @@
 use crate::db::{upsert_install_status, var_exists_conn, Db};
-use crate::paths::{addon_packages_dir, addon_switch_root, config_paths, INSTALL_LINK_DIR};
+use crate::fs_util;
+use crate::paths::{addon_packages_dir, addon_switch_root, config_paths};
 use crate::{job_log, job_set_result, system_ops, winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::runtime::Handle;
-use walkdir::WalkDir;
 
 #[derive(Deserialize)]
 struct PackSwitchArgs {
@@ -239,7 +238,7 @@ fn refresh_install_status(vampath: &Path) -> Result<usize, String> {
         .execute("DELETE FROM installStatus", [])
         .map_err(|err| err.to_string())?;
 
-    let installed_links = collect_installed_links(vampath);
+    let installed_links = fs_util::collect_installed_links(vampath);
     let mut installed = 0;
     for (var_name, link_path) in installed_links {
         if !var_exists_conn(db.connection(), &var_name)? {
@@ -250,55 +249,4 @@ fn refresh_install_status(vampath: &Path) -> Result<usize, String> {
         installed += 1;
     }
     Ok(installed)
-}
-
-fn collect_installed_links(vampath: &Path) -> HashMap<String, PathBuf> {
-    let mut installed = HashMap::new();
-    let install_dir = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
-    let link_files = collect_symlink_vars(&install_dir, true);
-    for link in link_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    let top_files = collect_symlink_vars(&vampath.join("AddonPackages"), false);
-    for link in top_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    installed
-}
-
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") {
-                    if is_symlink(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-    files
-}
-
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
 }

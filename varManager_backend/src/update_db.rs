@@ -2,12 +2,13 @@ use crate::db::{
     delete_var_related, list_vars, replace_dependencies, replace_scenes, upsert_install_status,
     upsert_var, var_exists_conn, Db, SceneRecord, VarRecord,
 };
+use crate::fs_util;
 use crate::paths::resolve_var_file_path;
 use crate::var_logic::vars_dependencies;
 use crate::{job_log, job_progress, system_ops, winfs, AppState};
 use chrono::{DateTime, Local};
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -74,7 +75,7 @@ fn update_db_blocking(reporter: &JobReporter) -> Result<(), String> {
 
     let mut vars_for_install = load_vars_for_install();
     for varfile in &addon_vars {
-        if is_symlink(varfile) {
+        if fs_util::is_symlink(varfile) {
             continue;
         }
         if let Some(name) = varfile.file_stem().and_then(|s| s.to_str()) {
@@ -270,7 +271,7 @@ fn tidy_vars(
         if !varfile.exists() {
             continue;
         }
-        if is_symlink(&varfile) {
+        if fs_util::is_symlink(&varfile) {
             continue;
         }
         if !comply_var_file(&varfile) {
@@ -414,12 +415,6 @@ fn comply_var_name(name: &str) -> bool {
     parts[2].chars().all(|c| c.is_ascii_digit())
 }
 
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
-}
-
 fn vars_for_install_path() -> PathBuf {
     crate::exe_dir().join(VARS_FOR_INSTALL_FILE)
 }
@@ -483,7 +478,12 @@ fn refresh_install_status(
 ) -> Result<(), String> {
     conn.execute("DELETE FROM installStatus", [])
         .map_err(|err| err.to_string())?;
-    let installed_links = collect_installed_links(vampath);
+    let installed_links = fs_util::collect_installed_links(vampath);
+    tracing::debug!(
+        vampath = %vampath.display(),
+        link_count = installed_links.len(),
+        "refresh_install_status: collected links"
+    );
     let mut installed = 0;
     for (var_name, link_path) in installed_links {
         if !var_exists_conn(conn, &var_name)? {
@@ -495,47 +495,6 @@ fn refresh_install_status(
     }
     reporter.log(format!("UpdateVarsInstalled completed: {}", installed));
     Ok(())
-}
-
-fn collect_installed_links(vampath: &Path) -> HashMap<String, PathBuf> {
-    let mut installed = HashMap::new();
-    let install_dir = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
-    for link in collect_symlink_vars(&install_dir, true) {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_string(), link);
-        }
-    }
-    for link in collect_symlink_vars(&vampath.join("AddonPackages"), false) {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_string(), link);
-        }
-    }
-    installed
-}
-
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") && is_symlink(entry.path()) {
-                    files.push(entry.path().to_path_buf());
-                }
-            }
-        }
-    }
-    files
 }
 
 enum InstallOutcome {
@@ -559,6 +518,11 @@ fn install_var(
     }
 
     if link_path.exists() {
+        tracing::debug!(
+            var_name = %var_name,
+            link_path = %link_path.display(),
+            "install_var: link already exists"
+        );
         return Ok(InstallOutcome::AlreadyInstalled);
     }
 
@@ -566,6 +530,12 @@ fn install_var(
     winfs::create_symlink_file(&link_path, &dest)?;
     set_link_times(&link_path, &dest)?;
     upsert_install_status(conn, var_name, true, false)?;
+    tracing::debug!(
+        var_name = %var_name,
+        link_path = %link_path.display(),
+        dest = %dest.display(),
+        "install_var: link created"
+    );
     Ok(InstallOutcome::Installed)
 }
 

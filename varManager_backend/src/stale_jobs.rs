@@ -1,13 +1,13 @@
 use crate::db::{delete_var_related_conn, upsert_install_status, var_exists_conn, Db};
+use crate::fs_util;
 use crate::paths::{config_paths, resolve_var_file_path, OLD_VERSION_DIR, STALE_DIR};
 use crate::{job_log, job_progress, job_set_result, system_ops, winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::runtime::Handle;
-use walkdir::WalkDir;
 
 #[derive(Deserialize)]
 struct StaleVarsArgs {
@@ -134,7 +134,7 @@ fn stale_vars_blocking(reporter: &JobReporter) -> Result<StaleVarsResult, String
     let stale_dir = varspath.join(STALE_DIR);
     fs::create_dir_all(&stale_dir).map_err(|err| err.to_string())?;
 
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let mut moved = 0;
     let mut skipped = 0;
     let mut failed = 0;
@@ -199,7 +199,7 @@ fn old_version_vars_blocking(reporter: &JobReporter) -> Result<StaleVarsResult, 
     let old_dir = varspath.join(OLD_VERSION_DIR);
     fs::create_dir_all(&old_dir).map_err(|err| err.to_string())?;
 
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let mut moved = 0;
     let mut skipped = 0;
     let mut failed = 0;
@@ -360,57 +360,6 @@ fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
         }
     }
     Ok(())
-}
-
-fn collect_installed_links(vampath: &Path) -> HashMap<String, PathBuf> {
-    let mut installed = HashMap::new();
-    let install_dir = vampath.join("AddonPackages").join(crate::paths::INSTALL_LINK_DIR);
-    let link_files = collect_symlink_vars(&install_dir, true);
-    for link in link_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    let top_files = collect_symlink_vars(&vampath.join("AddonPackages"), false);
-    for link in top_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    installed
-}
-
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") {
-                    if is_symlink(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-    files
-}
-
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
 }
 
 fn base_without_version(var_name: &str) -> Option<String> {

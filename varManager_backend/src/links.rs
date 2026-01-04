@@ -1,4 +1,5 @@
 use crate::db::{upsert_install_status, var_exists_conn, Db};
+use crate::fs_util;
 use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR};
 use crate::{job_log, job_progress, job_set_result, winfs, AppState};
 use serde::{Deserialize, Serialize};
@@ -147,10 +148,14 @@ fn rebuild_links_blocking(reporter: &JobReporter, args: RebuildLinksArgs) -> Res
     let db = Db::open(&db_path)?;
     db.ensure_schema()?;
 
-    let mut links = collect_symlink_vars(&vampath.join("AddonPackages").join(INSTALL_LINK_DIR), true);
-    links.extend(collect_symlink_vars(&vampath.join("AddonPackages"), false));
+    let mut links =
+        fs_util::collect_symlink_vars(&vampath.join("AddonPackages").join(INSTALL_LINK_DIR), true);
+    links.extend(fs_util::collect_symlink_vars(
+        &vampath.join("AddonPackages"),
+        false,
+    ));
     if args.include_missing {
-        links.extend(collect_symlink_vars(
+        links.extend(fs_util::collect_symlink_vars(
             &vampath.join("AddonPackages").join(MISSING_LINK_DIR),
             true,
         ));
@@ -376,33 +381,6 @@ fn missing_links_create_blocking(
     Ok(())
 }
 
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") {
-                    if is_symlink(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-    files
-}
-
 fn find_link_path(root: &Path, var_name: &str) -> Option<PathBuf> {
     let target = format!("{}.var", var_name);
     let walker = WalkDir::new(root).follow_links(false).into_iter();
@@ -445,12 +423,6 @@ fn find_missing_matches(root: &Path, missing_var: &str) -> Vec<PathBuf> {
         }
     }
     matches
-}
-
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
 }
 
 fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {

@@ -1,14 +1,13 @@
 use crate::db::{upsert_install_status, var_exists_conn, Db};
+use crate::fs_util;
 use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
 use crate::var_logic::{implicated_vars, vars_dependencies};
 use crate::{job_log, job_progress, job_set_result, util, winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::runtime::Handle;
-use walkdir::WalkDir;
 
 #[derive(Deserialize)]
 struct ExportInstalledArgs {
@@ -225,7 +224,7 @@ fn install_batch_blocking(
     let db = Db::open(&db_path)?;
     db.ensure_schema()?;
 
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let total = targets.len();
     let mut installed = Vec::new();
     let mut already_installed = Vec::new();
@@ -273,7 +272,7 @@ fn toggle_install_blocking(
     let db = Db::open(&db_path)?;
     db.ensure_schema()?;
 
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let key = args.var_name.to_ascii_lowercase();
     if installed_links.contains_key(&key) {
         let mut var_list = if args.include_implicated {
@@ -385,7 +384,12 @@ fn refresh_install_status_blocking(reporter: &JobReporter) -> Result<(), String>
         .execute("DELETE FROM installStatus", [])
         .map_err(|err| err.to_string())?;
 
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links(&vampath);
+    tracing::debug!(
+        vampath = %vampath.display(),
+        link_count = installed_links.len(),
+        "refresh_install_status: collected links"
+    );
     let mut installed = 0;
     for (var_name, link_path) in installed_links {
         if !var_exists_conn(db.connection(), &var_name)? {
@@ -401,57 +405,6 @@ fn refresh_install_status_blocking(reporter: &JobReporter) -> Result<(), String>
             .map_err(|err| err.to_string())?,
     );
     Ok(())
-}
-
-fn collect_installed_links(vampath: &Path) -> HashMap<String, PathBuf> {
-    let mut installed = HashMap::new();
-    let install_dir = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
-    let link_files = collect_symlink_vars(&install_dir, true);
-    for link in link_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    let top_files = collect_symlink_vars(&vampath.join("AddonPackages"), false);
-    for link in top_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    installed
-}
-
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") {
-                    if is_symlink(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-    files
-}
-
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
 }
 
 fn install_var(
@@ -479,6 +432,11 @@ fn install_var(
     }
 
     if link_path.exists() {
+        tracing::debug!(
+            var_name = %var_name,
+            link_path = %link_path.display(),
+            "install_var: link already exists"
+        );
         return Ok(InstallOutcome::AlreadyInstalled);
     }
 
@@ -491,6 +449,13 @@ fn install_var(
     }
 
     upsert_install_status(conn, var_name, true, disabled)?;
+    tracing::debug!(
+        var_name = %var_name,
+        link_path = %link_path.display(),
+        dest = %dest.display(),
+        disabled,
+        "install_var: link created"
+    );
     Ok(InstallOutcome::Installed)
 }
 

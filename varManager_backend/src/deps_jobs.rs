@@ -1,4 +1,5 @@
 use crate::db::{upsert_install_status, Db};
+use crate::fs_util;
 use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
 use crate::var_logic::{resolve_var_exist_name, vars_dependencies};
 use crate::{job_log, job_progress, job_set_result, winfs, AppState};
@@ -337,50 +338,17 @@ fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
 fn collect_installed_names(vampath: &Path) -> HashSet<String> {
     let mut names = HashSet::new();
     let install_dir = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
-    for path in collect_symlink_vars(&install_dir, true) {
+    for path in fs_util::collect_symlink_vars(&install_dir, true) {
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
             names.insert(stem.to_string());
         }
     }
-    for path in collect_symlink_vars(&vampath.join("AddonPackages"), false) {
+    for path in fs_util::collect_symlink_vars(&vampath.join("AddonPackages"), false) {
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
             names.insert(stem.to_string());
         }
     }
     names
-}
-
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") {
-                    if is_symlink(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-    files
-}
-
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
 }
 
 fn locate_log_file() -> Result<PathBuf, String> {

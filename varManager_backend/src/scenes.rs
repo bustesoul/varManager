@@ -1,4 +1,5 @@
 use crate::db::{var_exists_conn, Db};
+use crate::fs_util;
 use crate::paths::{config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR};
 use crate::var_logic::vars_dependencies;
 use crate::{exe_dir, job_log, job_progress, job_set_result, util, winfs, AppState};
@@ -12,7 +13,6 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 use tokio::runtime::Handle;
-use walkdir::WalkDir;
 use zip::ZipArchive;
 
 const SCENE_BASE_ATOMS: [&str; 4] = ["CoreControl", "PlayerNavigationPanel", "VRController", "WindowCamera"];
@@ -1426,7 +1426,7 @@ fn install_temp(reporter: &JobReporter, deps: &[String]) -> Result<(Vec<String>,
 
     let mut varnames = vars_dependencies(db.connection(), deps.to_vec())?;
     varnames = distinct(varnames);
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links_ci(&vampath);
     varnames.retain(|v| !installed_links.contains_key(&v.to_ascii_lowercase()));
 
     let temp_dir = temp_links_dir(&vampath);
@@ -1478,7 +1478,7 @@ fn collect_temp_links(vampath: &Path) -> Result<Vec<String>, String> {
     for entry in fs::read_dir(&dir).map_err(|err| err.to_string())? {
         let entry = entry.map_err(|err| err.to_string())?;
         let path = entry.path();
-        if path.is_file() && is_symlink(&path) {
+        if path.is_file() && fs_util::is_symlink(&path) {
             if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
                 files.push(name.to_ascii_lowercase());
             }
@@ -1676,57 +1676,6 @@ fn find_atom_file(root: &Path, atom_name: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn collect_installed_links(vampath: &Path) -> HashMap<String, PathBuf> {
-    let mut installed = HashMap::new();
-    let install_dir = vampath.join("AddonPackages").join(crate::paths::INSTALL_LINK_DIR);
-    let link_files = collect_symlink_vars(&install_dir, true);
-    for link in link_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    let top_files = collect_symlink_vars(&vampath.join("AddonPackages"), false);
-    for link in top_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_ascii_lowercase(), link);
-        }
-    }
-    installed
-}
-
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") {
-                    if is_symlink(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-    files
-}
-
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
 }
 
 fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {

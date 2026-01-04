@@ -1,14 +1,13 @@
 use crate::db::{delete_var_related_conn, upsert_install_status, Db};
+use crate::fs_util;
 use crate::paths::{config_paths, resolve_var_file_path, DELETED_DIR, INSTALL_LINK_DIR};
 use crate::var_logic::{implicated_vars, vars_dependencies};
 use crate::{job_log, job_progress, job_set_result, winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::runtime::Handle;
-use walkdir::WalkDir;
 
 #[derive(Deserialize)]
 struct InstallVarsArgs {
@@ -214,7 +213,7 @@ fn uninstall_vars_blocking(reporter: &JobReporter, args: UninstallVarsArgs) -> R
         args.var_names
     };
 
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links(&vampath);
     let total = var_list.len();
     let mut removed = Vec::new();
     let mut skipped = Vec::new();
@@ -264,7 +263,7 @@ fn delete_vars_blocking(reporter: &JobReporter, args: DeleteVarsArgs) -> Result<
         args.var_names
     };
 
-    let installed_links = collect_installed_links(&vampath);
+    let installed_links = fs_util::collect_installed_links(&vampath);
     let total = var_list.len();
     let mut deleted = Vec::new();
     let mut failed = Vec::new();
@@ -341,6 +340,11 @@ fn install_var(
     }
 
     if link_path.exists() {
+        tracing::debug!(
+            var_name = %var_name,
+            link_path = %link_path.display(),
+            "install_var: link already exists"
+        );
         return Ok(InstallOutcome::AlreadyInstalled);
     }
 
@@ -353,59 +357,15 @@ fn install_var(
     }
 
     upsert_install_status(conn, var_name, true, disabled)?;
+    tracing::debug!(
+        var_name = %var_name,
+        link_path = %link_path.display(),
+        dest = %dest.display(),
+        disabled,
+        "install_var: link created"
+    );
     reporter.log(format!("{} installed", var_name));
     Ok(InstallOutcome::Installed)
-}
-
-fn collect_installed_links(vampath: &Path) -> HashMap<String, PathBuf> {
-    let mut installed = HashMap::new();
-    let install_dir = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
-    let link_files = collect_symlink_vars(&install_dir, true);
-    for link in link_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_string(), link);
-        }
-    }
-    let top_files = collect_symlink_vars(&vampath.join("AddonPackages"), false);
-    for link in top_files {
-        if let Some(stem) = link.file_stem().and_then(|s| s.to_str()) {
-            installed.insert(stem.to_string(), link);
-        }
-    }
-    installed
-}
-
-fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-    let mut files = Vec::new();
-    let walker = WalkDir::new(root)
-        .follow_links(false)
-        .max_depth(if recursive { usize::MAX } else { 1 })
-        .into_iter();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
-                if ext.eq_ignore_ascii_case("var") {
-                    if is_symlink(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-    files
-}
-
-fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
-        .unwrap_or(false)
 }
 
 fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
