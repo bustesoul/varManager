@@ -192,16 +192,29 @@ struct ErrorResponse {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = load_or_write_config()?;
-    let env_filter =
-        EnvFilter::try_new(config.log_level.as_str()).unwrap_or_else(|_| EnvFilter::new("info"));
+
+    // Parse the configured log level, but filter out noisy third-party libraries
+    let base_level = config.log_level.as_str();
+    let env_filter = if base_level == "debug" {
+        // If debug is requested, only show debug for our crate, info for others
+        EnvFilter::new("varManager_backend=debug,h2=info,reqwest=info,hyper=info,hyper_util=info")
+    } else {
+        // For other levels, use the configured level
+        EnvFilter::try_new(base_level).unwrap_or_else(|_| EnvFilter::new("info"))
+    };
+
     let log_dir = exe_dir();
     let file_appender = tracing_appender::rolling::never(&log_dir, "backend.log");
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
     let stdout_layer = tracing_subscriber::fmt::layer().with_filter(env_filter);
+
+    // File layer: debug for our crate, info for third-party libraries
+    let file_filter = EnvFilter::new("varManager_backend=debug,h2=info,reqwest=info,hyper=info,hyper_util=info");
     let file_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
         .with_writer(file_writer)
-        .with_filter(EnvFilter::new("debug"));
+        .with_filter(file_filter);
+
     tracing_subscriber::registry()
         .with(stdout_layer)
         .with(file_layer)

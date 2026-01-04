@@ -26,6 +26,11 @@ namespace varManager
         private List<string> listPayType, listLocation, listSort, listTags, listCategory, listCreator;
         private bool downlistHide = true;
         Dictionary<string, string> downloadUrls = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> downloadUrlsByUrl = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private bool refreshInProgress;
+        private bool refreshQueued;
+        private bool refreshQueuedGenePages;
+        private string? lastQuerySignature;
         private const int intPerPage = 48;
         private InvokeAddLoglist addlog;
         static string vam_download_exe = "vam_downloader.exe";
@@ -34,12 +39,134 @@ namespace varManager
 
         private void LogBackendLine(string line)
         {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                return;
+            }
+            string msg = line.Trim();
             LogLevel level = LogLevel.INFO;
-            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+            if (msg.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
             {
                 level = LogLevel.ERROR;
+                msg = msg.Substring("error:".Length).TrimStart();
             }
-            BeginInvoke(addlog, new Object[] { line, level });
+            else if (msg.StartsWith("debug:", StringComparison.OrdinalIgnoreCase))
+            {
+                level = LogLevel.DEBUG;
+                msg = msg.Substring("debug:".Length).TrimStart();
+            }
+            BeginInvoke(addlog, new Object[] { msg, level });
+        }
+
+        private void LogDebug(string message)
+        {
+            LogBackendLine($"debug: {message}");
+        }
+
+        private static bool IsVersionedVarName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+            string[] parts = name.Split('.');
+            if (parts.Length < 3)
+            {
+                return false;
+            }
+            return int.TryParse(parts[parts.Length - 1], out _);
+        }
+
+        private void AddDownloadUrl(string varName, string url)
+        {
+            if (string.IsNullOrWhiteSpace(varName) || string.IsNullOrWhiteSpace(url))
+            {
+                return;
+            }
+            if (downloadUrls.TryGetValue(varName, out var existingUrl) &&
+                !string.Equals(existingUrl, url, StringComparison.OrdinalIgnoreCase))
+            {
+                downloadUrlsByUrl.Remove(existingUrl);
+            }
+            if (downloadUrlsByUrl.TryGetValue(url, out var existingName))
+            {
+                if (string.Equals(existingName, varName, StringComparison.OrdinalIgnoreCase))
+                {
+                    downloadUrls[varName] = url;
+                    return;
+                }
+                bool existingVersioned = IsVersionedVarName(existingName);
+                bool newVersioned = IsVersionedVarName(varName);
+                if (newVersioned && !existingVersioned)
+                {
+                    downloadUrls.Remove(existingName);
+                    downloadUrls[varName] = url;
+                    downloadUrlsByUrl[url] = varName;
+                }
+                return;
+            }
+            downloadUrls[varName] = url;
+            downloadUrlsByUrl[url] = varName;
+        }
+
+        private void NormalizeDownloadUrls()
+        {
+            var source = downloadUrls;
+            downloadUrls = new Dictionary<string, string>();
+            downloadUrlsByUrl.Clear();
+            foreach (var kvp in source)
+            {
+                AddDownloadUrl(kvp.Key, kvp.Value);
+            }
+        }
+
+        private static string? NormalizeFilter(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+            string trimmed = value.Trim();
+            if (trimmed.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+            return trimmed;
+        }
+
+        private static string BuildQuerySignature(
+            int perpage,
+            string? location,
+            string? paytype,
+            string? category,
+            string? username,
+            string? tags,
+            string? search,
+            string? sort,
+            int page)
+        {
+            return string.Join("|", perpage,
+                location ?? string.Empty,
+                paytype ?? string.Empty,
+                category ?? string.Empty,
+                username ?? string.Empty,
+                tags ?? string.Empty,
+                search ?? string.Empty,
+                sort ?? string.Empty,
+                page);
+        }
+
+        private static string TrimForLog(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+            if (value.Length <= maxLength)
+            {
+                return value;
+            }
+            return value.Substring(0, maxLength) + "...";
         }
 
         private Task<BackendJobResult> RunBackendJobAsync(string kind, object? args)
@@ -117,11 +244,13 @@ namespace varManager
                         }
                     }
                 }
+                NormalizeDownloadUrls();
                 if (form1 != null)
                 {
                     downloadUrls = downloadUrls
                         .Where(kvp => !form1.FindByvarName(kvp.Key))
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                    NormalizeDownloadUrls();
                 }
 
                 if (downloadUrls.Count > 0)
@@ -238,7 +367,7 @@ namespace varManager
             ClearFilter();
             this.UseWaitCursor = false;
             this.Enabled = true;
-            await GenerateHabItemsAsync();
+            await GenerateHabItemsAsync(force: true);
             EnableFilterEvent();
             
         }
@@ -252,12 +381,14 @@ namespace varManager
 
         private void Item_GenLinkList(object sender, DownloadLinkListEventArgs e)
         {
-            foreach (string varname in e.DownloadLinks.Keys)
+            foreach (var kvp in e.DownloadLinks)
             {
+                string varname = kvp.Key;
+                string url = kvp.Value;
                 var exitname = form1.VarExistName(varname);
                 if (exitname == "missing"|| exitname.EndsWith("$"))
                 {
-                    downloadUrls[varname] = e.DownloadLinks[varname] ;
+                    AddDownloadUrl(varname, url);
                 }
             }
             DrawDownloadListView();
@@ -345,8 +476,15 @@ namespace varManager
             }
         }
 
-        private async Task GenerateHabItemsAsync(bool genePages = true)
+        private async Task GenerateHabItemsAsync(bool genePages = true, bool force = false)
         {
+            if (refreshInProgress)
+            {
+                refreshQueued = true;
+                refreshQueuedGenePages = refreshQueuedGenePages || genePages;
+                return;
+            }
+            refreshInProgress = true;
             string location = comboBoxHosted.Text, paytype = comboBoxPayType.Text,
              category = comboBoxCategory.Text, username = comboBoxCreator.Text,
                  tags = comboBoxTags.Text, search = textBoxSearch.Text;
@@ -354,6 +492,12 @@ namespace varManager
             {
                 search = "";
             }
+            string? locationFilter = NormalizeFilter(location);
+            string? paytypeFilter = NormalizeFilter(paytype);
+            string? categoryFilter = NormalizeFilter(category);
+            string? usernameFilter = NormalizeFilter(username);
+            string? tagsFilter = NormalizeFilter(tags);
+            string? searchFilter = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
             string sort = comboBoxPriSort.Text;
             if (!string.IsNullOrEmpty(comboBoxSecSort.Text))
                 sort = sort + "," + comboBoxSecSort.Text;
@@ -363,16 +507,40 @@ namespace varManager
                 if (comboBoxPages.SelectedIndex >= 0)
                     page = comboBoxPages.SelectedIndex + 1;
             }
+            string signature = BuildQuerySignature(intPerPage, locationFilter, paytypeFilter, categoryFilter,
+                usernameFilter, tagsFilter, searchFilter, sort, page);
             try
             {
-                string response = await GetResourcesAsync(intPerPage, location, paytype, category, username, tags, search, sort, page);
-                if (!string.IsNullOrEmpty(response))
+                if (!force && signature == lastQuerySignature)
                 {
-                    RefreshResource(response);
+                    return;
                 }
+                LogDebug($"hub_resources request perpage={intPerPage} location='{locationFilter ?? "<null>"}' paytype='{paytypeFilter ?? "<null>"}' category='{categoryFilter ?? "<null>"}' username='{usernameFilter ?? "<null>"}' tags='{tagsFilter ?? "<null>"}' search='{searchFilter ?? "<null>"}' sort='{sort}' page={page}");
+                string response = await GetResourcesAsync(intPerPage, locationFilter, paytypeFilter, categoryFilter, usernameFilter, tagsFilter, searchFilter, sort, page);
+                if (string.IsNullOrEmpty(response))
+                {
+                    LogBackendLine("error: hub_resources returned empty response");
+                    return;
+                }
+                LogDebug($"hub_resources raw length={response.Length}");
+                LogDebug($"hub_resources raw preview={TrimForLog(response, 200)}");
+                RefreshResource(response, genePages);
+                lastQuerySignature = signature;
             }
-            catch
+            catch (Exception ex)
             {
+                LogBackendLine($"error: GenerateHabItemsAsync failed: {ex.Message}");
+            }
+            finally
+            {
+                refreshInProgress = false;
+                if (refreshQueued)
+                {
+                    bool queuedGenePages = refreshQueuedGenePages;
+                    refreshQueued = false;
+                    refreshQueuedGenePages = false;
+                    await GenerateHabItemsAsync(queuedGenePages);
+                }
             }
         }
 
@@ -381,53 +549,91 @@ namespace varManager
             try
             {
                 var result = await RunBackendJobAsync("hub_info", null);
+                if (!result.Succeeded)
+                {
+                    LogBackendLine($"error: hub_info job failed status={result.Job.Status} error={result.Job.Error ?? "unknown"}");
+                }
                 if (!result.Result.HasValue)
                 {
+                    LogBackendLine("error: hub_info returned no result");
                     return false;
                 }
-                JSONNode jsonResult = JSON.Parse(result.Result.Value.GetRawText());
+                string raw = result.Result.Value.GetRawText();
+                LogDebug($"hub_info raw length={raw.Length}");
+                LogDebug($"hub_info raw preview={TrimForLog(raw, 200)}");
+                JSONNode jsonResult = JSON.Parse(raw);
+
+                if (jsonResult == null)
+                {
+                    LogBackendLine("error: Failed to parse hub_info JSON response");
+                    return false;
+                }
+
                 JSONArray jArray = jsonResult["category"] as JSONArray;
                 listPayType = new List<string>();
-                foreach (var item in jArray.Childs)
+                if (jArray != null)
                 {
-                    listPayType.Add(item.Value);
+                    foreach (var item in jArray.Childs)
+                    {
+                        listPayType.Add(item.Value);
+                    }
                 }
+
                 jArray = jsonResult["location"] as JSONArray;
                 listLocation = new List<string>();
-                foreach (var item in jArray.Childs)
+                if (jArray != null)
                 {
-                    listLocation.Add(item.Value);
+                    foreach (var item in jArray.Childs)
+                    {
+                        listLocation.Add(item.Value);
+                    }
                 }
+
                 jArray = jsonResult["type"] as JSONArray;
                 listCategory = new List<string>();
-                foreach (var item in jArray.Childs)
+                if (jArray != null)
                 {
-                    listCategory.Add(item.Value);
+                    foreach (var item in jArray.Childs)
+                    {
+                        listCategory.Add(item.Value);
+                    }
                 }
+
                 jArray = jsonResult["sort"] as JSONArray;
                 listSort = new List<string>();
-                foreach (var item in jArray.Childs)
+                if (jArray != null)
                 {
-                    listSort.Add(item.Value);
+                    foreach (var item in jArray.Childs)
+                    {
+                        listSort.Add(item.Value);
+                    }
                 }
 
                 JSONClass jClass = jsonResult["tags"] as JSONClass;
                 listTags = new List<string>();
-                foreach (var item in jClass.Keys)
+                if (jClass != null)
                 {
-                    listTags.Add(item);
+                    foreach (var item in jClass.Keys)
+                    {
+                        listTags.Add(item);
+                    }
                 }
 
                 jClass = jsonResult["users"] as JSONClass;
                 listCreator = new List<string>();
-                foreach (var item in jClass.Keys)
+                if (jClass != null)
                 {
-                    listCreator.Add(item);
+                    foreach (var item in jClass.Keys)
+                    {
+                        listCreator.Add(item);
+                    }
                 }
+                LogDebug($"hub_info counts location={listLocation.Count} paytype={listPayType.Count} category={listCategory.Count} sort={listSort.Count} tags={listTags.Count} users={listCreator.Count}");
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                LogBackendLine($"error: GetInfoListAsync failed: {ex.Message}");
                 return false;
             }
         }
@@ -454,12 +660,12 @@ namespace varManager
 
         private void buttonRefresh_Click(object sender, EventArgs e)
         {
-            _ = GenerateHabItemsAsync();
+            _ = GenerateHabItemsAsync(force: true);
         }
 
         private async Task<string> GetResourcesAsync(int perpage = intPerPage,
-            string location = "Hub And Dependencies", string paytype = "Free",
-            string category = "", string username = "", string tags = "", string search = "",
+            string? location = null, string? paytype = null,
+            string? category = null, string? username = null, string? tags = null, string? search = null,
             string sort = "Latest Update",
             int page = 1)
         {
@@ -475,17 +681,21 @@ namespace varManager
                 sort = sort,
                 page = page
             });
+            if (!result.Succeeded)
+            {
+                LogBackendLine($"error: hub_resources job failed status={result.Job.Status} error={result.Job.Error ?? "unknown"}");
+            }
             return result.Result.HasValue ? result.Result.Value.GetRawText() : string.Empty;
         }
 
-        public delegate void InvokeRefreshResource(string response);
+        public delegate void InvokeRefreshResource(string response, bool rebuildPages);
 
         private void buttonClearFilters_Click(object sender, EventArgs e)
         {
             DisableFilterEvent();
             ClearFilter();
             EnableFilterEvent();
-            _ = GenerateHabItemsAsync();
+            _ = GenerateHabItemsAsync(force: true);
         }
 
         private void buttonEmptySearch_Click(object sender, EventArgs e)
@@ -537,11 +747,13 @@ namespace varManager
                         }
                     }
                 }
+                NormalizeDownloadUrls();
                 if (form1 != null)
                 {
                     downloadUrls = downloadUrls
                         .Where(kvp => !form1.FindByvarName(kvp.Key))
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                    NormalizeDownloadUrls();
                 }
                 if (downloadUrls.Count > 0)
                 {
@@ -677,6 +889,7 @@ namespace varManager
         private void button1_Click(object sender, EventArgs e)
         {
             downloadUrls.Clear();
+            downloadUrlsByUrl.Clear();
             DrawDownloadListView();
         }
 
@@ -697,103 +910,162 @@ namespace varManager
             }
         }
 
-        public void RefreshResource(string response)
+        public void RefreshResource(string response, bool rebuildPages = true)
         {
-            JSONNode jsonResult = JSON.Parse(response);
-
-            JSONClass pagination = jsonResult["pagination"] as JSONClass;
-            int totalFound = int.Parse(pagination["total_found"].Value);
-
-            labelTotal.Text = $"Total: {totalFound}";
-            int totalPages = int.Parse(pagination["total_pages"].Value);
-            int curPage = int.Parse(pagination["page"].Value);
-            if (curPage > totalPages) curPage = totalPages;
-            if (curPage < 1) curPage = 1;
-            comboBoxPages.SelectedIndexChanged -= ComboBoxSelectedChanged;
-            comboBoxPages.Items.Clear();
-            for (int i = 0; i < totalPages; i++)
+            try
             {
-                comboBoxPages.Items.Add($"{i + 1 } of {totalPages}");
-            }
-            if (comboBoxPages.Items.Count > 0)
-                comboBoxPages.SelectedIndex = curPage - 1;
-            comboBoxPages.SelectedIndexChanged += ComboBoxSelectedChanged;
-
-            var resources = jsonResult["resources"].AsArray;
-
-            for (int index = 0; index < intPerPage; index++)
-            {
-                HubItem hubItem = (HubItem)flowLayoutPanelHubItems.Controls[index];
-                if (resources.Count > index)
+                if (string.IsNullOrEmpty(response))
                 {
-                    hubItem.Visible = true;
-                    JSONClass resource = resources[index] as JSONClass;
-                    hubItem.SetResource(resource); 
-                    string inRepository = "Unknown Status";
-                    if (resource.HasKey("hubFiles"))
+                    LogBackendLine("error: RefreshResource received empty response");
+                    return;
+                }
+
+                JSONNode jsonResult = JSON.Parse(response);
+                if (jsonResult == null)
+                {
+                    LogBackendLine("error: Failed to parse hub_resources JSON response");
+                    return;
+                }
+
+                JSONClass pagination = jsonResult["pagination"] as JSONClass;
+                if (pagination == null)
+                {
+                    LogBackendLine("error: hub_resources response missing pagination field");
+                    return;
+                }
+
+                int totalFound = 0;
+                if (pagination["total_found"] != null)
+                {
+                    int.TryParse(pagination["total_found"].Value, out totalFound);
+                }
+                labelTotal.Text = $"Total: {totalFound}";
+
+                int totalPages = 0;
+                if (pagination["total_pages"] != null)
+                {
+                    int.TryParse(pagination["total_pages"].Value, out totalPages);
+                }
+
+                int curPage = 1;
+                if (pagination["page"] != null)
+                {
+                    int.TryParse(pagination["page"].Value, out curPage);
+                }
+
+                if (rebuildPages)
+                {
+                    if (curPage > totalPages) curPage = totalPages;
+                    if (curPage < 1) curPage = 1;
+                    comboBoxPages.SelectedIndexChanged -= ComboBoxSelectedChanged;
+                    comboBoxPages.Items.Clear();
+                    for (int i = 0; i < totalPages; i++)
                     {
-                        var hubfiles = resource["hubFiles"].AsArray;
-                        if (hubfiles.Count > 0)
+                        comboBoxPages.Items.Add($"{i + 1 } of {totalPages}");
+                    }
+                    if (comboBoxPages.Items.Count > 0)
+                        comboBoxPages.SelectedIndex = curPage - 1;
+                    comboBoxPages.SelectedIndexChanged += ComboBoxSelectedChanged;
+                }
+
+                var resources = jsonResult["resources"]?.AsArray;
+                LogDebug($"hub_resources pagination total_found={totalFound} total_pages={totalPages} page={curPage} resources={(resources != null ? resources.Count : 0)}");
+                if (resources == null)
+                {
+                    LogBackendLine("error: hub_resources response missing resources field");
+                    // Hide all items if no resources
+                    for (int index = 0; index < intPerPage; index++)
+                    {
+                        HubItem hubItem = (HubItem)flowLayoutPanelHubItems.Controls[index];
+                        hubItem.Visible = false;
+                    }
+                    return;
+                }
+
+                for (int index = 0; index < intPerPage; index++)
+                {
+                    HubItem hubItem = (HubItem)flowLayoutPanelHubItems.Controls[index];
+                    if (resources.Count > index)
+                    {
+                        hubItem.Visible = true;
+                        JSONClass resource = resources[index] as JSONClass;
+                        if (resource == null)
                         {
-                            int inrepons = -1;
-                            //JSONClass hubfile = hubfiles[0] as JSONClass;
-                            foreach (JSONClass hubfile in hubfiles)
+                            hubItem.Visible = false;
+                            continue;
+                        }
+                        hubItem.SetResource(resource);
+                        string inRepository = "Unknown Status";
+                        if (resource.HasKey("hubFiles"))
+                        {
+                            var hubfiles = resource["hubFiles"]?.AsArray;
+                            if (hubfiles != null && hubfiles.Count > 0)
                             {
-                                string filename = hubfile["filename"];
-                                if (filename.EndsWith(".var"))
-                                    filename = filename.Substring(0, filename.Length - 4);
-                                hubItem.PackageName = filename;
-                                //int splitindex = filename.LastIndexOf('.');
-                                string[] filenameparts = filename.Split(('.'));
-                                if (filenameparts.Length >= 2)
+                                int inrepons = -1;
+                                //JSONClass hubfile = hubfiles[0] as JSONClass;
+                                foreach (JSONClass hubfile in hubfiles)
                                 {
-                                    string hubpackageName = filenameparts[0] + "." + filenameparts[1];
-                                    int hubversion = 1;
-                                    if (filenameparts.Length >= 3)
-                                        int.TryParse(filenameparts[2], out hubversion); 
-                                    string varlastname = form1.VarExistName(hubpackageName + ".latest");
-                                    if (varlastname != "missing")
+                                    if (hubfile == null || hubfile["filename"] == null) continue;
+                                    string filename = hubfile["filename"].Value;
+                                    if (filename.EndsWith(".var"))
+                                        filename = filename.Substring(0, filename.Length - 4);
+                                    hubItem.PackageName = filename;
+                                    //int splitindex = filename.LastIndexOf('.');
+                                    string[] filenameparts = filename.Split(('.'));
+                                    if (filenameparts.Length >= 2)
                                     {
-                                        int lastversion = int.Parse(varlastname.Substring(filename.LastIndexOf('.') + 1));
-                                        if (lastversion >= hubversion)
+                                        string hubpackageName = filenameparts[0] + "." + filenameparts[1];
+                                        int hubversion = 1;
+                                        if (filenameparts.Length >= 3)
+                                            int.TryParse(filenameparts[2], out hubversion);
+                                        string varlastname = form1.VarExistName(hubpackageName + ".latest");
+                                        if (varlastname != "missing")
                                         {
-                                            if (inrepons < 0)
+                                            int lastversion = int.Parse(varlastname.Substring(filename.LastIndexOf('.') + 1));
+                                            if (lastversion >= hubversion)
                                             {
-                                                inRepository = "In Repository";
-                                                inrepons = 0;
+                                                if (inrepons < 0)
+                                                {
+                                                    inRepository = "In Repository";
+                                                    inrepons = 0;
+                                                }
                                             }
+                                            else
+                                            {
+                                                if (inrepons < 1)
+                                                {
+                                                    inRepository = $"{lastversion} Upgrade to {hubversion}";
+                                                    inrepons = 1;
+                                                }
+                                            }
+
                                         }
                                         else
                                         {
-                                            if (inrepons < 1)
-                                            {
-                                                inRepository = $"{lastversion} Upgrade to {hubversion}";
-                                                inrepons = 1;
-                                            }
+                                            inRepository = "Generate Download List";
+                                            break;
                                         }
-
-                                    }
-                                    else
-                                    {
-                                        inRepository = "Generate Download List";
-                                        break;
                                     }
                                 }
                             }
                         }
+                        else
+                        {
+                            if (resource.HasKey("download_url"))
+                            {
+                                inRepository = "Go To Download";
+                            }
+                        }
+                        hubItem.InRepository = inRepository;
+                        hubItem.RefreshItem();
                     }
                     else
-                    {
-                        if (resource.HasKey("download_url"))
-                        {
-                            inRepository = "Go To Download";
-                        }
-                    }
-                    hubItem.InRepository=inRepository;
-                    hubItem.RefreshItem();
+                        hubItem.Visible = false;
                 }
-                else
-                    hubItem.Visible = false;
+            }
+            catch (Exception ex)
+            {
+                LogBackendLine($"error: RefreshResource failed: {ex.Message}\n{ex.StackTrace}");
             }
         }
         private void ResponseTask(Task<string> responseTask)
@@ -802,7 +1074,7 @@ namespace varManager
             {
                 InvokeRefreshResource refreshResource = new InvokeRefreshResource(RefreshResource);
                 string response = responseTask.Result;
-                this.BeginInvoke(refreshResource, new Object[] { response });
+                this.BeginInvoke(refreshResource, new Object[] { response, true });
             }
             catch (Exception) { }
         }

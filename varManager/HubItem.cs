@@ -36,6 +36,11 @@ namespace varManager
             LogSink?.Invoke(line);
         }
 
+        private void LogDebug(string message)
+        {
+            LogBackendLine($"debug: {message}");
+        }
+
         private T? DeserializeResult<T>(BackendJobResult result)
         {
             if (!result.Result.HasValue)
@@ -43,6 +48,54 @@ namespace varManager
                 return default;
             }
             return JsonSerializer.Deserialize<T>(result.Result.Value.GetRawText());
+        }
+
+        private int ParseInt(JSONClass json, string key, int defaultValue = 0)
+        {
+            string raw = json[key].Value;
+            if (string.IsNullOrWhiteSpace(raw) || raw.Equals("null", StringComparison.OrdinalIgnoreCase))
+            {
+                LogDebug($"HubItem parse int empty key={key} resource_id='{resource_id}' title='{title}'");
+                return defaultValue;
+            }
+            if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
+            {
+                return value;
+            }
+            LogDebug($"HubItem parse int failed key={key} value='{raw}' resource_id='{resource_id}' title='{title}'");
+            return defaultValue;
+        }
+
+        private long ParseLong(JSONClass json, string key, long defaultValue = 0)
+        {
+            string raw = json[key].Value;
+            if (string.IsNullOrWhiteSpace(raw) || raw.Equals("null", StringComparison.OrdinalIgnoreCase))
+            {
+                LogDebug($"HubItem parse long empty key={key} resource_id='{resource_id}' title='{title}'");
+                return defaultValue;
+            }
+            if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value))
+            {
+                return value;
+            }
+            LogDebug($"HubItem parse long failed key={key} value='{raw}' resource_id='{resource_id}' title='{title}'");
+            return defaultValue;
+        }
+
+        private double ParseDouble(JSONClass json, string key, double defaultValue = 0)
+        {
+            string raw = json[key].Value;
+            if (string.IsNullOrWhiteSpace(raw) || raw.Equals("null", StringComparison.OrdinalIgnoreCase))
+            {
+                LogDebug($"HubItem parse double empty key={key} resource_id='{resource_id}' title='{title}'");
+                return defaultValue;
+            }
+            if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+            {
+                return value;
+            }
+            LogDebug($"HubItem parse double failed key={key} value='{raw}' resource_id='{resource_id}' title='{title}'");
+            return defaultValue;
         }
 
         private sealed class HubDownloadList
@@ -68,11 +121,17 @@ namespace varManager
             try
             {
                 var result = BackendSession.RunJob("hub_resource_detail", new { resource_id = resource_id }, LogBackendLine, CancellationToken.None);
+                if (!result.Succeeded)
+                {
+                    LogBackendLine($"error: hub_resource_detail job failed status={result.Job.Status} error={result.Job.Error ?? "unknown"}");
+                }
                 var payload = DeserializeResult<HubDownloadList>(result);
                 if (payload == null)
                 {
+                    LogDebug($"hub_resource_detail result empty resource_id='{resource_id}'");
                     return false;
                 }
+                LogDebug($"hub_resource_detail resource_id='{resource_id}' urls={payload.DownloadUrls.Count} urls_no_version={payload.DownloadUrlsNoVersion.Count}");
                 Dictionary<string, string> varDownloadUrl = new Dictionary<string, string>();
                 foreach (var kvp in payload.DownloadUrls)
                 {
@@ -91,8 +150,9 @@ namespace varManager
                 RaiseGenLinkListFilterEvent(varDownloadUrl);
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                LogBackendLine($"error: GetResourceDetail failed: {ex.Message}");
                 return false;
             }
         }
@@ -312,22 +372,22 @@ namespace varManager
         public void SetResource(JSONClass json) 
         {
             this.resource = json;
+            this.resource_id = resource["resource_id"].Value;
+            this.title = resource["title"].Value;
             this.paytype = resource["category"].Value;
             this.category = resource["type"].Value;
-            this.title = resource["title"].Value;
             this.version = resource["version_string"].Value;
             this.tagLine = resource["tag_line"].Value;
-            this.ratingAvg = double.Parse(resource["rating_avg"].Value);
-            this.ratingCount = int.Parse(resource["rating_count"].Value);
-            this.downloads = int.Parse(resource["download_count"].Value);
-            long unixTimeStamp = long.Parse(resource["last_update"].Value);
-            DateTime dt1 = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-            this.lastUpdated = dt1.AddSeconds(unixTimeStamp).ToLocalTime();
             this.imageUrl = resource["image_url"].Value;
             this.creatorIcon = resource["icon_url"].Value;
             this.creatorName = resource["username"].Value;
-            this.resource_id = resource["resource_id"].Value;
             this.download_url = resource["download_url"].Value;
+            this.ratingAvg = ParseDouble(resource, "rating_avg");
+            this.ratingCount = ParseInt(resource, "rating_count");
+            this.downloads = ParseInt(resource, "download_count");
+            long unixTimeStamp = ParseLong(resource, "last_update");
+            DateTime dt1 = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+            this.lastUpdated = dt1.AddSeconds(unixTimeStamp).ToLocalTime();
         }
     }
     public class HubItemFilterEventArgs : EventArgs

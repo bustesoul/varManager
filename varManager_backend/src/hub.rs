@@ -308,6 +308,11 @@ pub fn get_info() -> Result<Value, String> {
     resp.json::<Value>().map_err(|err| err.to_string())
 }
 
+fn is_filter_value(value: &str) -> bool {
+    let trimmed = value.trim();
+    !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("all")
+}
+
 pub fn get_resources(query: HubResourcesQuery) -> Result<Value, String> {
     let perpage = query.perpage.unwrap_or(48);
     let mut body = json!({
@@ -318,23 +323,39 @@ pub fn get_resources(query: HubResourcesQuery) -> Result<Value, String> {
         "page": query.page.unwrap_or(1).to_string(),
     });
     if let Some(location) = query.location {
-        body["location"] = Value::String(location);
+        let trimmed = location.trim();
+        if is_filter_value(trimmed) {
+            body["location"] = Value::String(trimmed.to_string());
+        }
     }
     if let Some(paytype) = query.paytype {
-        body["category"] = Value::String(paytype);
+        let trimmed = paytype.trim();
+        if is_filter_value(trimmed) {
+            body["category"] = Value::String(trimmed.to_string());
+        }
     }
     if let Some(category) = query.category {
-        body["type"] = Value::String(category);
+        let trimmed = category.trim();
+        if is_filter_value(trimmed) {
+            body["type"] = Value::String(trimmed.to_string());
+        }
     }
     if let Some(username) = query.username {
-        body["username"] = Value::String(username);
+        let trimmed = username.trim();
+        if is_filter_value(trimmed) {
+            body["username"] = Value::String(trimmed.to_string());
+        }
     }
     if let Some(tags) = query.tags {
-        body["tags"] = Value::String(tags);
+        let trimmed = tags.trim();
+        if is_filter_value(trimmed) {
+            body["tags"] = Value::String(trimmed.to_string());
+        }
     }
     if let Some(search) = query.search {
-        if !search.is_empty() {
-            body["search"] = Value::String(search);
+        let trimmed = search.trim();
+        if !trimmed.is_empty() {
+            body["search"] = Value::String(trimmed.to_string());
             body["searchall"] = Value::String("true".to_string());
         }
     }
