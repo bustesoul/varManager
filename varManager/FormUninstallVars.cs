@@ -41,11 +41,24 @@ namespace varManager
             // Load vars to uninstall into the grid
             if (VarsToUninstall != null && VarsToUninstall.Count > 0)
             {
-                var varsData = VarsToUninstall.Select(varName =>
+                // Remove duplicates from the list first
+                var uniqueVars = VarsToUninstall.Distinct().ToList();
+
+                var varsData = uniqueVars.Select(varName =>
                     dbContext.VarsView.FirstOrDefault(v => v.VarName == varName)
                 ).Where(v => v != null).ToList();
 
                 dataGridViewVars.DataSource = varsData;
+            }
+
+            // Hide ID and VarName columns in dependencies grid to avoid confusion
+            if (dataGridView1.Columns.Contains("iDDataGridViewTextBoxColumn"))
+            {
+                dataGridView1.Columns["iDDataGridViewTextBoxColumn"].Visible = false;
+            }
+            if (dataGridView1.Columns.Contains("varNameDataGridViewTextBoxColumn1"))
+            {
+                dataGridView1.Columns["varNameDataGridViewTextBoxColumn1"].Visible = false;
             }
 
             toolStripComboBoxPreviewType.SelectedIndex = 0;

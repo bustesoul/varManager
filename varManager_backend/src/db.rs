@@ -29,6 +29,7 @@ pub struct VarRecord {
     pub sub_scene: Option<i64>,
     pub appearance: Option<i64>,
     pub dependency_cnt: Option<i64>,
+    pub fsize: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -110,11 +111,20 @@ impl Db {
                     look INTEGER,
                     subScene INTEGER,
                     appearance INTEGER,
-                    dependencyCnt INTEGER
+                    dependencyCnt INTEGER,
+                    fsize REAL
                 );
                 "#,
             )
-            .map_err(|err| err.to_string())
+            .map_err(|err| err.to_string())?;
+
+        // Add fsize column if it doesn't exist (migration)
+        self.conn.execute(
+            "ALTER TABLE vars ADD COLUMN fsize REAL",
+            [],
+        ).ok(); // Ignore error if column already exists
+
+        Ok(())
     }
 
     pub fn path(&self) -> &Path {
@@ -262,11 +272,11 @@ pub fn upsert_var(tx: &Transaction<'_>, record: &VarRecord) -> Result<(), String
         INSERT OR REPLACE INTO vars (
             varName, creatorName, packageName, metaDate, varDate, version, description,
             morph, cloth, hair, skin, pose, scene, script, plugin, asset, texture,
-            look, subScene, appearance, dependencyCnt
+            look, subScene, appearance, dependencyCnt, fsize
         ) VALUES (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7,
             ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-            ?18, ?19, ?20, ?21
+            ?18, ?19, ?20, ?21, ?22
         )
         "#,
         params![
@@ -290,7 +300,8 @@ pub fn upsert_var(tx: &Transaction<'_>, record: &VarRecord) -> Result<(), String
             record.look,
             record.sub_scene,
             record.appearance,
-            record.dependency_cnt
+            record.dependency_cnt,
+            record.fsize
         ],
     )
     .map_err(|err| err.to_string())?;

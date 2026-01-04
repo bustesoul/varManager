@@ -572,7 +572,7 @@ namespace varManager
             // Add columns matching the VarsView entity properties
             dataTable.Columns.Add("varName", typeof(string));
             dataTable.Columns.Add("Installed", typeof(bool));
-            dataTable.Columns.Add("fsize", typeof(double));
+            dataTable.Columns.Add("Fsize", typeof(double));
             dataTable.Columns.Add("varPath", typeof(string));
             dataTable.Columns.Add("creatorName", typeof(string));
             dataTable.Columns.Add("packageName", typeof(string));
@@ -2619,26 +2619,7 @@ namespace varManager
                 }
                 if (installed)
                 {
-                    string message = varName + " will be removed, are you sure?";
-                    string caption = "Remove Var";
-                    var result = MessageBox.Show(message, caption,
-                                          MessageBoxButtons.YesNo,
-                                          MessageBoxIcon.Question,
-                                          MessageBoxDefaultButton.Button2);
-                    if (result == DialogResult.Yes)
-                    {
-                        try
-                        {
-                            RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
-                            RefreshVarsViewUi();
-                            RunBackendJob("rescan_packages", null);
-                        }
-                        catch (Exception ex)
-                        {
-                            BeginInvoke(addlog, new Object[] { $"卸载失败: {ex.Message}", LogLevel.ERROR });
-                        }
-                    }
-
+                    UninstallVarWithPreview(varName);
                 }
                 else
                 {
@@ -3077,6 +3058,76 @@ namespace varManager
             catch (Exception ex)
             {
                 BeginInvoke(addlog, new Object[] { $"卸载失败: {ex.Message}", LogLevel.ERROR });
+            }
+        }
+
+        private bool UninstallVarWithPreview(string varName)
+        {
+            // Call preview_uninstall API to get the full list
+            BackendJobResult previewResult;
+            try
+            {
+                previewResult = RunBackendJob("preview_uninstall", new { var_names = new[] { varName }, include_implicated = true });
+            }
+            catch (Exception ex)
+            {
+                BeginInvoke(addlog, new Object[] { $"预览卸载列表失败: {ex.Message}", LogLevel.ERROR });
+                return false;
+            }
+
+            if (!previewResult.Succeeded)
+            {
+                BeginInvoke(addlog, new Object[] { "预览卸载列表失败", LogLevel.ERROR });
+                return false;
+            }
+
+            var preview = DeserializeResult<PreviewUninstallResult>(previewResult);
+            if (preview == null || preview.var_list == null)
+            {
+                BeginInvoke(addlog, new Object[] { "无法解析预览结果", LogLevel.ERROR });
+                return false;
+            }
+
+            // Show preview window if there are implicated vars
+            if (preview.implicated.Count > 0)
+            {
+                FormUninstallVars formUninstallVars = new FormUninstallVars();
+                formUninstallVars.previewpicsDirName = previewpicsDirName;
+                formUninstallVars.Text = "Uninstall Vars Preview";
+                formUninstallVars.VarsToUninstall = preview.var_list;
+
+                if (formUninstallVars.ShowDialog() != DialogResult.OK)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                // No implicated vars, show simple confirmation dialog
+                string message = varName + " will be removed, are you sure?";
+                string caption = "Remove Var";
+                var result = MessageBox.Show(message, caption,
+                                      MessageBoxButtons.YesNo,
+                                      MessageBoxIcon.Question,
+                                      MessageBoxDefaultButton.Button2);
+                if (result != DialogResult.Yes)
+                {
+                    return false;
+                }
+            }
+
+            // Execute uninstall
+            try
+            {
+                RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
+                RefreshVarsViewUi();
+                RunBackendJob("rescan_packages", null);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                BeginInvoke(addlog, new Object[] { $"卸载失败: {ex.Message}", LogLevel.ERROR });
+                return false;
             }
         }
 
@@ -3530,48 +3581,23 @@ namespace varManager
         private void buttonpreviewinstall_Click(object sender, EventArgs e)
         {
             string varName = labelPreviewVarName.Text;
-            this.BeginInvoke(addlog, new Object[] { $"[debug] Preview install toggle clicked: var={varName}", LogLevel.INFO });
             bool isInstalled = dbContext.InstallStatuses.Any(q => q.VarName == varName && q.Installed);
-            this.BeginInvoke(addlog, new Object[] { $"[debug] Preview install toggle state: installed={isInstalled}", LogLevel.INFO });
             if (isInstalled)
             {
-                string message = varName + "  will be remove, are you sure?";
-                string caption = "Remove Var";
-                this.BeginInvoke(addlog, new Object[] { "[debug] Preview uninstall showing confirm dialog", LogLevel.INFO });
-                var result = MessageBox.Show(message, caption,
-                                      MessageBoxButtons.YesNo,
-                                      MessageBoxIcon.Question,
-                                      MessageBoxDefaultButton.Button2);
-                this.BeginInvoke(addlog, new Object[] { $"[debug] Preview uninstall confirm result: {result}", LogLevel.INFO });
-                if (result == DialogResult.Yes)
-                {
-                    try
-                    {
-                        this.BeginInvoke(addlog, new Object[] { "[debug] Preview uninstall start job: vars_toggle_install include_implicated=true include_dependencies=true", LogLevel.INFO });
-                        RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
-                    }
-                    catch (Exception ex)
-                    {
-                        BeginInvoke(addlog, new Object[] { $"卸载失败: {ex.Message}", LogLevel.ERROR });
-                        return;
-                    }
-                }
+                UninstallVarWithPreview(varName);
             }
             else
             {
                 string message = varName + "  will install, are you sure?";
                 string caption = "Install Var";
-                this.BeginInvoke(addlog, new Object[] { "[debug] Preview install showing confirm dialog", LogLevel.INFO });
                 var result = MessageBox.Show(message, caption,
                                       MessageBoxButtons.YesNo,
                                       MessageBoxIcon.Question,
                                       MessageBoxDefaultButton.Button2);
-                this.BeginInvoke(addlog, new Object[] { $"[debug] Preview install confirm result: {result}", LogLevel.INFO });
                 if (result == DialogResult.Yes)
                 {
                     try
                     {
-                        this.BeginInvoke(addlog, new Object[] { "[debug] Preview install start job: vars_toggle_install include_dependencies=true include_implicated=true", LogLevel.INFO });
                         RunBackendJob("vars_toggle_install", new { var_name = varName, include_dependencies = true, include_implicated = true });
                     }
                     catch (Exception ex)

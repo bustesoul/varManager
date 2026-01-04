@@ -17,7 +17,7 @@ zip = "7"
 walkdir = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 reqwest = { version = "0.13", features = ["blocking", "json"] }
-sysinfo = "0.37"
+sysinfo = "0.36"
 uuid = { version = "1", features = ["v4"] }
 windows = { version = "0.62", features = [
     "Win32_Foundation",

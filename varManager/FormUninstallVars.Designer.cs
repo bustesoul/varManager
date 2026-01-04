@@ -510,8 +510,8 @@ namespace varManager
             this.iDDataGridViewTextBoxColumn.Width = 125;
             // 
             // varNameDataGridViewTextBoxColumn1
-            // 
-            this.varNameDataGridViewTextBoxColumn1.DataPropertyName = "varName";
+            //
+            this.varNameDataGridViewTextBoxColumn1.DataPropertyName = "VarName";
             this.varNameDataGridViewTextBoxColumn1.HeaderText = "varName";
             this.varNameDataGridViewTextBoxColumn1.MinimumWidth = 6;
             this.varNameDataGridViewTextBoxColumn1.Name = "varNameDataGridViewTextBoxColumn1";
@@ -519,8 +519,8 @@ namespace varManager
             this.varNameDataGridViewTextBoxColumn1.Width = 125;
             // 
             // dependencyDataGridViewTextBoxColumn
-            // 
-            this.dependencyDataGridViewTextBoxColumn.DataPropertyName = "dependency";
+            //
+            this.dependencyDataGridViewTextBoxColumn.DataPropertyName = "DependencyName";
             this.dependencyDataGridViewTextBoxColumn.HeaderText = "dependency";
             this.dependencyDataGridViewTextBoxColumn.MinimumWidth = 6;
             this.dependencyDataGridViewTextBoxColumn.Name = "dependencyDataGridViewTextBoxColumn";

@@ -571,10 +571,10 @@ namespace varManager
             ColumnDetail.Text = "Detail";
             ColumnDetail.UseColumnTextForButtonValue = true;
             ColumnDetail.Width = 60;
-            // 
+            //
             // fsize
-            // 
-            fsize.DataPropertyName = "fsize";
+            //
+            fsize.DataPropertyName = "Fsize";
             dataGridViewCellStyle1.Format = "N2";
             dataGridViewCellStyle1.NullValue = null;
             fsize.DefaultCellStyle = dataGridViewCellStyle1;

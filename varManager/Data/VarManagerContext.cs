@@ -137,13 +137,14 @@ namespace varManager.Data
                 entity.Property(e => e.SubScene).HasColumnName("subScene");
                 entity.Property(e => e.Appearance).HasColumnName("appearance");
                 entity.Property(e => e.DependencyCnt).HasColumnName("dependencyCnt");
+                entity.Property(e => e.Fsize).HasColumnName("fsize");
             });
 
             base.OnModelCreating(modelBuilder);
         }
 
         // Create views as queryable properties
-        public IQueryable<VarsView> VarsView => 
+        public IQueryable<VarsView> VarsView =>
             from v in Vars
             join i in InstallStatuses on v.VarName equals i.VarName into installJoin
             from install in installJoin.DefaultIfEmpty()
@@ -157,7 +158,7 @@ namespace varManager.Data
                 Version = v.Version,
                 Description = v.Description,
                 VarPath = "", // No varPath in existing schema
-                Fsize = 0.0, // No file size in existing schema  
+                Fsize = v.Fsize ?? 0.0,
                 Scenes = v.Scene ?? 0,
                 Looks = v.Look ?? 0,
                 Clothing = v.Cloth ?? 0,

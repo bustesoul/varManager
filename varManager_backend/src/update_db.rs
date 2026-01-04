@@ -591,6 +591,9 @@ fn process_var_file(
         .ok()
         .map(format_system_time);
 
+    // Calculate file size in MB
+    let fsize_mb = meta.len() as f64 / (1024.0 * 1024.0);
+
     let file = File::open(var_file).map_err(|err| ProcessError::Io(err.to_string()))?;
     let reader = BufReader::new(file);
     let mut zip = ZipArchive::new(reader).map_err(|err| ProcessError::Io(err.to_string()))?;
@@ -673,6 +676,7 @@ fn process_var_file(
         sub_scene: Some(0),
         appearance: Some(0),
         dependency_cnt: Some(dependencies.len() as i64),
+        fsize: Some(fsize_mb),
     };
 
     Ok(ProcessedVar {

@@ -38,13 +38,14 @@ namespace varManager.Models
         public int? SubScene { get; set; }
         public int? Appearance { get; set; }
         public int? DependencyCnt { get; set; }
-        
+        public double? Fsize { get; set; }
+
         // Compatibility properties for existing code (not mapped to database)
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]
         public string? VarPath { get => ""; set { } } // Not available in existing schema
-        
-        [System.ComponentModel.DataAnnotations.Schema.NotMapped]  
-        public long? Filesize { get => null; set { } } // Not available in existing schema
+
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public long? Filesize { get => Fsize.HasValue ? (long?)(Fsize.Value * 1024 * 1024) : null; set { } }
         
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]
         public int? Scenes { get => Scene; set => Scene = value; }
