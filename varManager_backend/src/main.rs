@@ -431,6 +431,7 @@ async fn run_job(
         "links_move" => links::run_move_links_job(state.clone(), id, args).await,
         "links_missing_create" => links::run_missing_links_create_job(state.clone(), id, args).await,
         "install_vars" => vars_jobs::run_install_vars_job(state.clone(), id, args).await,
+        "preview_uninstall" => vars_jobs::run_preview_uninstall_job(state.clone(), id, args).await,
         "uninstall_vars" => vars_jobs::run_uninstall_vars_job(state.clone(), id, args).await,
         "delete_vars" => vars_jobs::run_delete_vars_job(state.clone(), id, args).await,
         "vars_export_installed" => vars_misc::run_export_installed_job(state.clone(), id, args).await,

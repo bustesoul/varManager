@@ -28,6 +28,13 @@ struct UninstallVarsArgs {
 }
 
 #[derive(Deserialize)]
+struct PreviewUninstallArgs {
+    var_names: Vec<String>,
+    #[serde(default = "default_true")]
+    include_implicated: bool,
+}
+
+#[derive(Deserialize)]
 struct DeleteVarsArgs {
     var_names: Vec<String>,
     #[serde(default = "default_true")]
@@ -51,6 +58,13 @@ struct UninstallVarsResult {
     total: usize,
     removed: Vec<String>,
     skipped: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct PreviewUninstallResult {
+    var_list: Vec<String>,
+    requested: Vec<String>,
+    implicated: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -204,6 +218,20 @@ fn uninstall_vars_blocking(reporter: &JobReporter, args: UninstallVarsArgs) -> R
     reporter.progress(1);
 
     let db_path = crate::exe_dir().join("varManager.db");
+    let requested_sample = args
+        .var_names
+        .iter()
+        .take(5)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    reporter.log(format!(
+        "UninstallVars args: include_implicated={}, requested_count={}, sample=[{}]",
+        args.include_implicated,
+        args.var_names.len(),
+        requested_sample
+    ));
+    reporter.log(format!("UninstallVars db_path: {}", db_path.display()));
     let db = Db::open(&db_path)?;
     db.ensure_schema()?;
 
@@ -214,7 +242,19 @@ fn uninstall_vars_blocking(reporter: &JobReporter, args: UninstallVarsArgs) -> R
     };
 
     let installed_links = fs_util::collect_installed_links(&vampath);
+    let resolved_sample = var_list
+        .iter()
+        .take(5)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
     let total = var_list.len();
+    reporter.log(format!(
+        "UninstallVars resolved list: total={}, installed_links={}, sample=[{}]",
+        total,
+        installed_links.len(),
+        resolved_sample
+    ));
     let mut removed = Vec::new();
     let mut skipped = Vec::new();
 
@@ -244,6 +284,80 @@ fn uninstall_vars_blocking(reporter: &JobReporter, args: UninstallVarsArgs) -> R
 
     reporter.progress(100);
     reporter.log("UninstallVars completed".to_string());
+    Ok(())
+}
+
+pub async fn run_preview_uninstall_job(
+    state: AppState,
+    id: u64,
+    args: Option<Value>,
+) -> Result<(), String> {
+    let handle = Handle::current();
+    tokio::task::spawn_blocking(move || {
+        let reporter = JobReporter::new(state, id, handle);
+        let args = args.ok_or_else(|| "preview_uninstall args required".to_string())?;
+        let args: PreviewUninstallArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        preview_uninstall_blocking(&reporter, args)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn preview_uninstall_blocking(reporter: &JobReporter, args: PreviewUninstallArgs) -> Result<(), String> {
+    reporter.log("PreviewUninstall start".to_string());
+    reporter.progress(1);
+
+    let db_path = crate::exe_dir().join("varManager.db");
+    let requested_sample = args
+        .var_names
+        .iter()
+        .take(5)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    reporter.log(format!(
+        "PreviewUninstall args: include_implicated={}, requested_count={}, sample=[{}]",
+        args.include_implicated,
+        args.var_names.len(),
+        requested_sample
+    ));
+
+    let db = Db::open(&db_path)?;
+    db.ensure_schema()?;
+
+    let requested = args.var_names.clone();
+    let var_list = if args.include_implicated {
+        implicated_vars(db.connection(), args.var_names)?
+    } else {
+        args.var_names
+    };
+
+    // Calculate implicated vars (those not in the original request)
+    let requested_set: std::collections::HashSet<_> = requested.iter().cloned().collect();
+    let implicated: Vec<String> = var_list
+        .iter()
+        .filter(|v| !requested_set.contains(*v))
+        .cloned()
+        .collect();
+
+    reporter.log(format!(
+        "PreviewUninstall result: total={}, requested={}, implicated={}",
+        var_list.len(),
+        requested.len(),
+        implicated.len()
+    ));
+
+    reporter.set_result(
+        serde_json::to_value(PreviewUninstallResult {
+            var_list,
+            requested,
+            implicated,
+        })
+        .map_err(|err| err.to_string())?,
+    );
+
+    reporter.progress(100);
+    reporter.log("PreviewUninstall completed".to_string());
     Ok(())
 }
 

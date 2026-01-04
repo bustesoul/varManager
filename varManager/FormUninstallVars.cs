@@ -19,7 +19,8 @@ namespace varManager
         public string previewpicsDirName;
         public string deleVarsDirName;
         private VarManagerContext dbContext;
-        
+        public List<string> VarsToUninstall { get; set; } = new List<string>();
+
         public FormUninstallVars()
         {
             InitializeComponent();
@@ -36,6 +37,17 @@ namespace varManager
                     labelWarning.Text = $"Warning: The above VAR list will be Move to {deleVarsDirName} !";
                     break;
             }
+
+            // Load vars to uninstall into the grid
+            if (VarsToUninstall != null && VarsToUninstall.Count > 0)
+            {
+                var varsData = VarsToUninstall.Select(varName =>
+                    dbContext.VarsView.FirstOrDefault(v => v.VarName == varName)
+                ).Where(v => v != null).ToList();
+
+                dataGridViewVars.DataSource = varsData;
+            }
+
             toolStripComboBoxPreviewType.SelectedIndex = 0;
         }
 
