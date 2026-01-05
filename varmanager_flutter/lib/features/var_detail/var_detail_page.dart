@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
+import '../../core/backend/job_runner.dart';
 import '../../core/models/var_models.dart';
 import '../home/home_page.dart';
 
@@ -21,6 +22,12 @@ class VarDetailPage extends ConsumerWidget {
     final log = ref.read(jobLogProvider.notifier);
     await runner.runJob('vars_locate',
         args: {'var_name': varName}, onLog: log.addLine);
+  }
+
+  Future<void> _runJob(WidgetRef ref, String kind, Map<String, dynamic> args) async {
+    final runner = ref.read(jobRunnerProvider);
+    final log = ref.read(jobLogProvider.notifier);
+    await runner.runJob(kind, args: args, onLog: log.addLine);
   }
 
   @override
@@ -79,15 +86,47 @@ class VarDetailPage extends ConsumerWidget {
                   title: 'Dependencies',
                   child: Column(
                     children: detail.dependencies
-                        .map((dep) => ListTile(
-                              title: Text(dep.name),
-                              subtitle: Text(dep.resolved),
-                              tileColor: dep.missing
-                                  ? Colors.red.shade50
-                                  : dep.closest
-                                      ? Colors.orange.shade50
-                                      : null,
-                            ))
+                        .map((dep) {
+                      final resolved = dep.resolved;
+                      return ListTile(
+                        title: Text(dep.name),
+                        subtitle: Text(resolved),
+                        tileColor: dep.missing
+                            ? Colors.red.shade50
+                            : dep.closest
+                                ? Colors.orange.shade50
+                                : null,
+                        trailing: Wrap(
+                          spacing: 8,
+                          children: [
+                            if (dep.missing)
+                              TextButton(
+                                onPressed: () {
+                                  final search = dep.name.replaceAll('.latest', '.1');
+                                  _runJob(ref, 'open_url', {
+                                    'url':
+                                        'https://www.google.com/search?q=$search var',
+                                  });
+                                },
+                                child: const Text('Search'),
+                              )
+                            else
+                              TextButton(
+                                onPressed: () {
+                                  ref.read(varsQueryProvider.notifier).update(
+                                        (state) => state.copyWith(
+                                          page: 1,
+                                          search: resolved,
+                                        ),
+                                      );
+                                  Navigator.pop(context);
+                                },
+                                child: const Text('Select'),
+                              ),
+                          ],
+                        ),
+                      );
+                    })
                         .toList(),
                   ),
                 ),
@@ -96,7 +135,23 @@ class VarDetailPage extends ConsumerWidget {
                   title: 'Dependents',
                   child: Column(
                     children: detail.dependents
-                        .map((name) => ListTile(title: Text(name)))
+                        .map(
+                          (name) => ListTile(
+                            title: Text(name),
+                            trailing: TextButton(
+                              onPressed: () {
+                                ref.read(varsQueryProvider.notifier).update(
+                                      (state) => state.copyWith(
+                                        page: 1,
+                                        search: name,
+                                      ),
+                                    );
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Select'),
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
@@ -105,7 +160,22 @@ class VarDetailPage extends ConsumerWidget {
                   title: 'Save Dependencies',
                   child: Column(
                     children: detail.dependentSaves
-                        .map((name) => ListTile(title: Text(name)))
+                        .map(
+                          (name) => ListTile(
+                            title: Text(name),
+                            trailing: TextButton(
+                              onPressed: () {
+                                final path = name.startsWith('\\')
+                                    ? name.substring(1)
+                                    : name;
+                                _runJob(ref, 'vars_locate', {
+                                  'path': path.replaceAll('/', '\\'),
+                                });
+                              },
+                              child: const Text('Locate'),
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
