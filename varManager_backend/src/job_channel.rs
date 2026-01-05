@@ -61,7 +61,6 @@ impl JobReporter {
     /// Send a log line. Uses try_send - drops if channel is full.
     pub fn log(&self, msg: impl Into<String>) {
         let line = msg.into();
-        tracing::debug!(job_id = self.id, job_kind = %self.kind, line = %line, "job log");
         let _ = self.tx.try_send(JobEvent::Log {
             id: self.id,
             line,
@@ -70,7 +69,6 @@ impl JobReporter {
 
     /// Send progress update. Uses try_send - drops if channel is full (next update will arrive anyway).
     pub fn progress(&self, value: u8) {
-        tracing::debug!(job_id = self.id, job_kind = %self.kind, progress = value, "job progress");
         let _ = self.tx.try_send(JobEvent::Progress {
             id: self.id,
             value: value.min(100),
@@ -79,7 +77,6 @@ impl JobReporter {
 
     /// Set job result. Uses blocking_send - must succeed.
     pub fn set_result(&self, result: Value) {
-        tracing::debug!(job_id = self.id, job_kind = %self.kind, "job result set");
         let _ = self.tx.blocking_send(JobEvent::Result {
             id: self.id,
             result,

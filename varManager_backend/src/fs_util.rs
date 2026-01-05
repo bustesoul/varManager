@@ -12,11 +12,6 @@ pub fn is_symlink(path: &Path) -> bool {
 
 pub fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
     if !root.exists() {
-        tracing::debug!(
-            root = %root.display(),
-            recursive,
-            "collect_symlink_vars: root missing"
-        );
         return Vec::new();
     }
     let mut files = Vec::new();
@@ -39,13 +34,6 @@ pub fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
             }
         }
     }
-    tracing::debug!(
-        root = %root.display(),
-        recursive,
-        scanned,
-        found = files.len(),
-        "collect_symlink_vars"
-    );
     files
 }
 

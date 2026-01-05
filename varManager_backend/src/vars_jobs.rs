@@ -291,7 +291,7 @@ pub async fn run_preview_uninstall_job(
     .map_err(|err| err.to_string())?
 }
 
-fn preview_uninstall_blocking(_state: &AppState, reporter: &JobReporter, args: PreviewUninstallArgs) -> Result<(), String> {
+fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: PreviewUninstallArgs) -> Result<(), String> {
     let started = Instant::now();
     reporter.log("PreviewUninstall start".to_string());
     reporter.progress(1);
@@ -338,9 +338,30 @@ fn preview_uninstall_blocking(_state: &AppState, reporter: &JobReporter, args: P
     ));
     reporter.progress(60);
 
+    // Filter out uninstalled vars - only show installed ones
+    let (_, vampath) = crate::paths::config_paths(state)?;
+    let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
+    let installed_links = fs_util::collect_installed_links(&vampath);
+
+    let unfiltered_count = var_list.len();
+    let var_list_filtered: Vec<String> = var_list
+        .into_iter()
+        .filter(|name| installed_links.contains_key(name))
+        .collect();
+
+    let removed_count = unfiltered_count - var_list_filtered.len();
+    if removed_count > 0 {
+        reporter.log(format!(
+            "PreviewUninstall: removed {} uninstalled vars (before={}, after={})",
+            removed_count,
+            unfiltered_count,
+            var_list_filtered.len()
+        ));
+    }
+
     // Calculate implicated vars (those not in the original request)
     let requested_set: std::collections::HashSet<_> = requested.iter().cloned().collect();
-    let implicated: Vec<String> = var_list
+    let implicated: Vec<String> = var_list_filtered
         .iter()
         .filter(|v| !requested_set.contains(*v))
         .cloned()
@@ -348,14 +369,14 @@ fn preview_uninstall_blocking(_state: &AppState, reporter: &JobReporter, args: P
 
     reporter.log(format!(
         "PreviewUninstall result: total={}, requested={}, implicated={}",
-        var_list.len(),
+        var_list_filtered.len(),
         requested.len(),
         implicated.len()
     ));
 
     reporter.set_result(
         serde_json::to_value(PreviewUninstallResult {
-            var_list,
+            var_list: var_list_filtered,
             requested,
             implicated,
         })

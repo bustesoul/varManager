@@ -72,10 +72,6 @@ pub fn vars_dependencies(conn: &Connection, var_names: Vec<String>) -> Result<Ve
 }
 
 pub fn implicated_vars(conn: &Connection, var_names: Vec<String>) -> Result<Vec<String>, String> {
-    tracing::debug!(
-        requested_count = var_names.len(),
-        "implicated_vars: start"
-    );
     let mut varname_exist = Vec::new();
     let mut vars_processed = Vec::new();
     let mut implics = Vec::new();
@@ -105,10 +101,6 @@ pub fn implicated_vars(conn: &Connection, var_names: Vec<String>) -> Result<Vec<
             .into_iter()
             .map(|name| name.trim_end_matches('^').to_string())
             .collect::<Vec<_>>();
-        tracing::debug!(
-            resolved_count = cleaned.len(),
-            "implicated_vars: resolved"
-        );
         Ok(distinct(cleaned))
     }
 }
@@ -121,32 +113,12 @@ fn implicated_var(conn: &Connection, var_name: &str) -> Result<Vec<String>, Stri
         if is_latest {
             let latest = format!("{}.latest", base_without_version(var_name));
             let deps = list_dependents(conn, &[var_name, &latest])?;
-            tracing::debug!(
-                var_name = %var_name,
-                count,
-                is_latest,
-                latest = %latest,
-                dependent_count = deps.len(),
-                "implicated_var: dependents"
-            );
             varnames.extend(deps);
         } else {
             let deps = list_dependents(conn, &[var_name])?;
-            tracing::debug!(
-                var_name = %var_name,
-                count,
-                is_latest,
-                dependent_count = deps.len(),
-                "implicated_var: dependents"
-            );
             varnames.extend(deps);
         }
     } else {
-        tracing::debug!(
-            var_name = %var_name,
-            count,
-            "implicated_var: skip (multi-version)"
-        );
     }
     Ok(distinct(varnames))
 }
