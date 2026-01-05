@@ -49,16 +49,18 @@ pub fn run_downloader(state: &AppState, urls: &[String]) -> Result<(), String> {
 }
 
 pub fn start_vam(state: &AppState) -> Result<(), String> {
-    let vampath = state
+    let cfg = state
         .config
+        .read()
+        .map_err(|_| "config lock poisoned".to_string())?;
+    let vampath = cfg
         .vampath
         .as_ref()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let exec_name = state
-        .config
+    let exec_name = cfg
         .vam_exec
         .as_ref()
         .map(|s| s.trim().to_string())
@@ -86,8 +88,11 @@ pub fn start_vam(state: &AppState) -> Result<(), String> {
 }
 
 pub fn rescan_packages(state: &AppState) -> Result<bool, String> {
-    let vampath = state
+    let cfg = state
         .config
+        .read()
+        .map_err(|_| "config lock poisoned".to_string())?;
+    let vampath = cfg
         .vampath
         .as_ref()
         .map(|s| s.trim().to_string())
@@ -129,8 +134,11 @@ pub fn open_folder(path: &Path) -> Result<(), String> {
 }
 
 fn resolve_downloader_path(state: &AppState) -> PathBuf {
-    if let Some(path) = state
-        .config
+    let cfg = match state.config.read() {
+        Ok(cfg) => cfg,
+        Err(err) => err.into_inner(),
+    };
+    if let Some(path) = cfg
         .downloader_path
         .as_ref()
         .map(|s| s.trim())
@@ -146,8 +154,11 @@ fn resolve_downloader_path(state: &AppState) -> PathBuf {
 }
 
 fn resolve_downloader_save_path(state: &AppState) -> Result<PathBuf, String> {
-    if let Some(path) = state
+    let cfg = state
         .config
+        .read()
+        .map_err(|_| "config lock poisoned".to_string())?;
+    if let Some(path) = cfg
         .downloader_save_path
         .as_ref()
         .map(|s| s.trim())
@@ -157,14 +168,13 @@ fn resolve_downloader_save_path(state: &AppState) -> Result<PathBuf, String> {
         if candidate.is_absolute() {
             return Ok(candidate);
         }
-        if let Some(vampath) = state.config.vampath.as_ref() {
+        if let Some(vampath) = cfg.vampath.as_ref() {
             return Ok(PathBuf::from(vampath).join(candidate));
         }
         return Ok(exe_dir().join(candidate));
     }
 
-    let vampath = state
-        .config
+    let vampath = cfg
         .vampath
         .as_ref()
         .map(|s| s.trim().to_string())

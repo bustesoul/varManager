@@ -211,16 +211,12 @@ fn update_db_blocking(reporter: &JobReporter) -> Result<(), String> {
 }
 
 fn config_paths(state: &AppState) -> Result<(PathBuf, Option<PathBuf>), String> {
-    let varspath = state
+    let cfg = state
         .config
-        .varspath
-        .as_ref()
-        .and_then(|s| normalize_path(s));
-    let vampath = state
-        .config
-        .vampath
-        .as_ref()
-        .and_then(|s| normalize_path(s));
+        .read()
+        .map_err(|_| "config lock poisoned".to_string())?;
+    let varspath = cfg.varspath.as_ref().and_then(|s| normalize_path(s));
+    let vampath = cfg.vampath.as_ref().and_then(|s| normalize_path(s));
 
     let varspath = varspath.ok_or_else(|| "varspath is required in config.json".to_string())?;
     Ok((varspath, vampath))

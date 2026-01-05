@@ -130,26 +130,38 @@ Notes:
 
 ## Progress Tracking
 ### Milestones
-- [ ] App shell + theme + routing
-- [ ] Backend process manager + health check
-- [ ] Core list (vars) + filters + selection
-- [ ] Job runner + log panel
-- [ ] Settings (read/write config)
-- [ ] Missing vars flow
-- [ ] Scenes + analysis flows
-- [ ] Hub flow
+- [x] App shell + theme + routing
+- [x] Backend process manager + health check
+- [x] Core list (vars) + filters + selection
+- [x] Job runner + log panel
+- [x] Settings (read/write config)
+- [x] Missing vars flow
+- [x] Scenes + analysis flows
+- [x] Hub flow
 - [ ] Packaging + smoke tests
 
 ### Tracking Table
 | Area | Task | Status | Notes |
 | --- | --- | --- | --- |
-| App Shell | Theme + routing + layout | TODO | Material3 baseline |
-| Backend | Process manager + health | TODO | Start/stop flow |
-| Data | BackendClient + DTOs | TODO | Single base URL |
-| Home | Vars list + filters | TODO | Parity with WinForms |
-| Jobs | Update DB / install / uninstall | TODO | Job flow standard |
-| Scenes | List + actions | TODO | |
-| Hub | Browse + download | TODO | |
-| Missing Vars | Link map + actions | TODO | |
-| Settings | Config read/write | TODO | |
+| App Shell | Theme + routing + layout | DONE | Material3 baseline + rail |
+| Backend | Process manager + health | DONE | Start/stop flow |
+| Data | BackendClient + DTOs | DONE | Single base URL |
+| Home | Vars list + filters | PARTIAL | core list done; preview panel/filter/nav missing |
+| Jobs | Update DB / install / uninstall | DONE | job flow + logs |
+| Scenes | List + actions | PARTIAL | basic list/actions; layout/filters/paging gaps |
+| Hub | Browse + download | PARTIAL | basic list/actions; hub_info/filter/paging gaps |
+| Missing Vars | Link map + actions | PARTIAL | core flow; ignore-version/row nav gaps |
+| Settings | Config read/write | DONE | runtime update |
 | Packaging | Zip layout + smoke test | TODO | |
+
+### Parity TODO (WinForms -> Flutter)
+- Home: preview panel (thumbnails + large preview) + nav (first/prev/next/last/page), PreviewType/Loadable filters, preview install/uninstall button.
+- Home: Fix Preview entry, column-level filters (WinForms DgvFilter), full pagination/sort controls, filtered-missing scope should use full filtered set (not current page only).
+- Scenes: three-column hide/normal/fav layout with drag sorting, location filter, creator dropdown linkage, reset filters, full paging + cache preview handling.
+- Hub: hub_info-driven filter lists, InRepository status calculation, full sort/paging controls (first/last + page counts), hub item cards with image + type/user quick filters.
+- Analysis: atom tree/list selection (tri-state tree, listbox) to replace manual atom name/path input.
+- Prepare Saves: save tree view (Scenes/Appearance/Presets) + selectable nodes, output folder picker, strict empty-dir validation.
+- Uninstall Vars: preview image list + type filter + navigation + click-to-preview, dependency grid for selected vars.
+- PackSwitch: existing switch list + current active indicator, input validation before add/delete/rename/set.
+- Missing Vars: ignore-version filter, row navigator/data-grid parity, download status/detail view, save/load map with file picker.
+- Var Detail: dependency/dependent actions (open url/locate/select in list), dependent save locate actions.

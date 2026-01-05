@@ -1,19 +1,21 @@
 use axum::{
+    body::Body,
     extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+    routing::{get, post, put},
     Json, Router,
 };
+use rusqlite::{params_from_iter, types::Value as SqlValue};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
-    path::PathBuf,
+    path::{Component, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc,
+        Arc, RwLock,
     },
 };
 use tokio::sync::{oneshot, Mutex, Semaphore};
@@ -77,11 +79,11 @@ impl Default for Config {
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    config: Arc<Config>,
+    config: Arc<RwLock<Config>>,
     shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     jobs: Arc<Mutex<HashMap<u64, Job>>>,
     job_counter: Arc<AtomicU64>,
-    job_semaphore: Arc<Semaphore>,
+    job_semaphore: Arc<RwLock<Arc<Semaphore>>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -169,6 +171,49 @@ struct JobLogsQuery {
     from: Option<usize>,
 }
 
+#[derive(Deserialize)]
+struct VarsQuery {
+    page: Option<u32>,
+    per_page: Option<u32>,
+    search: Option<String>,
+    creator: Option<String>,
+    installed: Option<String>,
+    sort: Option<String>,
+    order: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ScenesQuery {
+    page: Option<u32>,
+    per_page: Option<u32>,
+    search: Option<String>,
+    creator: Option<String>,
+    category: Option<String>,
+    installed: Option<String>,
+    hide_fav: Option<String>,
+    sort: Option<String>,
+    order: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PreviewQuery {
+    root: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateConfigRequest {
+    listen_host: Option<String>,
+    listen_port: Option<u16>,
+    log_level: Option<String>,
+    job_concurrency: Option<usize>,
+    varspath: Option<String>,
+    vampath: Option<String>,
+    vam_exec: Option<String>,
+    downloader_path: Option<String>,
+    downloader_save_path: Option<String>,
+}
+
 #[derive(Serialize)]
 struct JobLogsResponse {
     id: u64,
@@ -187,6 +232,116 @@ struct JobResultResponse {
 #[derive(Serialize)]
 struct ErrorResponse {
     error: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct VarListItem {
+    var_name: String,
+    creator_name: Option<String>,
+    package_name: Option<String>,
+    meta_date: Option<String>,
+    var_date: Option<String>,
+    version: Option<String>,
+    description: Option<String>,
+    morph: Option<i64>,
+    cloth: Option<i64>,
+    hair: Option<i64>,
+    skin: Option<i64>,
+    pose: Option<i64>,
+    scene: Option<i64>,
+    script: Option<i64>,
+    plugin: Option<i64>,
+    asset: Option<i64>,
+    texture: Option<i64>,
+    look: Option<i64>,
+    sub_scene: Option<i64>,
+    appearance: Option<i64>,
+    dependency_cnt: Option<i64>,
+    fsize: Option<f64>,
+    installed: bool,
+    disabled: bool,
+}
+
+#[derive(Serialize)]
+struct VarsListResponse {
+    items: Vec<VarListItem>,
+    page: u32,
+    per_page: u32,
+    total: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct SceneListItem {
+    var_name: String,
+    atom_type: String,
+    preview_pic: Option<String>,
+    scene_path: String,
+    is_preset: bool,
+    is_loadable: bool,
+    creator_name: Option<String>,
+    package_name: Option<String>,
+    meta_date: Option<String>,
+    var_date: Option<String>,
+    version: Option<String>,
+    installed: bool,
+    disabled: bool,
+    hide: bool,
+    fav: bool,
+    hide_fav: i32,
+}
+
+#[derive(Serialize)]
+struct ScenesListResponse {
+    items: Vec<SceneListItem>,
+    page: u32,
+    per_page: u32,
+    total: u64,
+}
+
+#[derive(Serialize)]
+struct CreatorsResponse {
+    creators: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct StatsResponse {
+    vars_total: u64,
+    vars_installed: u64,
+    vars_disabled: u64,
+    scenes_total: u64,
+    missing_deps: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct DependencyStatus {
+    name: String,
+    resolved: String,
+    missing: bool,
+    closest: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct ScenePreviewItem {
+    atom_type: String,
+    preview_pic: Option<String>,
+    scene_path: String,
+    is_preset: bool,
+    is_loadable: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct VarDetailResponse {
+    var_info: VarListItem,
+    dependencies: Vec<DependencyStatus>,
+    dependents: Vec<String>,
+    dependent_saves: Vec<String>,
+    scenes: Vec<ScenePreviewItem>,
 }
 
 #[tokio::main]
@@ -223,16 +378,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let state = AppState {
-        config: Arc::new(config.clone()),
+        config: Arc::new(RwLock::new(config.clone())),
         shutdown_tx: Arc::new(Mutex::new(Some(shutdown_tx))),
         jobs: Arc::new(Mutex::new(HashMap::new())),
         job_counter: Arc::new(AtomicU64::new(1)),
-        job_semaphore: Arc::new(Semaphore::new(config.job_concurrency)),
+        job_semaphore: Arc::new(RwLock::new(Arc::new(Semaphore::new(config.job_concurrency)))),
     };
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/config", get(get_config))
+        .route("/config", put(update_config))
+        .route("/vars", get(list_vars))
+        .route("/vars/{name}", get(get_var_detail))
+        .route("/scenes", get(list_scenes))
+        .route("/creators", get(list_creators))
+        .route("/stats", get(get_stats))
+        .route("/preview", get(get_preview))
         .route("/jobs", post(start_job))
         .route("/jobs/{id}", get(get_job))
         .route("/jobs/{id}/logs", get(get_job_logs))
@@ -256,7 +418,14 @@ async fn health() -> impl IntoResponse {
 }
 
 async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
-    Json(state.config.as_ref().clone())
+    match read_config(&state) {
+        Ok(cfg) => Json(cfg).into_response(),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+            .into_response(),
+    }
 }
 
 async fn shutdown(State(state): State<AppState>) -> impl IntoResponse {
@@ -369,6 +538,969 @@ async fn get_job_result(
     Ok(Json(JobResultResponse { id, result }))
 }
 
+fn read_config(state: &AppState) -> Result<Config, String> {
+    let guard = state
+        .config
+        .read()
+        .map_err(|_| "config lock poisoned".to_string())?;
+    Ok(guard.clone())
+}
+
+fn normalize_optional(value: Option<String>) -> Option<String> {
+    value.and_then(|raw| {
+        let trimmed = raw.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
+
+fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Config, String> {
+    let mut next = current.clone();
+    if let Some(host) = req.listen_host {
+        let trimmed = host.trim();
+        if trimmed.is_empty() {
+            return Err("listen_host cannot be empty".to_string());
+        }
+        next.listen_host = trimmed.to_string();
+    }
+    if let Some(port) = req.listen_port {
+        if !(1..=65535).contains(&port) {
+            return Err("listen_port must be between 1 and 65535".to_string());
+        }
+        next.listen_port = port;
+    }
+    if let Some(level) = req.log_level {
+        let trimmed = level.trim();
+        if trimmed.is_empty() {
+            return Err("log_level cannot be empty".to_string());
+        }
+        next.log_level = trimmed.to_string();
+    }
+    if let Some(concurrency) = req.job_concurrency {
+        if concurrency == 0 {
+            return Err("job_concurrency must be >= 1".to_string());
+        }
+        next.job_concurrency = concurrency;
+    }
+    if req.varspath.is_some() {
+        next.varspath = normalize_optional(req.varspath);
+    }
+    if req.vampath.is_some() {
+        next.vampath = normalize_optional(req.vampath);
+    }
+    if req.vam_exec.is_some() {
+        next.vam_exec = normalize_optional(req.vam_exec);
+    }
+    if req.downloader_path.is_some() {
+        next.downloader_path = normalize_optional(req.downloader_path);
+    }
+    if req.downloader_save_path.is_some() {
+        next.downloader_save_path = normalize_optional(req.downloader_save_path);
+    }
+    Ok(next)
+}
+
+async fn update_config(
+    State(state): State<AppState>,
+    Json(req): Json<UpdateConfigRequest>,
+) -> Result<Json<Config>, (StatusCode, Json<ErrorResponse>)> {
+    let current = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let next = apply_config_update(&current, req).map_err(|err| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let path = config_path();
+    let contents = serde_json::to_string_pretty(&next).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+    std::fs::write(&path, contents).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+
+    {
+        let mut guard = state
+            .config
+            .write()
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "config lock poisoned".to_string(),
+                    }),
+                )
+            })?;
+        *guard = next.clone();
+    }
+    {
+        let mut guard = state
+            .job_semaphore
+            .write()
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "semaphore lock poisoned".to_string(),
+                    }),
+                )
+            })?;
+        *guard = Arc::new(Semaphore::new(next.job_concurrency));
+    }
+
+    Ok(Json(next))
+}
+
+async fn list_vars(
+    State(state): State<AppState>,
+    Query(query): Query<VarsQuery>,
+) -> Result<Json<VarsListResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let _cfg = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = ((page - 1) * per_page) as i64;
+
+    let mut conditions = Vec::new();
+    let mut params: Vec<SqlValue> = Vec::new();
+
+    if let Some(creator) = query.creator.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        conditions.push("v.creatorName = ?".to_string());
+        params.push(SqlValue::from(creator.to_string()));
+    }
+    if let Some(search) = query.search.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        conditions.push("(v.varName LIKE ? OR v.packageName LIKE ?)".to_string());
+        let like = format!("%{}%", search);
+        params.push(SqlValue::from(like.clone()));
+        params.push(SqlValue::from(like));
+    }
+    if let Some(installed) = query.installed.as_ref().map(|s| s.to_lowercase()) {
+        match installed.as_str() {
+            "true" | "1" | "yes" => {
+                conditions.push("i.installed = 1".to_string());
+            }
+            "false" | "0" | "no" => {
+                conditions.push("(i.installed IS NULL OR i.installed = 0)".to_string());
+            }
+            _ => {}
+        }
+    }
+
+    let where_clause = if conditions.is_empty() {
+        "".to_string()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let sort = query.sort.as_deref().unwrap_or("meta_date");
+    let order = query.order.as_deref().unwrap_or("desc");
+    let sort_col = match sort {
+        "var_name" => "v.varName",
+        "creator" => "v.creatorName",
+        "package" => "v.packageName",
+        "var_date" => "v.varDate",
+        "size" => "v.fsize",
+        _ => "v.metaDate",
+    };
+    let order_sql = if order.eq_ignore_ascii_case("asc") {
+        "ASC"
+    } else {
+        "DESC"
+    };
+
+    let count_sql = format!(
+        "SELECT COUNT(1) FROM vars v LEFT JOIN installStatus i ON v.varName = i.varName {}",
+        where_clause
+    );
+    let total: u64 = db
+        .connection()
+        .query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+
+    let mut list_params = params.clone();
+    list_params.push(SqlValue::from(per_page as i64));
+    list_params.push(SqlValue::from(offset));
+    let sql = format!(
+        "SELECT v.varName, v.creatorName, v.packageName, v.metaDate, v.varDate, v.version, v.description,
+                v.morph, v.cloth, v.hair, v.skin, v.pose, v.scene, v.script, v.plugin, v.asset, v.texture,
+                v.look, v.subScene, v.appearance, v.dependencyCnt, v.fsize,
+                COALESCE(i.installed, 0), COALESCE(i.disabled, 0)
+         FROM vars v
+         LEFT JOIN installStatus i ON v.varName = i.varName
+         {}
+         ORDER BY {} {}
+         LIMIT ? OFFSET ?",
+        where_clause, sort_col, order_sql
+    );
+
+    let mut stmt = db.connection().prepare(&sql).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+    let rows = stmt
+        .query_map(params_from_iter(list_params.iter()), |row| {
+            Ok(VarListItem {
+                var_name: row.get(0)?,
+                creator_name: row.get(1)?,
+                package_name: row.get(2)?,
+                meta_date: row.get(3)?,
+                var_date: row.get(4)?,
+                version: row.get(5)?,
+                description: row.get(6)?,
+                morph: row.get(7)?,
+                cloth: row.get(8)?,
+                hair: row.get(9)?,
+                skin: row.get(10)?,
+                pose: row.get(11)?,
+                scene: row.get(12)?,
+                script: row.get(13)?,
+                plugin: row.get(14)?,
+                asset: row.get(15)?,
+                texture: row.get(16)?,
+                look: row.get(17)?,
+                sub_scene: row.get(18)?,
+                appearance: row.get(19)?,
+                dependency_cnt: row.get(20)?,
+                fsize: row.get(21)?,
+                installed: row.get::<_, i64>(22)? != 0,
+                disabled: row.get::<_, i64>(23)? != 0,
+            })
+        })
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?);
+    }
+
+    Ok(Json(VarsListResponse {
+        items,
+        page,
+        per_page,
+        total,
+    }))
+}
+
+async fn get_var_detail(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<VarDetailResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let _cfg = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let mut stmt = db.connection().prepare(
+        "SELECT v.varName, v.creatorName, v.packageName, v.metaDate, v.varDate, v.version, v.description,
+                v.morph, v.cloth, v.hair, v.skin, v.pose, v.scene, v.script, v.plugin, v.asset, v.texture,
+                v.look, v.subScene, v.appearance, v.dependencyCnt, v.fsize,
+                COALESCE(i.installed, 0), COALESCE(i.disabled, 0)
+         FROM vars v
+         LEFT JOIN installStatus i ON v.varName = i.varName
+         WHERE v.varName = ?1
+         LIMIT 1",
+    ).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err.to_string() }),
+        )
+    })?;
+
+    let var_info = stmt
+        .query_row([&name], |row| {
+            Ok(VarListItem {
+                var_name: row.get(0)?,
+                creator_name: row.get(1)?,
+                package_name: row.get(2)?,
+                meta_date: row.get(3)?,
+                var_date: row.get(4)?,
+                version: row.get(5)?,
+                description: row.get(6)?,
+                morph: row.get(7)?,
+                cloth: row.get(8)?,
+                hair: row.get(9)?,
+                skin: row.get(10)?,
+                pose: row.get(11)?,
+                scene: row.get(12)?,
+                script: row.get(13)?,
+                plugin: row.get(14)?,
+                asset: row.get(15)?,
+                texture: row.get(16)?,
+                look: row.get(17)?,
+                sub_scene: row.get(18)?,
+                appearance: row.get(19)?,
+                dependency_cnt: row.get(20)?,
+                fsize: row.get(21)?,
+                installed: row.get::<_, i64>(22)? != 0,
+                disabled: row.get::<_, i64>(23)? != 0,
+            })
+        })
+        .map_err(|err| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: format!("var not found: {}", err),
+                }),
+            )
+        })?;
+
+    let dependencies = list_dependencies_with_status(db.connection(), &name)
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: err }),
+            )
+        })?;
+    let dependents = list_dependents(db.connection(), &name).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let dependent_saves = list_dependent_saves(db.connection(), &name).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let scenes = list_var_scenes(db.connection(), &name).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    Ok(Json(VarDetailResponse {
+        var_info,
+        dependencies,
+        dependents,
+        dependent_saves,
+        scenes,
+    }))
+}
+
+async fn list_scenes(
+    State(state): State<AppState>,
+    Query(query): Query<ScenesQuery>,
+) -> Result<Json<ScenesListResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let _cfg = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(50).clamp(1, 200);
+    let offset = ((page - 1) * per_page) as i64;
+
+    let mut conditions = Vec::new();
+    let mut params: Vec<SqlValue> = Vec::new();
+
+    if let Some(category) = query.category.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        conditions.push("s.atomType = ?".to_string());
+        params.push(SqlValue::from(category.to_string()));
+    }
+    if let Some(creator) = query.creator.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        conditions.push("v.creatorName = ?".to_string());
+        params.push(SqlValue::from(creator.to_string()));
+    }
+    if let Some(search) = query.search.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        conditions.push("(s.scenePath LIKE ? OR v.varName LIKE ?)".to_string());
+        let like = format!("%{}%", search);
+        params.push(SqlValue::from(like.clone()));
+        params.push(SqlValue::from(like));
+    }
+    if let Some(installed) = query.installed.as_ref().map(|s| s.to_lowercase()) {
+        match installed.as_str() {
+            "true" | "1" | "yes" => conditions.push("i.installed = 1".to_string()),
+            "false" | "0" | "no" => {
+                conditions.push("(i.installed IS NULL OR i.installed = 0)".to_string())
+            }
+            _ => {}
+        }
+    }
+    if let Some(hide_fav) = query.hide_fav.as_ref().map(|s| s.to_lowercase()) {
+        let mut flags = Vec::new();
+        for part in hide_fav.split(',') {
+            let value = part.trim();
+            if value == "hide" {
+                flags.push("h.hide = 1".to_string());
+            } else if value == "fav" {
+                flags.push("h.fav = 1".to_string());
+            } else if value == "normal" {
+                flags.push("(h.hide IS NULL OR h.hide = 0) AND (h.fav IS NULL OR h.fav = 0)".to_string());
+            }
+        }
+        if !flags.is_empty() {
+            conditions.push(format!("({})", flags.join(" OR ")));
+        }
+    }
+
+    let where_clause = if conditions.is_empty() {
+        "".to_string()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let sort = query.sort.as_deref().unwrap_or("var_date");
+    let order = query.order.as_deref().unwrap_or("desc");
+    let sort_col = match sort {
+        "var_name" => "v.varName",
+        "scene_name" => "s.scenePath",
+        "meta_date" => "v.metaDate",
+        _ => "v.varDate",
+    };
+    let order_sql = if order.eq_ignore_ascii_case("asc") {
+        "ASC"
+    } else {
+        "DESC"
+    };
+
+    let count_sql = format!(
+        "SELECT COUNT(1)
+         FROM scenes s
+         LEFT JOIN vars v ON s.varName = v.varName
+         LEFT JOIN installStatus i ON s.varName = i.varName
+         LEFT JOIN HideFav h ON s.varName = h.varName
+         {}",
+        where_clause
+    );
+    let total: u64 = db
+        .connection()
+        .query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+
+    let mut list_params = params.clone();
+    list_params.push(SqlValue::from(per_page as i64));
+    list_params.push(SqlValue::from(offset));
+
+    let sql = format!(
+        "SELECT s.varName, s.atomType, s.previewPic, s.scenePath, s.isPreset, s.isLoadable,
+                v.creatorName, v.packageName, v.metaDate, v.varDate, v.version,
+                COALESCE(i.installed, 0), COALESCE(i.disabled, 0),
+                COALESCE(h.hide, 0), COALESCE(h.fav, 0)
+         FROM scenes s
+         LEFT JOIN vars v ON s.varName = v.varName
+         LEFT JOIN installStatus i ON s.varName = i.varName
+         LEFT JOIN HideFav h ON s.varName = h.varName
+         {}
+         ORDER BY {} {}
+         LIMIT ? OFFSET ?",
+        where_clause, sort_col, order_sql
+    );
+    let mut stmt = db.connection().prepare(&sql).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+    let rows = stmt
+        .query_map(params_from_iter(list_params.iter()), |row| {
+            let hide: i64 = row.get(13)?;
+            let fav: i64 = row.get(14)?;
+            let hide_fav = if hide != 0 { -1 } else if fav != 0 { 1 } else { 0 };
+            Ok(SceneListItem {
+                var_name: row.get(0)?,
+                atom_type: row.get(1)?,
+                preview_pic: row.get(2)?,
+                scene_path: row.get(3)?,
+                is_preset: row.get::<_, i64>(4)? != 0,
+                is_loadable: row.get::<_, i64>(5)? != 0,
+                creator_name: row.get(6)?,
+                package_name: row.get(7)?,
+                meta_date: row.get(8)?,
+                var_date: row.get(9)?,
+                version: row.get(10)?,
+                installed: row.get::<_, i64>(11)? != 0,
+                disabled: row.get::<_, i64>(12)? != 0,
+                hide: hide != 0,
+                fav: fav != 0,
+                hide_fav,
+            })
+        })
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?);
+    }
+
+    Ok(Json(ScenesListResponse {
+        items,
+        page,
+        per_page,
+        total,
+    }))
+}
+
+async fn list_creators(
+    State(state): State<AppState>,
+) -> Result<Json<CreatorsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let _cfg = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let mut stmt = db
+        .connection()
+        .prepare(
+            "SELECT DISTINCT creatorName FROM vars WHERE creatorName IS NOT NULL AND creatorName <> '' ORDER BY creatorName",
+        )
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    let mut creators = Vec::new();
+    for row in rows {
+        creators.push(row.map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?);
+    }
+
+    Ok(Json(CreatorsResponse { creators }))
+}
+
+async fn get_stats(
+    State(state): State<AppState>,
+) -> Result<Json<StatsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let _cfg = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let vars_total: u64 = db
+        .connection()
+        .query_row("SELECT COUNT(1) FROM vars", [], |row| row.get(0))
+        .unwrap_or(0);
+    let vars_installed: u64 = db
+        .connection()
+        .query_row(
+            "SELECT COUNT(1) FROM installStatus WHERE installed = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let vars_disabled: u64 = db
+        .connection()
+        .query_row(
+            "SELECT COUNT(1) FROM installStatus WHERE disabled = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let scenes_total: u64 = db
+        .connection()
+        .query_row("SELECT COUNT(1) FROM scenes", [], |row| row.get(0))
+        .unwrap_or(0);
+    let missing_deps: u64 = db
+        .connection()
+        .query_row(
+            "SELECT COUNT(DISTINCT d.dependency)
+             FROM dependencies d
+             LEFT JOIN vars v ON d.dependency = v.varName
+             WHERE v.varName IS NULL",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    Ok(Json(StatsResponse {
+        vars_total,
+        vars_installed,
+        vars_disabled,
+        scenes_total,
+        missing_deps,
+    }))
+}
+
+async fn get_preview(
+    State(state): State<AppState>,
+    Query(query): Query<PreviewQuery>,
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    let cfg = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let base = match query.root.as_str() {
+        "varspath" => cfg
+            .varspath
+            .as_ref()
+            .map(PathBuf::from)
+            .ok_or_else(|| "varspath not set".to_string()),
+        "vampath" => cfg
+            .vampath
+            .as_ref()
+            .map(PathBuf::from)
+            .ok_or_else(|| "vampath not set".to_string()),
+        "cache" => Ok(exe_dir().join("Cache")),
+        _ => Err("invalid preview root".to_string()),
+    }
+    .map_err(|err| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let joined = safe_join(&base, &query.path).map_err(|err| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let bytes = std::fs::read(&joined).map_err(|err| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+    let content_type = match joined.extension().and_then(|s| s.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("png") => "image/png",
+        Some(ext) if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") => "image/jpeg",
+        Some(ext) if ext.eq_ignore_ascii_case("gif") => "image/gif",
+        _ => "application/octet-stream",
+    };
+    let resp = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .body(Body::from(bytes))
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    Ok(resp)
+}
+
+fn safe_join(base: &PathBuf, relative: &str) -> Result<PathBuf, String> {
+    let rel = PathBuf::from(relative);
+    for comp in rel.components() {
+        match comp {
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
+                return Err("invalid preview path".to_string())
+            }
+            Component::CurDir | Component::Normal(_) => {}
+        }
+    }
+    Ok(base.join(rel))
+}
+
+fn list_dependencies_with_status(
+    conn: &rusqlite::Connection,
+    var_name: &str,
+) -> Result<Vec<DependencyStatus>, String> {
+    let mut stmt = conn
+        .prepare("SELECT dependency FROM dependencies WHERE varName = ?1")
+        .map_err(|err| err.to_string())?;
+    let rows = stmt
+        .query_map([var_name], |row| row.get::<_, Option<String>>(0))
+        .map_err(|err| err.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        if let Some(dep) = row.map_err(|err| err.to_string())? {
+            let mut resolved = crate::var_logic::resolve_var_exist_name(conn, &dep)?;
+            let mut closest = false;
+            if resolved.ends_with('$') {
+                closest = true;
+                resolved = resolved.trim_end_matches('$').to_string();
+            }
+            let missing = resolved == "missing";
+            result.push(DependencyStatus {
+                name: dep,
+                resolved,
+                missing,
+                closest,
+            });
+        }
+    }
+    Ok(result)
+}
+
+fn list_dependents(conn: &rusqlite::Connection, var_name: &str) -> Result<Vec<String>, String> {
+    let mut names = Vec::new();
+    let targets = dependency_targets(conn, var_name)?;
+    let mut stmt = conn
+        .prepare("SELECT varName FROM dependencies WHERE dependency = ?1")
+        .map_err(|err| err.to_string())?;
+    for dep in targets {
+        let rows = stmt
+            .query_map([dep], |row| row.get::<_, Option<String>>(0))
+            .map_err(|err| err.to_string())?;
+        for row in rows {
+            if let Some(name) = row.map_err(|err| err.to_string())? {
+                names.push(name);
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
+fn list_dependent_saves(
+    conn: &rusqlite::Connection,
+    var_name: &str,
+) -> Result<Vec<String>, String> {
+    let mut names = Vec::new();
+    let targets = dependency_targets(conn, var_name)?;
+    let mut stmt = conn
+        .prepare("SELECT SavePath FROM savedepens WHERE dependency = ?1")
+        .map_err(|err| err.to_string())?;
+    for dep in targets {
+        let rows = stmt
+            .query_map([dep], |row| row.get::<_, Option<String>>(0))
+            .map_err(|err| err.to_string())?;
+        for row in rows {
+            if let Some(name) = row.map_err(|err| err.to_string())? {
+                names.push(name);
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
+fn list_var_scenes(
+    conn: &rusqlite::Connection,
+    var_name: &str,
+) -> Result<Vec<ScenePreviewItem>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT atomType, previewPic, scenePath, isPreset, isLoadable FROM scenes WHERE varName = ?1",
+        )
+        .map_err(|err| err.to_string())?;
+    let rows = stmt
+        .query_map([var_name], |row| {
+            Ok(ScenePreviewItem {
+                atom_type: row.get(0)?,
+                preview_pic: row.get(1)?,
+                scene_path: row.get(2)?,
+                is_preset: row.get::<_, i64>(3)? != 0,
+                is_loadable: row.get::<_, i64>(4)? != 0,
+            })
+        })
+        .map_err(|err| err.to_string())?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|err| err.to_string())?);
+    }
+    Ok(items)
+}
+
+fn dependency_targets(conn: &rusqlite::Connection, var_name: &str) -> Result<Vec<String>, String> {
+    let parts: Vec<&str> = var_name.split('.').collect();
+    if parts.len() != 3 {
+        return Ok(vec![var_name.to_string()]);
+    }
+    let is_latest = is_var_latest(conn, parts[0], parts[1], parts[2])?;
+    let mut targets = vec![var_name.to_string()];
+    if is_latest {
+        targets.push(format!("{}.{}.latest", parts[0], parts[1]));
+    }
+    Ok(targets)
+}
+
+fn is_var_latest(
+    conn: &rusqlite::Connection,
+    creator: &str,
+    package: &str,
+    version: &str,
+) -> Result<bool, String> {
+    let current: i64 = match version.parse() {
+        Ok(ver) => ver,
+        Err(_) => return Ok(true),
+    };
+    let mut stmt = conn
+        .prepare("SELECT version FROM vars WHERE creatorName = ?1 AND packageName = ?2")
+        .map_err(|err| err.to_string())?;
+    let rows = stmt
+        .query_map([creator, package], |row| row.get::<_, Option<String>>(0))
+        .map_err(|err| err.to_string())?;
+    let mut max_ver: Option<i64> = None;
+    for row in rows {
+        if let Some(ver) = row.map_err(|err| err.to_string())? {
+            if let Ok(parsed) = ver.parse::<i64>() {
+                if max_ver.map(|cur| parsed > cur).unwrap_or(true) {
+                    max_ver = Some(parsed);
+                }
+            }
+        }
+    }
+    Ok(max_ver.map(|max| current >= max).unwrap_or(true))
+}
+
 async fn shutdown_signal(mut rx: oneshot::Receiver<()>) {
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::select! {
@@ -406,7 +1538,11 @@ pub(crate) fn exe_dir() -> PathBuf {
 
 fn spawn_job(state: AppState, id: u64, kind: String, args: Option<Value>) {
     tokio::spawn(async move {
-        let permit = state.job_semaphore.acquire().await;
+        let semaphore = match state.job_semaphore.read() {
+            Ok(guard) => guard.clone(),
+            Err(err) => err.into_inner().clone(),
+        };
+        let permit = semaphore.acquire().await;
         if permit.is_err() {
             job_fail(&state, id, "failed to acquire job slot".to_string()).await;
             return;
