@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class JobLogController extends StateNotifier<List<String>> {
-  JobLogController() : super(const []);
+class JobLogController extends Notifier<List<String>> {
+  @override
+  List<String> build() => const [];
 
   void addLine(String line) {
     final next = [...state, line];
@@ -29,6 +30,6 @@ class JobLogController extends StateNotifier<List<String>> {
   }
 }
 
-final jobLogProvider = StateNotifierProvider<JobLogController, List<String>>(
-  (ref) => JobLogController(),
+final jobLogProvider = NotifierProvider<JobLogController, List<String>>(
+  JobLogController.new,
 );

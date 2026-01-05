@@ -7,18 +7,35 @@ import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/backend/job_runner.dart';
 import '../../core/backend/query_params.dart';
+import '../../core/models/extra_models.dart';
 import '../../core/models/job_models.dart';
 import '../../core/models/var_models.dart';
 import '../../core/utils/debounce.dart';
 import '../missing_vars/missing_vars_page.dart';
-import '../packswitch/packswitch_page.dart';
 import '../prepare_saves/prepare_saves_page.dart';
 import '../uninstall_vars/uninstall_vars_page.dart';
 import '../var_detail/var_detail_page.dart';
 
-final varsQueryProvider = StateProvider<VarsQueryParams>((ref) {
-  return VarsQueryParams();
-});
+class VarsQueryNotifier extends Notifier<VarsQueryParams> {
+  @override
+  VarsQueryParams build() => VarsQueryParams();
+
+  void update(VarsQueryParams Function(VarsQueryParams) updater) {
+    state = updater(state);
+  }
+
+  void set(VarsQueryParams value) {
+    state = value;
+  }
+
+  void reset() {
+    state = VarsQueryParams();
+  }
+}
+
+final varsQueryProvider = NotifierProvider<VarsQueryNotifier, VarsQueryParams>(
+  VarsQueryNotifier.new,
+);
 
 final varsListProvider = FutureProvider<VarsListResponse>((ref) async {
   final client = ref.watch(backendClientProvider);
@@ -31,9 +48,39 @@ final creatorsProvider = FutureProvider<List<String>>((ref) async {
   return client.listCreators();
 });
 
-final selectedVarsProvider = StateProvider<Set<String>>((ref) {
-  return <String>{};
-});
+class SelectedVarsNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => <String>{};
+
+  void setSelection(Set<String> value) {
+    state = value;
+  }
+
+  void clear() {
+    state = <String>{};
+  }
+}
+
+final selectedVarsProvider = NotifierProvider<SelectedVarsNotifier, Set<String>>(
+  SelectedVarsNotifier.new,
+);
+
+class FocusedVarNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void setFocused(String? value) {
+    state = value;
+  }
+
+  void clear() {
+    state = null;
+  }
+}
+
+final focusedVarProvider = NotifierProvider<FocusedVarNotifier, String?>(
+  FocusedVarNotifier.new,
+);
 
 class PreviewItem {
   PreviewItem({
@@ -56,32 +103,28 @@ class PreviewItem {
 }
 
 final previewItemsProvider = FutureProvider<List<PreviewItem>>((ref) async {
-  final selected = ref.watch(selectedVarsProvider);
-  if (selected.isEmpty) {
+  final focusedVar = ref.watch(focusedVarProvider);
+  if (focusedVar == null) {
     return [];
   }
   final client = ref.watch(backendClientProvider);
-  final futures = selected.map((name) async {
-    try {
-      final detail = await client.getVarDetail(name);
-      final installed = detail.varInfo.installed;
-      return detail.scenes
-          .map((scene) => PreviewItem(
-                varName: detail.varInfo.varName,
-                atomType: scene.atomType,
-                previewPic: scene.previewPic,
-                scenePath: scene.scenePath,
-                isPreset: scene.isPreset,
-                isLoadable: scene.isLoadable,
-                installed: installed,
-              ))
-          .toList();
-    } catch (_) {
-      return <PreviewItem>[];
-    }
-  }).toList();
-  final results = await Future.wait(futures);
-  return results.expand((items) => items).toList();
+  try {
+    final detail = await client.getVarDetail(focusedVar);
+    final installed = detail.varInfo.installed;
+    return detail.scenes
+        .map((scene) => PreviewItem(
+              varName: detail.varInfo.varName,
+              atomType: scene.atomType,
+              previewPic: scene.previewPic,
+              scenePath: scene.scenePath,
+              isPreset: scene.isPreset,
+              isLoadable: scene.isLoadable,
+              installed: installed,
+            ))
+        .toList();
+  } catch (_) {
+    return <PreviewItem>[];
+  }
 });
 
 class HomePage extends ConsumerStatefulWidget {
@@ -107,6 +150,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   int _previewPage = 1;
   int? _previewSelectedIndex;
 
+  // PackSwitch state
+  PackSwitchListResponse? _packSwitchData;
+  String? _selectedSwitch;
+
   @override
   void initState() {
     super.initState();
@@ -120,6 +167,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         });
       });
     });
+    Future.microtask(_loadPackSwitches);
   }
 
   @override
@@ -146,10 +194,27 @@ class _HomePageState extends ConsumerState<HomePage> {
     ref.read(varsQueryProvider.notifier).update((state) => updater(state));
   }
 
+  Future<void> _loadPackSwitches() async {
+    final client = ref.read(backendClientProvider);
+    try {
+      final response = await client.listPackSwitches();
+      if (!mounted) return;
+      setState(() {
+        _packSwitchData = response;
+        _selectedSwitch = response.switches.contains(_selectedSwitch)
+            ? _selectedSwitch
+            : response.current;
+      });
+    } catch (e) {
+      // Ignore errors during load
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final varsAsync = ref.watch(varsListProvider);
     final selected = ref.watch(selectedVarsProvider);
+    final focusedVar = ref.watch(focusedVarProvider);
     final creatorsAsync = ref.watch(creatorsProvider);
     final query = ref.watch(varsQueryProvider);
     final previewAsync = ref.watch(previewItemsProvider);
@@ -281,16 +346,48 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   Text('Selected ${selected.length}'),
                   TextButton(
-                    onPressed: selected.isEmpty
-                        ? null
-                        : () {
-                            ref.read(selectedVarsProvider.notifier).state = {};
-                          },
-                    child: const Text('Clear selection'),
+                    onPressed: () {
+                      final items = varsAsync.asData?.value.items ?? [];
+                      if (items.isEmpty) return;
+                      final pageNames = items.map((e) => e.varName).toSet();
+                      final next = <String>{...selected, ...pageNames};
+                      ref.read(selectedVarsProvider.notifier).setSelection(next);
+                    },
+                    child: const Text('Select page'),
                   ),
                   TextButton(
                     onPressed: () {
-                      ref.read(varsQueryProvider.notifier).state = VarsQueryParams();
+                      final items = varsAsync.asData?.value.items ?? [];
+                      if (items.isEmpty) return;
+                      final pageNames = items.map((e) => e.varName).toSet();
+                      final next = <String>{};
+                      // Add items not on this page
+                      for (final name in selected) {
+                        if (!pageNames.contains(name)) {
+                          next.add(name);
+                        }
+                      }
+                      // Add unselected items from this page
+                      for (final name in pageNames) {
+                        if (!selected.contains(name)) {
+                          next.add(name);
+                        }
+                      }
+                      ref.read(selectedVarsProvider.notifier).setSelection(next);
+                    },
+                    child: const Text('Invert page'),
+                  ),
+                  TextButton(
+                    onPressed: selected.isEmpty
+                        ? null
+                        : () {
+                            ref.read(selectedVarsProvider.notifier).clear();
+                          },
+                    child: const Text('Clear all'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      ref.read(varsQueryProvider.notifier).reset();
                       _packageController.clear();
                       _versionController.clear();
                       _minSizeController.clear();
@@ -515,16 +612,19 @@ class _HomePageState extends ConsumerState<HomePage> {
               data: (data) {
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    final wide = constraints.maxWidth >= 1000;
-                    final list = _buildList(context, data, selected, query);
+                    final wide = constraints.maxWidth >= 1200;
+                    final list = _buildList(context, data, selected, query, focusedVar);
                     final preview = _buildPreviewPanel(
                       context,
                       previewAsync,
-                      selected.isNotEmpty,
+                      focusedVar != null,
                     );
+                    final packSwitch = _buildPackSwitchPanel(context);
                     if (wide) {
                       return Row(
                         children: [
+                          SizedBox(width: 180, child: packSwitch),
+                          const SizedBox(width: 12),
                           Expanded(flex: 3, child: list),
                           const SizedBox(width: 12),
                           Expanded(flex: 2, child: preview),
@@ -647,14 +747,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           },
           child: const Text('Prepare Saves'),
         ),
-        OutlinedButton(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PackSwitchPage()),
-            );
-          },
-          child: const Text('PackSwitch'),
-        ),
       ],
     );
   }
@@ -663,7 +755,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       BuildContext context,
       VarsListResponse data,
       Set<String> selected,
-      VarsQueryParams query) {
+      VarsQueryParams query,
+      String? focusedVar) {
     final totalPages =
         data.total == 0 ? 1 : (data.total + query.perPage - 1) ~/ query.perPage;
     if (data.total > 0 && data.page > totalPages) {
@@ -733,54 +826,52 @@ class _HomePageState extends ConsumerState<HomePage> {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final item = data.items[index];
-                final isSelected = selected.contains(item.varName);
-                return ListTile(
-                  leading: Checkbox(
-                    value: isSelected,
-                    onChanged: (value) {
-                      final next = {...selected};
-                      if (value == true) {
-                        next.add(item.varName);
-                      } else {
-                        next.remove(item.varName);
-                      }
-                      ref.read(selectedVarsProvider.notifier).state = next;
+                final isChecked = selected.contains(item.varName);
+                final isFocused = focusedVar == item.varName;
+                return Container(
+                  color: isFocused ? Colors.blue.shade50 : null,
+                  child: ListTile(
+                    leading: Checkbox(
+                      value: isChecked,
+                      onChanged: (value) {
+                        final next = {...selected};
+                        if (value == true) {
+                          next.add(item.varName);
+                        } else {
+                          next.remove(item.varName);
+                        }
+                        ref.read(selectedVarsProvider.notifier).setSelection(next);
+                      },
+                    ),
+                    onTap: () {
+                      ref.read(focusedVarProvider.notifier).setFocused(item.varName);
                     },
+                    title: Text(item.varName),
+                    subtitle: Text(
+                      '${item.creatorName ?? '-'} - ${item.packageName ?? '-'} - v${item.version ?? '-'}',
+                    ),
+                    trailing: Wrap(
+                      spacing: 8,
+                      children: [
+                        Chip(
+                          label: Text(item.installed ? 'Installed' : 'Not installed'),
+                          backgroundColor: item.installed
+                              ? Colors.green.shade100
+                              : Colors.grey.shade200,
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => VarDetailPage(varName: item.varName),
+                              ),
+                            );
+                          },
+                          child: const Text('Details'),
+                        ),
+                      ],
+                    ),
                   ),
-                  title: Text(item.varName),
-                  subtitle: Text(
-                    '${item.creatorName ?? '-'} - ${item.packageName ?? '-'} - v${item.version ?? '-'}',
-                  ),
-                  trailing: Wrap(
-                    spacing: 8,
-                    children: [
-                      Chip(
-                        label: Text(item.installed ? 'Installed' : 'Not installed'),
-                        backgroundColor: item.installed
-                            ? Colors.green.shade100
-                            : Colors.grey.shade200,
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => VarDetailPage(varName: item.varName),
-                            ),
-                          );
-                        },
-                        child: const Text('Details'),
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    final next = {...selected};
-                    if (isSelected) {
-                      next.remove(item.varName);
-                    } else {
-                      next.add(item.varName);
-                    }
-                    ref.read(selectedVarsProvider.notifier).state = next;
-                  },
                 );
               },
             ),
@@ -890,8 +981,8 @@ class _HomePageState extends ConsumerState<HomePage> {
           data: (items) {
             if (items.isEmpty) {
               final message = hasSelection
-                  ? 'No preview entries for selected vars'
-                  : 'Select vars to load previews';
+                  ? 'No preview entries for selected var'
+                  : 'Click on a var to load previews';
               return Center(child: Text(message));
             }
             final filtered = items.where((item) {
@@ -1463,5 +1554,192 @@ class _HomePageState extends ConsumerState<HomePage> {
         );
       },
     );
+  }
+
+  Widget _buildPackSwitchPanel(BuildContext context) {
+    final switches = _packSwitchData?.switches ?? [];
+    final current = _packSwitchData?.current ?? 'default';
+    final selectedSwitch = switches.contains(_selectedSwitch)
+        ? _selectedSwitch
+        : (switches.isNotEmpty ? switches.first : null);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Pack Switch',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            if (switches.isNotEmpty)
+              DropdownButton<String>(
+                value: selectedSwitch,
+                isExpanded: true,
+                items: switches
+                    .map((name) => DropdownMenuItem(
+                          value: name,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (name == current)
+                                Container(
+                                  margin: const EdgeInsets.only(left: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    'Active',
+                                    style: TextStyle(fontSize: 10),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedSwitch = value;
+                    });
+                  }
+                },
+              )
+            else
+              const Text('No switches available', style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () => _addPackSwitch(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.tonal(
+              onPressed: selectedSwitch != null
+                  ? () => _activatePackSwitch(selectedSwitch)
+                  : null,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_outline, size: 18),
+                  SizedBox(width: 8),
+                  Text('Activate'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: selectedSwitch != null
+                  ? () => _renamePackSwitch(context, selectedSwitch)
+                  : null,
+              icon: const Icon(Icons.edit, size: 18),
+              label: const Text('Rename'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: selectedSwitch != null &&
+                      selectedSwitch != current &&
+                      selectedSwitch.toLowerCase() != 'default'
+                  ? () => _deletePackSwitch(selectedSwitch)
+                  : null,
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('Delete'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                foregroundColor: Colors.red.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addPackSwitch(BuildContext context) async {
+    final name = await _askText(context, 'New Switch Name', hint: '');
+    if (name == null || name.trim().isEmpty) return;
+    final trimmed = name.trim();
+    final switches = _packSwitchData?.switches ?? [];
+    if (switches.any((s) => s.toLowerCase() == trimmed.toLowerCase())) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Switch already exists')),
+      );
+      return;
+    }
+    await _runJob('packswitch_add', args: {'name': trimmed});
+    await _loadPackSwitches();
+  }
+
+  Future<void> _renamePackSwitch(BuildContext context, String oldName) async {
+    final newName = await _askText(context, 'Rename Switch', hint: oldName);
+    if (newName == null || newName.trim().isEmpty) return;
+    final trimmed = newName.trim();
+    if (trimmed.toLowerCase() == oldName.toLowerCase()) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New name must be different')),
+      );
+      return;
+    }
+    final switches = _packSwitchData?.switches ?? [];
+    if (switches.any((s) => s.toLowerCase() == trimmed.toLowerCase())) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Target name already exists')),
+      );
+      return;
+    }
+    await _runJob('packswitch_rename', args: {
+      'old_name': oldName,
+      'new_name': trimmed,
+    });
+    await _loadPackSwitches();
+  }
+
+  Future<void> _deletePackSwitch(String name) async {
+    final confirmed = await _confirmAction(
+      context,
+      'Delete Switch',
+      'Delete switch "$name"?',
+    );
+    if (!confirmed) return;
+    await _runJob('packswitch_delete', args: {'name': name});
+    await _loadPackSwitches();
+  }
+
+  Future<void> _activatePackSwitch(String name) async {
+    // Optimistic update: immediately reflect the change in UI
+    setState(() {
+      if (_packSwitchData != null) {
+        _packSwitchData = PackSwitchListResponse(
+          current: name,
+          switches: _packSwitchData!.switches,
+        );
+      }
+    });
+    await _runJob('packswitch_set', args: {'name': name});
+    await _loadPackSwitches();
   }
 }

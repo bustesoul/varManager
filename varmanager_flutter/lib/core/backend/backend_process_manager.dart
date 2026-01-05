@@ -17,6 +17,7 @@ class BackendProcessManager {
 
   static const String defaultHost = '127.0.0.1';
   static const int defaultPort = 57123;
+  static const String parentPidEnvKey = 'VARMANAGER_PARENT_PID';
 
   static Future<String> resolveBaseUrl(Directory workDir) async {
     final configFile = File(p.join(workDir.path, 'config.json'));
@@ -40,7 +41,7 @@ class BackendProcessManager {
     _starting = true;
     try {
       if (await _isHealthy()) {
-        return;
+        await _shutdownExisting();
       }
       final exePath = _resolveBackendExe();
       if (exePath == null) {
@@ -50,6 +51,7 @@ class BackendProcessManager {
         exePath,
         [],
         workingDirectory: workDir.path,
+        environment: {parentPidEnvKey: pid.toString()},
       );
       await _waitForHealth();
     } finally {
@@ -67,6 +69,13 @@ class BackendProcessManager {
       process.kill(ProcessSignal.sigkill);
       _process = null;
     }
+  }
+
+  Future<void> _shutdownExisting() async {
+    try {
+      await client.shutdown();
+    } catch (_) {}
+    await _waitForShutdown();
   }
 
   Future<bool> _isHealthy() async {
@@ -90,6 +99,19 @@ class BackendProcessManager {
       await Future.delayed(const Duration(milliseconds: 350));
     }
     throw Exception('backend health check timeout');
+  }
+
+  Future<void> _waitForShutdown() async {
+    final deadline = DateTime.now().add(const Duration(seconds: 8));
+    while (DateTime.now().isBefore(deadline)) {
+      if (!await _isHealthy()) {
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+    if (await _isHealthy()) {
+      throw Exception('backend shutdown timeout');
+    }
   }
 
   String? _resolveBackendExe() {

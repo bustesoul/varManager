@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
+    env,
     net::SocketAddr,
     path::{Component, Path as StdPath, PathBuf},
     sync::{
@@ -19,8 +20,10 @@ use std::{
     },
 };
 use tokio::sync::{oneshot, Mutex, Semaphore};
+use tokio::time::{interval, Duration};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use walkdir::WalkDir;
+use sysinfo::{Pid, ProcessesToUpdate, System};
 
 mod db;
 mod deps_jobs;
@@ -43,6 +46,7 @@ mod vars_jobs;
 mod winfs;
 
 const LOG_CAPACITY: usize = 1000;
+const PARENT_PID_ENV: &str = "VARMANAGER_PARENT_PID";
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Config {
@@ -537,6 +541,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         job_semaphore: Arc::new(RwLock::new(Arc::new(Semaphore::new(config.job_concurrency)))),
     };
 
+    if let Some(parent_pid) = read_parent_pid() {
+        tracing::info!(parent_pid, "parent watchdog enabled");
+        let state_clone = state.clone();
+        tokio::spawn(async move {
+            parent_watchdog(parent_pid, state_clone).await;
+        });
+    }
+
     let app = Router::new()
         .route("/health", get(health))
         .route("/config", get(get_config))
@@ -591,11 +603,43 @@ async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn shutdown(State(state): State<AppState>) -> impl IntoResponse {
+    trigger_shutdown(&state).await;
+    Json(json!({ "status": "shutting_down" }))
+}
+
+async fn trigger_shutdown(state: &AppState) {
     let mut guard = state.shutdown_tx.lock().await;
     if let Some(tx) = guard.take() {
         let _ = tx.send(());
     }
-    Json(json!({ "status": "shutting_down" }))
+}
+
+fn read_parent_pid() -> Option<u32> {
+    let raw = env::var(PARENT_PID_ENV).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let pid = trimmed.parse::<u32>().ok()?;
+    if pid == 0 {
+        return None;
+    }
+    Some(pid)
+}
+
+async fn parent_watchdog(parent_pid: u32, state: AppState) {
+    let target = Pid::from_u32(parent_pid);
+    let mut system = System::new();
+    let mut ticker = interval(Duration::from_secs(3));
+    loop {
+        ticker.tick().await;
+        system.refresh_processes(ProcessesToUpdate::Some(&[target]), true);
+        if system.process(target).is_none() {
+            tracing::info!(parent_pid, "parent process exited, shutting down backend");
+            trigger_shutdown(&state).await;
+            break;
+        }
+    }
 }
 
 async fn start_job(

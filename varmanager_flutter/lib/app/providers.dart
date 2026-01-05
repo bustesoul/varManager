@@ -6,13 +6,22 @@ import '../core/backend/backend_client.dart';
 import '../core/backend/backend_process_manager.dart';
 import '../core/backend/job_runner.dart';
 
-final baseUrlProvider = StateProvider<String>((ref) {
+final baseUrlProvider = Provider<String>((ref) {
   return 'http://127.0.0.1:57123';
 });
 
-final navIndexProvider = StateProvider<int>((ref) {
-  return 0;
-});
+class NavIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void setIndex(int value) {
+    state = value;
+  }
+}
+
+final navIndexProvider = NotifierProvider<NavIndexNotifier, int>(
+  NavIndexNotifier.new,
+);
 
 final backendClientProvider = Provider<BackendClient>((ref) {
   final baseUrl = ref.watch(baseUrlProvider);

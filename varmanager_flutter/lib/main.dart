@@ -13,7 +13,7 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [
-        baseUrlProvider.overrideWith((ref) => baseUrl),
+        baseUrlProvider.overrideWithValue(baseUrl),
       ],
       child: const VarManagerApp(),
     ),

@@ -376,7 +376,7 @@ class _HubPageState extends ConsumerState<HubPage> {
       ref.read(varsQueryProvider.notifier).update(
             (state) => state.copyWith(page: 1, search: name),
           );
-      ref.read(navIndexProvider.notifier).state = 0;
+      ref.read(navIndexProvider.notifier).setIndex(0);
       return;
     }
     if (status.contains('Generate Download List') || status.contains('Upgrade to')) {

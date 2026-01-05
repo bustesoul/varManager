@@ -9,9 +9,20 @@ import '../../core/backend/query_params.dart';
 import '../../core/models/scene_models.dart';
 import '../analysis/analysis_page.dart';
 
-final scenesQueryProvider = StateProvider<ScenesQueryParams>((ref) {
-  return ScenesQueryParams(location: 'installed,not_installed,save');
-});
+class ScenesQueryNotifier extends Notifier<ScenesQueryParams> {
+  @override
+  ScenesQueryParams build() =>
+      ScenesQueryParams(location: 'installed,not_installed,save');
+
+  void update(ScenesQueryParams Function(ScenesQueryParams) updater) {
+    state = updater(state);
+  }
+}
+
+final scenesQueryProvider =
+    NotifierProvider<ScenesQueryNotifier, ScenesQueryParams>(
+  ScenesQueryNotifier.new,
+);
 
 final scenesListProvider = FutureProvider<ScenesListResponse>((ref) async {
   final client = ref.watch(backendClientProvider);

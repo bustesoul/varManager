@@ -618,7 +618,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                   ref.read(varsQueryProvider.notifier).update(
                                         (state) => state.copyWith(page: 1, search: name),
                                       );
-                                  ref.read(navIndexProvider.notifier).state = 0;
+                                  ref
+                                      .read(navIndexProvider.notifier)
+                                      .setIndex(0);
                                 },
                                 child: const Text('Select'),
                               ),

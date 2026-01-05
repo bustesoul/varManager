@@ -116,7 +116,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   NavigationBar(
                     selectedIndex: index,
                     onDestinationSelected: (value) {
-                      ref.read(navIndexProvider.notifier).state = value;
+                      ref.read(navIndexProvider.notifier).setIndex(value);
                     },
                     destinations: _pages
                         .map(
@@ -135,7 +135,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     selectedIndex: index,
                     labelType: NavigationRailLabelType.all,
                     onDestinationSelected: (value) {
-                      ref.read(navIndexProvider.notifier).state = value;
+                      ref.read(navIndexProvider.notifier).setIndex(value);
                     },
                     destinations: _pages
                         .map(
