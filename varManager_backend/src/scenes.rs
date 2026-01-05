@@ -15,6 +15,13 @@ use std::time::Duration;
 use tokio::runtime::Handle;
 use zip::ZipArchive;
 
+#[derive(Clone, Serialize)]
+pub struct AtomTreeNode {
+    pub name: String,
+    pub path: Option<String>,
+    pub children: Vec<AtomTreeNode>,
+}
+
 const SCENE_BASE_ATOMS: [&str; 4] = ["CoreControl", "PlayerNavigationPanel", "VRController", "WindowCamera"];
 const POSE_CONTROL_IDS: [&str; 26] = [
     "hipControl",
@@ -889,6 +896,95 @@ fn ensure_analysis_cache(
     };
     let _ = read_save_name(state, &save_name, "female", true)?;
     Ok(())
+}
+
+pub fn list_analysis_atoms(
+    state: &AppState,
+    var_name: &str,
+    entry_name: &str,
+) -> Result<(Vec<AtomTreeNode>, Vec<String>), String> {
+    let (var_name, entry_name) = normalize_cache_key(var_name, entry_name);
+    let cache_root = cache_dir(&var_name, &entry_name);
+    ensure_analysis_cache(state, &var_name, &entry_name, &cache_root)?;
+
+    let atoms_root = cache_root.join("atoms");
+    let atoms = if atoms_root.exists() {
+        build_atom_tree(&atoms_root, &cache_root)?
+    } else {
+        Vec::new()
+    };
+
+    let mut person_atoms = Vec::new();
+    let person_dir = atoms_root.join("Person");
+    if person_dir.exists() {
+        for entry in fs::read_dir(&person_dir).map_err(|err| err.to_string())? {
+            let entry = entry.map_err(|err| err.to_string())?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("bin") {
+                continue;
+            }
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                person_atoms.push(stem.to_string());
+            }
+        }
+    }
+    person_atoms.sort();
+    person_atoms.dedup();
+
+    Ok((atoms, person_atoms))
+}
+
+fn build_atom_tree(dir: &Path, cache_root: &Path) -> Result<Vec<AtomTreeNode>, String> {
+    let mut entries = Vec::new();
+    if dir.exists() {
+        for entry in fs::read_dir(dir).map_err(|err| err.to_string())? {
+            let entry = entry.map_err(|err| err.to_string())?;
+            entries.push(entry.path());
+        }
+    }
+    entries.sort_by(|a, b| {
+        a.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .cmp(
+                &b.file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase(),
+            )
+    });
+
+    let mut nodes = Vec::new();
+    for path in entries {
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .or_else(|| path.file_name().and_then(|s| s.to_str()))
+            .unwrap_or("")
+            .to_string();
+        if path.is_dir() {
+            let children = build_atom_tree(&path, cache_root)?;
+            nodes.push(AtomTreeNode {
+                name,
+                path: None,
+                children,
+            });
+        } else if path.extension().and_then(|s| s.to_str()) == Some("bin") {
+            let rel = path
+                .strip_prefix(cache_root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            nodes.push(AtomTreeNode {
+                name,
+                path: Some(rel),
+                children: Vec::new(),
+            });
+        }
+    }
+
+    Ok(nodes)
 }
 
 fn load_person_atom(cache_root: &Path, atom_name: &str) -> Result<Value, String> {

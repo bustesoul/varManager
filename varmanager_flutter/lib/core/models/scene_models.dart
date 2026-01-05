@@ -16,6 +16,7 @@ class SceneListItem {
     required this.hide,
     required this.fav,
     required this.hideFav,
+    required this.location,
   });
 
   final String varName;
@@ -34,6 +35,7 @@ class SceneListItem {
   final bool hide;
   final bool fav;
   final int hideFav;
+  final String location;
 
   factory SceneListItem.fromJson(Map<String, dynamic> json) {
     return SceneListItem(
@@ -53,6 +55,7 @@ class SceneListItem {
       hide: json['hide'] as bool? ?? false,
       fav: json['fav'] as bool? ?? false,
       hideFav: (json['hide_fav'] as num?)?.toInt() ?? 0,
+      location: json['location'] as String? ?? '',
     );
   }
 }

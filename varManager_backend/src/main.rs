@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
-    path::{Component, PathBuf},
+    path::{Component, Path as StdPath, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, RwLock,
@@ -20,6 +20,7 @@ use std::{
 };
 use tokio::sync::{oneshot, Mutex, Semaphore};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use walkdir::WalkDir;
 
 mod db;
 mod deps_jobs;
@@ -177,7 +178,27 @@ struct VarsQuery {
     per_page: Option<u32>,
     search: Option<String>,
     creator: Option<String>,
+    package: Option<String>,
+    version: Option<String>,
     installed: Option<String>,
+    disabled: Option<String>,
+    min_size: Option<f64>,
+    max_size: Option<f64>,
+    min_dependency: Option<i64>,
+    max_dependency: Option<i64>,
+    has_scene: Option<bool>,
+    has_look: Option<bool>,
+    has_cloth: Option<bool>,
+    has_hair: Option<bool>,
+    has_skin: Option<bool>,
+    has_pose: Option<bool>,
+    has_morph: Option<bool>,
+    has_plugin: Option<bool>,
+    has_script: Option<bool>,
+    has_asset: Option<bool>,
+    has_texture: Option<bool>,
+    has_sub_scene: Option<bool>,
+    has_appearance: Option<bool>,
     sort: Option<String>,
     order: Option<String>,
 }
@@ -191,8 +212,94 @@ struct ScenesQuery {
     category: Option<String>,
     installed: Option<String>,
     hide_fav: Option<String>,
+    location: Option<String>,
     sort: Option<String>,
     order: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct DependentsQuery {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct AnalysisAtomsQuery {
+    var_name: String,
+    entry_name: String,
+}
+
+#[derive(Deserialize)]
+struct ResolveVarsRequest {
+    names: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ValidateOutputRequest {
+    path: String,
+}
+
+#[derive(Serialize)]
+struct ValidateOutputResponse {
+    ok: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+struct MissingMapItem {
+    missing_var: String,
+    dest_var: String,
+}
+
+#[derive(Deserialize)]
+struct MissingMapSaveRequest {
+    path: String,
+    links: Vec<MissingMapItem>,
+}
+
+#[derive(Deserialize)]
+struct MissingMapLoadRequest {
+    path: String,
+}
+
+#[derive(Serialize)]
+struct MissingMapResponse {
+    links: Vec<MissingMapItem>,
+}
+
+#[derive(Deserialize)]
+struct VarDependenciesRequest {
+    var_names: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct VarDependencyItem {
+    var_name: String,
+    dependency: String,
+}
+
+#[derive(Serialize)]
+struct VarDependenciesResponse {
+    items: Vec<VarDependencyItem>,
+}
+
+#[derive(Deserialize)]
+struct VarPreviewsRequest {
+    var_names: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct VarPreviewItem {
+    var_name: String,
+    atom_type: String,
+    preview_pic: Option<String>,
+    scene_path: String,
+    is_preset: bool,
+    is_loadable: bool,
+}
+
+#[derive(Serialize)]
+struct VarPreviewsResponse {
+    items: Vec<VarPreviewItem>,
 }
 
 #[derive(Deserialize)]
@@ -290,6 +397,7 @@ struct SceneListItem {
     hide: bool,
     fav: bool,
     hide_fav: i32,
+    location: String,
 }
 
 #[derive(Serialize)]
@@ -303,6 +411,49 @@ struct ScenesListResponse {
 #[derive(Serialize)]
 struct CreatorsResponse {
     creators: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct PackSwitchListResponse {
+    current: String,
+    switches: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct DependentsResponse {
+    dependents: Vec<String>,
+    dependent_saves: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct AnalysisAtomsResponse {
+    atoms: Vec<scenes::AtomTreeNode>,
+    person_atoms: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct SavesTreeItem {
+    path: String,
+    name: String,
+    preview: Option<String>,
+    modified: Option<String>,
+}
+
+#[derive(Serialize)]
+struct SavesTreeGroup {
+    id: String,
+    title: String,
+    items: Vec<SavesTreeItem>,
+}
+
+#[derive(Serialize)]
+struct SavesTreeResponse {
+    groups: Vec<SavesTreeGroup>,
+}
+
+#[derive(Serialize)]
+struct ResolveVarsResponse {
+    resolved: HashMap<String, String>,
 }
 
 #[derive(Serialize)]
@@ -391,10 +542,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/config", put(update_config))
         .route("/vars", get(list_vars))
         .route("/vars/{name}", get(get_var_detail))
+        .route("/vars/resolve", post(resolve_vars))
+        .route("/vars/dependencies", post(list_var_dependencies))
+        .route("/vars/previews", post(list_var_previews))
         .route("/scenes", get(list_scenes))
         .route("/creators", get(list_creators))
         .route("/stats", get(get_stats))
         .route("/preview", get(get_preview))
+        .route("/packswitch", get(list_packswitch))
+        .route("/dependents", get(list_dependents))
+        .route("/analysis/atoms", get(list_analysis_atoms))
+        .route("/saves/tree", get(list_saves_tree))
+        .route("/saves/validate_output", post(validate_output_dir))
+        .route("/missing/map/save", post(save_missing_map))
+        .route("/missing/map/load", post(load_missing_map))
         .route("/jobs", post(start_job))
         .route("/jobs/{id}", get(get_job))
         .route("/jobs/{id}/logs", get(get_job_logs))
@@ -705,6 +866,14 @@ async fn list_vars(
         conditions.push("v.creatorName = ?".to_string());
         params.push(SqlValue::from(creator.to_string()));
     }
+    if let Some(package) = query.package.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        conditions.push("v.packageName LIKE ?".to_string());
+        params.push(SqlValue::from(format!("%{}%", package)));
+    }
+    if let Some(version) = query.version.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        conditions.push("v.version LIKE ?".to_string());
+        params.push(SqlValue::from(format!("%{}%", version)));
+    }
     if let Some(search) = query.search.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         conditions.push("(v.varName LIKE ? OR v.packageName LIKE ?)".to_string());
         let like = format!("%{}%", search);
@@ -721,6 +890,111 @@ async fn list_vars(
             }
             _ => {}
         }
+    }
+    if let Some(disabled) = query.disabled.as_ref().map(|s| s.to_lowercase()) {
+        match disabled.as_str() {
+            "true" | "1" | "yes" => {
+                conditions.push("i.disabled = 1".to_string());
+            }
+            "false" | "0" | "no" => {
+                conditions.push("(i.disabled IS NULL OR i.disabled = 0)".to_string());
+            }
+            _ => {}
+        }
+    }
+    if let Some(min_size) = query.min_size {
+        conditions.push("COALESCE(v.fsize, 0) >= ?".to_string());
+        params.push(SqlValue::from(min_size));
+    }
+    if let Some(max_size) = query.max_size {
+        conditions.push("COALESCE(v.fsize, 0) <= ?".to_string());
+        params.push(SqlValue::from(max_size));
+    }
+    if let Some(min_dependency) = query.min_dependency {
+        conditions.push("COALESCE(v.dependencyCnt, 0) >= ?".to_string());
+        params.push(SqlValue::from(min_dependency));
+    }
+    if let Some(max_dependency) = query.max_dependency {
+        conditions.push("COALESCE(v.dependencyCnt, 0) <= ?".to_string());
+        params.push(SqlValue::from(max_dependency));
+    }
+    if let Some(value) = query.has_scene {
+        conditions.push(format!(
+            "COALESCE(v.scene, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_look {
+        conditions.push(format!(
+            "COALESCE(v.look, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_cloth {
+        conditions.push(format!(
+            "COALESCE(v.cloth, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_hair {
+        conditions.push(format!(
+            "COALESCE(v.hair, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_skin {
+        conditions.push(format!(
+            "COALESCE(v.skin, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_pose {
+        conditions.push(format!(
+            "COALESCE(v.pose, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_morph {
+        conditions.push(format!(
+            "COALESCE(v.morph, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_plugin {
+        conditions.push(format!(
+            "COALESCE(v.plugin, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_script {
+        conditions.push(format!(
+            "COALESCE(v.script, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_asset {
+        conditions.push(format!(
+            "COALESCE(v.asset, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_texture {
+        conditions.push(format!(
+            "COALESCE(v.texture, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_sub_scene {
+        conditions.push(format!(
+            "COALESCE(v.subScene, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
+    }
+    if let Some(value) = query.has_appearance {
+        conditions.push(format!(
+            "COALESCE(v.appearance, 0) {} 0",
+            if value { ">" } else { "=" }
+        ));
     }
 
     let where_clause = if conditions.is_empty() {
@@ -749,7 +1023,7 @@ async fn list_vars(
         "SELECT COUNT(1) FROM vars v LEFT JOIN installStatus i ON v.varName = i.varName {}",
         where_clause
     );
-    let total: u64 = db
+    let total: i64 = db
         .connection()
         .query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))
         .map_err(|err| {
@@ -760,6 +1034,7 @@ async fn list_vars(
                 }),
             )
         })?;
+    let total = total as u64;
 
     let mut list_params = params.clone();
     list_params.push(SqlValue::from(per_page as i64));
@@ -841,6 +1116,39 @@ async fn list_vars(
         per_page,
         total,
     }))
+}
+
+async fn resolve_vars(
+    State(state): State<AppState>,
+    Json(req): Json<ResolveVarsRequest>,
+) -> Result<Json<ResolveVarsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let _cfg = read_config(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let mut resolved = HashMap::new();
+    for name in req.names {
+        let value = crate::var_logic::resolve_var_exist_name(db.connection(), &name)
+            .unwrap_or_else(|_| "missing".to_string());
+        resolved.insert(name, value);
+    }
+    Ok(Json(ResolveVarsResponse { resolved }))
 }
 
 async fn get_var_detail(
@@ -928,7 +1236,7 @@ async fn get_var_detail(
                 Json(ErrorResponse { error: err }),
             )
         })?;
-    let dependents = list_dependents(db.connection(), &name).map_err(|err| {
+    let dependents = list_dependents_conn(db.connection(), &name).map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse { error: err }),
@@ -982,7 +1290,6 @@ async fn list_scenes(
 
     let page = query.page.unwrap_or(1).max(1);
     let per_page = query.per_page.unwrap_or(50).clamp(1, 200);
-    let offset = ((page - 1) * per_page) as i64;
 
     let mut conditions = Vec::new();
     let mut params: Vec<SqlValue> = Vec::new();
@@ -1019,7 +1326,9 @@ async fn list_scenes(
             } else if value == "fav" {
                 flags.push("h.fav = 1".to_string());
             } else if value == "normal" {
-                flags.push("(h.hide IS NULL OR h.hide = 0) AND (h.fav IS NULL OR h.fav = 0)".to_string());
+                flags.push(
+                    "(h.hide IS NULL OR h.hide = 0) AND (h.fav IS NULL OR h.fav = 0)".to_string(),
+                );
             }
         }
         if !flags.is_empty() {
@@ -1033,45 +1342,6 @@ async fn list_scenes(
         format!("WHERE {}", conditions.join(" AND "))
     };
 
-    let sort = query.sort.as_deref().unwrap_or("var_date");
-    let order = query.order.as_deref().unwrap_or("desc");
-    let sort_col = match sort {
-        "var_name" => "v.varName",
-        "scene_name" => "s.scenePath",
-        "meta_date" => "v.metaDate",
-        _ => "v.varDate",
-    };
-    let order_sql = if order.eq_ignore_ascii_case("asc") {
-        "ASC"
-    } else {
-        "DESC"
-    };
-
-    let count_sql = format!(
-        "SELECT COUNT(1)
-         FROM scenes s
-         LEFT JOIN vars v ON s.varName = v.varName
-         LEFT JOIN installStatus i ON s.varName = i.varName
-         LEFT JOIN HideFav h ON s.varName = h.varName
-         {}",
-        where_clause
-    );
-    let total: u64 = db
-        .connection()
-        .query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: err.to_string(),
-                }),
-            )
-        })?;
-
-    let mut list_params = params.clone();
-    list_params.push(SqlValue::from(per_page as i64));
-    list_params.push(SqlValue::from(offset));
-
     let sql = format!(
         "SELECT s.varName, s.atomType, s.previewPic, s.scenePath, s.isPreset, s.isLoadable,
                 v.creatorName, v.packageName, v.metaDate, v.varDate, v.version,
@@ -1081,10 +1351,8 @@ async fn list_scenes(
          LEFT JOIN vars v ON s.varName = v.varName
          LEFT JOIN installStatus i ON s.varName = i.varName
          LEFT JOIN HideFav h ON s.varName = h.varName
-         {}
-         ORDER BY {} {}
-         LIMIT ? OFFSET ?",
-        where_clause, sort_col, order_sql
+         {}",
+        where_clause
     );
     let mut stmt = db.connection().prepare(&sql).map_err(|err| {
         (
@@ -1095,10 +1363,16 @@ async fn list_scenes(
         )
     })?;
     let rows = stmt
-        .query_map(params_from_iter(list_params.iter()), |row| {
+        .query_map(params_from_iter(params.iter()), |row| {
             let hide: i64 = row.get(13)?;
             let fav: i64 = row.get(14)?;
             let hide_fav = if hide != 0 { -1 } else if fav != 0 { 1 } else { 0 };
+            let installed = row.get::<_, i64>(11)? != 0;
+            let location = if installed {
+                "installed".to_string()
+            } else {
+                "not_installed".to_string()
+            };
             Ok(SceneListItem {
                 var_name: row.get(0)?,
                 atom_type: row.get(1)?,
@@ -1111,11 +1385,12 @@ async fn list_scenes(
                 meta_date: row.get(8)?,
                 var_date: row.get(9)?,
                 version: row.get(10)?,
-                installed: row.get::<_, i64>(11)? != 0,
+                installed,
                 disabled: row.get::<_, i64>(12)? != 0,
                 hide: hide != 0,
                 fav: fav != 0,
                 hide_fav,
+                location,
             })
         })
         .map_err(|err| {
@@ -1139,12 +1414,428 @@ async fn list_scenes(
         })?);
     }
 
+    let location_filter = parse_location_filter(query.location.as_deref());
+    let include_save = location_filter.contains("save");
+    let include_missing = location_filter.contains("missinglink");
+    if include_save || include_missing {
+        let (_, vampath) = crate::paths::config_paths(&state).map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: err }),
+            )
+        })?;
+        let vampath = vampath.ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "vampath is required in config.json".to_string(),
+                }),
+            )
+        })?;
+
+        if include_save {
+            items.extend(load_save_scenes(&vampath));
+        }
+        if include_missing {
+            items.extend(load_missing_link_scenes(&db, &vampath));
+        }
+    }
+
+    let installed_filter = parse_bool_filter(query.installed.as_deref());
+    let hide_fav_filter = parse_hide_fav_filter(query.hide_fav.as_deref());
+    let category_filter = query.category.as_ref().map(|s| s.trim().to_string());
+    let creator_filter = query.creator.as_ref().map(|s| s.trim().to_string());
+    let search_filter = query
+        .search
+        .as_ref()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty());
+
+    let mut filtered = items
+        .into_iter()
+        .filter(|item| {
+            if !location_filter.is_empty() && !location_filter.contains(&item.location) {
+                return false;
+            }
+            if let Some(installed) = installed_filter {
+                if item.installed != installed {
+                    return false;
+                }
+            }
+            if let Some(allowed) = hide_fav_filter.as_ref() {
+                if !allowed.contains(&item.hide_fav) {
+                    return false;
+                }
+            }
+            if let Some(category) = category_filter.as_ref() {
+                if !category.is_empty() && item.atom_type != *category {
+                    return false;
+                }
+            }
+            if let Some(creator) = creator_filter.as_ref() {
+                if !creator.is_empty() {
+                    if item
+                        .creator_name
+                        .as_ref()
+                        .map(|c| c != creator)
+                        .unwrap_or(true)
+                    {
+                        return false;
+                    }
+                }
+            }
+            if let Some(search) = search_filter.as_ref() {
+                let name = item.var_name.to_lowercase();
+                let path = item.scene_path.to_lowercase();
+                if !name.contains(search) && !path.contains(search) {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect::<Vec<_>>();
+
+    let sort = query.sort.as_deref().unwrap_or("var_date");
+    let order = query.order.as_deref().unwrap_or("desc");
+    filtered.sort_by(|a, b| {
+        let ordering = match sort {
+            "var_name" => a.var_name.cmp(&b.var_name),
+            "scene_name" => scene_name(&a.scene_path).cmp(&scene_name(&b.scene_path)),
+            "meta_date" => a
+                .meta_date
+                .as_deref()
+                .unwrap_or("")
+                .cmp(b.meta_date.as_deref().unwrap_or("")),
+            _ => a
+                .var_date
+                .as_deref()
+                .unwrap_or("")
+                .cmp(b.var_date.as_deref().unwrap_or("")),
+        };
+        if order.eq_ignore_ascii_case("asc") {
+            ordering
+        } else {
+            ordering.reverse()
+        }
+    });
+
+    let total = filtered.len() as u64;
+    let start = ((page - 1) * per_page) as usize;
+    let page_items = filtered
+        .into_iter()
+        .skip(start)
+        .take(per_page as usize)
+        .collect::<Vec<_>>();
+
     Ok(Json(ScenesListResponse {
-        items,
+        items: page_items,
         page,
         per_page,
         total,
     }))
+}
+
+fn parse_location_filter(raw: Option<&str>) -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    let raw = match raw {
+        Some(value) => value,
+        None => return set,
+    };
+    for part in raw.split(',') {
+        let value = part.trim().to_ascii_lowercase();
+        if value.is_empty() {
+            continue;
+        }
+        let normalized = match value.as_str() {
+            "installed" => "installed",
+            "not installed" | "not_installed" | "notinstalled" => "not_installed",
+            "missinglink" | "missing_link" | "missing link" => "missinglink",
+            "save" => "save",
+            other => other,
+        };
+        set.insert(normalized.to_string());
+    }
+    set
+}
+
+fn parse_bool_filter(raw: Option<&str>) -> Option<bool> {
+    match raw.map(|s| s.to_ascii_lowercase()) {
+        Some(value) if ["true", "1", "yes"].contains(&value.as_str()) => Some(true),
+        Some(value) if ["false", "0", "no"].contains(&value.as_str()) => Some(false),
+        _ => None,
+    }
+}
+
+fn parse_hide_fav_filter(raw: Option<&str>) -> Option<std::collections::HashSet<i32>> {
+    let raw = raw?;
+    let mut set = std::collections::HashSet::new();
+    for part in raw.split(',') {
+        let value = part.trim().to_ascii_lowercase();
+        match value.as_str() {
+            "hide" => {
+                set.insert(-1);
+            }
+            "fav" => {
+                set.insert(1);
+            }
+            "normal" => {
+                set.insert(0);
+            }
+            _ => {}
+        }
+    }
+    if set.is_empty() {
+        None
+    } else {
+        Some(set)
+    }
+}
+
+fn scene_name(path: &str) -> String {
+    StdPath::new(path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(path)
+        .to_string()
+}
+
+fn load_save_scenes(vampath: &StdPath) -> Vec<SceneListItem> {
+    let mut items = Vec::new();
+    let groups = vec![
+        ("scenes", vampath.join("Saves").join("scene"), "json"),
+        ("looks", vampath.join("Saves").join("Person").join("full"), "json"),
+        (
+            "looks",
+            vampath.join("Saves").join("Person").join("appearance"),
+            "json",
+        ),
+        (
+            "looks",
+            vampath.join("Custom").join("Atom").join("Person").join("Appearance"),
+            "vap",
+        ),
+        (
+            "pose",
+            vampath.join("Saves").join("Person").join("pose"),
+            "json",
+        ),
+        (
+            "pose",
+            vampath.join("Custom").join("Atom").join("Person").join("Pose"),
+            "vap",
+        ),
+        (
+            "clothing",
+            vampath.join("Custom").join("Atom").join("Person").join("Clothing"),
+            "vap",
+        ),
+        ("clothing", vampath.join("Custom").join("Clothing"), "vap"),
+        (
+            "hairstyle",
+            vampath.join("Custom").join("Atom").join("Person").join("Hair"),
+            "vap",
+        ),
+        ("hairstyle", vampath.join("Custom").join("Hair"), "vap"),
+        (
+            "morphs",
+            vampath.join("Custom").join("Atom").join("Person").join("Morphs"),
+            "vap",
+        ),
+        (
+            "skin",
+            vampath.join("Custom").join("Atom").join("Person").join("Skin"),
+            "vap",
+        ),
+    ];
+    for (atom_type, root, ext) in groups {
+        if !root.exists() {
+            continue;
+        }
+        for entry in WalkDir::new(&root)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_file())
+        {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some(ext) {
+                continue;
+            }
+            let rel = path.strip_prefix(vampath).unwrap_or(path);
+            let scene_path = rel.to_string_lossy().replace('\\', "/");
+            let preview_path = path.with_extension("jpg");
+            let preview_pic = if preview_path.exists() {
+                Some(
+                    preview_path
+                        .strip_prefix(vampath)
+                        .unwrap_or(&preview_path)
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                )
+            } else {
+                None
+            };
+            let (hide, fav, hide_fav) = read_hide_fav_for_save(path);
+            let modified = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(format_system_time)
+                .unwrap_or_default();
+            items.push(SceneListItem {
+                var_name: "save".to_string(),
+                atom_type: atom_type.to_string(),
+                preview_pic,
+                scene_path,
+                is_preset: true,
+                is_loadable: true,
+                creator_name: Some("(save)".to_string()),
+                package_name: None,
+                meta_date: Some(modified.clone()),
+                var_date: Some(modified),
+                version: None,
+                installed: true,
+                disabled: false,
+                hide,
+                fav,
+                hide_fav,
+                location: "save".to_string(),
+            });
+        }
+    }
+    items
+}
+
+fn load_missing_link_scenes(db: &crate::db::Db, vampath: &StdPath) -> Vec<SceneListItem> {
+    let mut items = Vec::new();
+    let root = crate::paths::missing_links_dir(vampath);
+    if !root.exists() {
+        return items;
+    }
+    let mut vars = Vec::new();
+    for entry in WalkDir::new(&root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+    {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("var") {
+            continue;
+        }
+        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        if name.is_empty() {
+            continue;
+        }
+        let mut dest = name.to_string();
+        if let Ok(target) = crate::winfs::read_link_target(path) {
+            if let Some(stem) = target.file_stem().and_then(|s| s.to_str()) {
+                dest = stem.to_string();
+            }
+        }
+        vars.push(dest);
+    }
+    vars.sort();
+    vars.dedup();
+
+    let mut stmt = match db.connection().prepare(
+        "SELECT s.varName, s.atomType, s.previewPic, s.scenePath, s.isPreset, s.isLoadable,
+                v.creatorName, v.packageName, v.metaDate, v.varDate, v.version,
+                COALESCE(i.installed, 0), COALESCE(i.disabled, 0)
+         FROM scenes s
+         LEFT JOIN vars v ON s.varName = v.varName
+         LEFT JOIN installStatus i ON s.varName = i.varName
+         WHERE s.varName = ?1",
+    ) {
+        Ok(stmt) => stmt,
+        Err(_) => return items,
+    };
+
+    for var_name in vars {
+        let rows = stmt.query_map([&var_name], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
+                row.get::<_, Option<String>>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, i64>(11)?,
+                row.get::<_, i64>(12)?,
+            ))
+        });
+        if let Ok(rows) = rows {
+            for row in rows.flatten() {
+                let (hide, fav, hide_fav) =
+                    read_hide_fav_for_var(vampath, &row.0, &row.3);
+                items.push(SceneListItem {
+                    var_name: row.0,
+                    atom_type: row.1,
+                    preview_pic: row.2,
+                    scene_path: row.3,
+                    is_preset: row.4 != 0,
+                    is_loadable: row.5 != 0,
+                    creator_name: row.6,
+                    package_name: row.7,
+                    meta_date: row.8,
+                    var_date: row.9,
+                    version: row.10,
+                    installed: row.11 != 0,
+                    disabled: row.12 != 0,
+                    hide,
+                    fav,
+                    hide_fav,
+                    location: "missinglink".to_string(),
+                });
+            }
+        }
+    }
+
+    items
+}
+
+fn read_hide_fav_for_var(vampath: &StdPath, var_name: &str, scene_path: &str) -> (bool, bool, i32) {
+    let scenepath = StdPath::new(scene_path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let scenename = StdPath::new(scene_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let base = crate::paths::prefs_root(vampath)
+        .join(var_name)
+        .join(&scenepath);
+    let pathhide = base.join(format!("{}.hide", scenename));
+    let pathfav = base.join(format!("{}.fav", scenename));
+    let hide = pathhide.exists();
+    let fav = pathfav.exists();
+    let hide_fav = if hide { -1 } else if fav { 1 } else { 0 };
+    (hide, fav, hide_fav)
+}
+
+fn read_hide_fav_for_save(path: &StdPath) -> (bool, bool, i32) {
+    let hide = path.with_extension(format!(
+        "{}.hide",
+        path.extension().and_then(|s| s.to_str()).unwrap_or("")
+    ));
+    let fav = path.with_extension(format!(
+        "{}.fav",
+        path.extension().and_then(|s| s.to_str()).unwrap_or("")
+    ));
+    let hide_exists = hide.exists();
+    let fav_exists = fav.exists();
+    let hide_fav = if hide_exists { -1 } else if fav_exists { 1 } else { 0 };
+    (hide_exists, fav_exists, hide_fav)
+}
+
+fn format_system_time(time: std::time::SystemTime) -> String {
+    let dt: chrono::DateTime<chrono::Local> = time.into();
+    dt.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 async fn list_creators(
@@ -1208,6 +1899,251 @@ async fn list_creators(
     Ok(Json(CreatorsResponse { creators }))
 }
 
+async fn list_packswitch(
+    State(state): State<AppState>,
+) -> Result<Json<PackSwitchListResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let (_, vampath) = crate::paths::config_paths(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let vampath = vampath.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "vampath is required in config.json".to_string(),
+            }),
+        )
+    })?;
+    let root = crate::paths::addon_switch_root(&vampath);
+    std::fs::create_dir_all(&root).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+
+    let mut switches = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                    switches.push(name.to_string());
+                }
+            }
+        }
+    }
+    if !switches.iter().any(|name| name.eq_ignore_ascii_case("default")) {
+        switches.push("default".to_string());
+    }
+    switches.sort_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
+
+    let addon_path = crate::paths::addon_packages_dir(&vampath);
+    let current = if let Ok(target) = crate::winfs::read_link_target(&addon_path) {
+        target
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("default")
+            .to_string()
+    } else {
+        "default".to_string()
+    };
+
+    Ok(Json(PackSwitchListResponse { current, switches }))
+}
+
+async fn list_dependents(
+    State(state): State<AppState>,
+    Query(query): Query<DependentsQuery>,
+) -> Result<Json<DependentsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+
+    let mut dependents = Vec::new();
+    let mut stmt = db
+        .connection()
+        .prepare("SELECT varName FROM dependencies WHERE dependency = ?1")
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    let rows = stmt
+        .query_map([&query.name], |row| row.get::<_, String>(0))
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    for row in rows {
+        if let Ok(value) = row {
+            dependents.push(value);
+        }
+    }
+
+    let mut dependent_saves = Vec::new();
+    let mut stmt = db
+        .connection()
+        .prepare("SELECT SavePath FROM savedepens WHERE dependency = ?1")
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    let rows = stmt
+        .query_map([&query.name], |row| row.get::<_, String>(0))
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    for row in rows {
+        if let Ok(value) = row {
+            dependent_saves.push(value);
+        }
+    }
+
+    dependents.sort();
+    dependents.dedup();
+    dependent_saves.sort();
+    dependent_saves.dedup();
+
+    Ok(Json(DependentsResponse {
+        dependents,
+        dependent_saves,
+    }))
+}
+
+async fn list_analysis_atoms(
+    State(state): State<AppState>,
+    Query(query): Query<AnalysisAtomsQuery>,
+) -> Result<Json<AnalysisAtomsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let (atoms, person_atoms) =
+        scenes::list_analysis_atoms(&state, &query.var_name, &query.entry_name).map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: err }),
+            )
+        })?;
+    Ok(Json(AnalysisAtomsResponse {
+        atoms,
+        person_atoms,
+    }))
+}
+
+async fn list_saves_tree(
+    State(state): State<AppState>,
+) -> Result<Json<SavesTreeResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let (_, vampath) = crate::paths::config_paths(&state).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err }),
+        )
+    })?;
+    let vampath = vampath.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "vampath is required in config.json".to_string(),
+            }),
+        )
+    })?;
+
+    let groups = vec![
+        ("scenes", "[Scenes]: ./Saves/scene", vampath.join("Saves").join("scene"), "json"),
+        (
+            "appearance",
+            "[Appearance]: ./Saves/Person/appearance",
+            vampath.join("Saves").join("Person").join("appearance"),
+            "json",
+        ),
+        (
+            "presets",
+            "[Appearance Presets]: ./Custom/Atom/Person/Appearance",
+            vampath.join("Custom").join("Atom").join("Person").join("Appearance"),
+            "vap",
+        ),
+    ];
+
+    let mut response_groups = Vec::new();
+    for (id, title, root, ext) in groups {
+        let mut items = Vec::new();
+        if root.exists() {
+            for entry in WalkDir::new(&root)
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|e| e.file_type().is_file())
+            {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some(ext) {
+                    continue;
+                }
+                let rel = path.strip_prefix(&vampath).unwrap_or(path);
+                let rel_str = rel.to_string_lossy().replace('\\', "/");
+                let name = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                let preview_path = path.with_extension("jpg");
+                let preview = if preview_path.exists() {
+                    Some(
+                        preview_path
+                            .strip_prefix(&vampath)
+                            .unwrap_or(&preview_path)
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                    )
+                } else {
+                    None
+                };
+                items.push(SavesTreeItem {
+                    path: rel_str,
+                    name,
+                    preview,
+                    modified: None,
+                });
+            }
+        }
+        response_groups.push(SavesTreeGroup {
+            id: id.to_string(),
+            title: title.to_string(),
+            items,
+        });
+    }
+
+    Ok(Json(SavesTreeResponse {
+        groups: response_groups,
+    }))
+}
+
 async fn get_stats(
     State(state): State<AppState>,
 ) -> Result<Json<StatsResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -1233,28 +2169,28 @@ async fn get_stats(
 
     let vars_total: u64 = db
         .connection()
-        .query_row("SELECT COUNT(1) FROM vars", [], |row| row.get(0))
-        .unwrap_or(0);
+        .query_row("SELECT COUNT(1) FROM vars", [], |row| row.get::<_, i64>(0))
+        .unwrap_or(0) as u64;
     let vars_installed: u64 = db
         .connection()
         .query_row(
             "SELECT COUNT(1) FROM installStatus WHERE installed = 1",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0),
         )
-        .unwrap_or(0);
+        .unwrap_or(0) as u64;
     let vars_disabled: u64 = db
         .connection()
         .query_row(
             "SELECT COUNT(1) FROM installStatus WHERE disabled = 1",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0),
         )
-        .unwrap_or(0);
+        .unwrap_or(0) as u64;
     let scenes_total: u64 = db
         .connection()
-        .query_row("SELECT COUNT(1) FROM scenes", [], |row| row.get(0))
-        .unwrap_or(0);
+        .query_row("SELECT COUNT(1) FROM scenes", [], |row| row.get::<_, i64>(0))
+        .unwrap_or(0) as u64;
     let missing_deps: u64 = db
         .connection()
         .query_row(
@@ -1263,9 +2199,9 @@ async fn get_stats(
              LEFT JOIN vars v ON d.dependency = v.varName
              WHERE v.varName IS NULL",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0),
         )
-        .unwrap_or(0);
+        .unwrap_or(0) as u64;
 
     Ok(Json(StatsResponse {
         vars_total,
@@ -1387,7 +2323,7 @@ fn list_dependencies_with_status(
     Ok(result)
 }
 
-fn list_dependents(conn: &rusqlite::Connection, var_name: &str) -> Result<Vec<String>, String> {
+fn list_dependents_conn(conn: &rusqlite::Connection, var_name: &str) -> Result<Vec<String>, String> {
     let mut names = Vec::new();
     let targets = dependency_targets(conn, var_name)?;
     let mut stmt = conn

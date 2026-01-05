@@ -146,7 +146,7 @@ Notes:
 | App Shell | Theme + routing + layout | DONE | Material3 baseline + rail |
 | Backend | Process manager + health | DONE | Start/stop flow |
 | Data | BackendClient + DTOs | DONE | Single base URL |
-| Home | Vars list + filters | PARTIAL | core list done; preview panel/filter/nav missing |
+| Home | Vars list + filters | PARTIAL | preview panel + nav + pagination/sort done; column filters pending |
 | Jobs | Update DB / install / uninstall | DONE | job flow + logs |
 | Scenes | List + actions | PARTIAL | basic list/actions; layout/filters/paging gaps |
 | Hub | Browse + download | PARTIAL | basic list/actions; hub_info/filter/paging gaps |
@@ -155,8 +155,9 @@ Notes:
 | Packaging | Zip layout + smoke test | TODO | |
 
 ### Parity TODO (WinForms -> Flutter)
-- Home: preview panel (thumbnails + large preview) + nav (first/prev/next/last/page), PreviewType/Loadable filters, preview install/uninstall button.
-- Home: Fix Preview entry, column-level filters (WinForms DgvFilter), full pagination/sort controls, filtered-missing scope should use full filtered set (not current page only).
+- Home: preview panel (thumbnails + large preview) + nav (first/prev/next/last/page), PreviewType/Loadable filters, preview install/uninstall button. (DONE)
+- Home: Fix Preview entry, full pagination/sort controls, filtered-missing scope should use full filtered set (not current page only). (DONE)
+- Home: column-level filters (WinForms DgvFilter). (TODO)
 - Scenes: three-column hide/normal/fav layout with drag sorting, location filter, creator dropdown linkage, reset filters, full paging + cache preview handling.
 - Hub: hub_info-driven filter lists, InRepository status calculation, full sort/paging controls (first/last + page counts), hub item cards with image + type/user quick filters.
 - Analysis: atom tree/list selection (tri-state tree, listbox) to replace manual atom name/path input.
