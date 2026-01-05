@@ -631,9 +631,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                         children: [
                           SizedBox(width: 180, child: packSwitch),
                           const SizedBox(width: 12),
-                          Expanded(flex: 3, child: list),
+                          Expanded(flex: 2, child: list),
                           const SizedBox(width: 12),
-                          Expanded(flex: 2, child: preview),
+                          Expanded(flex: 3, child: preview),
                         ],
                       );
                     }
@@ -641,7 +641,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       children: [
                         Expanded(child: list),
                         const SizedBox(height: 12),
-                        SizedBox(height: 360, child: preview),
+                        SizedBox(height: 440, child: preview),
                       ],
                     );
                   },
@@ -1220,7 +1220,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
                 const Divider(height: 16),
                 SizedBox(
-                  height: 180,
+                  height: 280,
                   child: _buildPreviewDetail(context, client, selectedItem),
                 ),
               ],
@@ -1253,7 +1253,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             crossAxisCount: crossAxisCount,
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
-            childAspectRatio: 0.85,
+            childAspectRatio: 1.0,
           ),
           itemBuilder: (context, index) {
             final item = items[index];
@@ -1327,25 +1327,29 @@ class _HomePageState extends ConsumerState<HomePage> {
     final previewPath = _previewPath(item);
     return Row(
       children: [
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: previewPath == null
-                ? Container(
-                    color: Colors.grey.shade200,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.image_not_supported),
-                  )
-                : Image.network(
-                    client.previewUrl(root: 'varspath', path: previewPath),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+        // Set fixed width for preview image (similar to uninstall preview dialog)
+        SizedBox(
+          width: 360,
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: previewPath == null
+                  ? Container(
                       color: Colors.grey.shade200,
                       alignment: Alignment.center,
-                      child: const Icon(Icons.broken_image),
+                      child: const Icon(Icons.image_not_supported),
+                    )
+                  : Image.network(
+                      client.previewUrl(root: 'varspath', path: previewPath),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.broken_image),
+                      ),
                     ),
-                  ),
+            ),
           ),
         ),
         const SizedBox(width: 12),
