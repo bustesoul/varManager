@@ -44,7 +44,7 @@ class AppTheme {
         foregroundColor: _onSurface,
         elevation: 0,
       ),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: scheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(

@@ -234,6 +234,75 @@ struct ResolveVarsRequest {
 }
 
 #[derive(Deserialize)]
+struct ValidateOutputRequest {
+    path: String,
+}
+
+#[derive(Serialize)]
+struct ValidateOutputResponse {
+    ok: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+struct MissingMapItem {
+    missing_var: String,
+    dest_var: String,
+}
+
+#[derive(Deserialize)]
+struct MissingMapSaveRequest {
+    path: String,
+    links: Vec<MissingMapItem>,
+}
+
+#[derive(Deserialize)]
+struct MissingMapLoadRequest {
+    path: String,
+}
+
+#[derive(Serialize)]
+struct MissingMapResponse {
+    links: Vec<MissingMapItem>,
+}
+
+#[derive(Deserialize)]
+struct VarDependenciesRequest {
+    var_names: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct VarDependencyItem {
+    var_name: String,
+    dependency: String,
+}
+
+#[derive(Serialize)]
+struct VarDependenciesResponse {
+    items: Vec<VarDependencyItem>,
+}
+
+#[derive(Deserialize)]
+struct VarPreviewsRequest {
+    var_names: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+struct VarPreviewItem {
+    var_name: String,
+    atom_type: String,
+    preview_pic: Option<String>,
+    scene_path: String,
+    is_preset: bool,
+    is_loadable: bool,
+}
+
+#[derive(Serialize)]
+struct VarPreviewsResponse {
+    items: Vec<VarPreviewItem>,
+}
+
+#[derive(Deserialize)]
 struct PreviewQuery {
     root: String,
     path: String,
@@ -474,6 +543,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/vars", get(list_vars))
         .route("/vars/{name}", get(get_var_detail))
         .route("/vars/resolve", post(resolve_vars))
+        .route("/vars/dependencies", post(list_var_dependencies))
+        .route("/vars/previews", post(list_var_previews))
         .route("/scenes", get(list_scenes))
         .route("/creators", get(list_creators))
         .route("/stats", get(get_stats))
@@ -482,6 +553,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/dependents", get(list_dependents))
         .route("/analysis/atoms", get(list_analysis_atoms))
         .route("/saves/tree", get(list_saves_tree))
+        .route("/saves/validate_output", post(validate_output_dir))
+        .route("/missing/map/save", post(save_missing_map))
+        .route("/missing/map/load", post(load_missing_map))
         .route("/jobs", post(start_job))
         .route("/jobs/{id}", get(get_job))
         .route("/jobs/{id}/logs", get(get_job_logs))

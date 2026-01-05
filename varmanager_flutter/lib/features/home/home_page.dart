@@ -1237,7 +1237,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   OutlinedButton(
                     onPressed: () async {
-                      await _runJob('vars_locate', args: {'var_name': item.varName});
+                      final jobArgs = {'var_name': item.varName};
+                      await _runJob('vars_locate', args: jobArgs);
                     },
                     child: const Text('Locate'),
                   ),
