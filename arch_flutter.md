@@ -70,14 +70,14 @@ lib/
 | --- | --- | --- | --- |
 | Home (Vars List) | Form1 | Main list, filters, toolbar actions | TODO |
 | Settings Dialog | FormSettings | Read + edit config | TODO |
-| Missing Vars Dialog | FormMissingVars | Link map + hub actions | TODO |
+| Missing Vars Dialog | FormMissingVars | Link map + hub actions | DONE |
 | Scenes Page | FormScenes | Scene list + actions | TODO |
-| Hub Page | FormHub + HubItem | Browse + download | TODO |
-| Analysis Dialog | FormAnalysis | Preset/scene analysis | TODO |
-| Prepare Saves Dialog | PrepareSaves | Output validation + copy list | TODO |
+| Hub Page | FormHub + HubItem | Browse + download | DONE |
+| Analysis Dialog | FormAnalysis | Preset/scene analysis | DONE |
+| Prepare Saves Dialog | PrepareSaves | Output validation + copy list | DONE |
 | Var Detail Dialog | FormVarDetail | Detail + locate + filter | TODO |
-| Uninstall Vars Dialog | FormUninstallVars | Preview navigation | TODO |
-| PackSwitch Dialogs | FormSwitchAdd/Rename + VarsMove | Add/rename/move | TODO |
+| Uninstall Vars Dialog | FormUninstallVars | Preview navigation | DONE |
+| PackSwitch Dialogs | FormSwitchAdd/Rename + VarsMove | Add/rename/move | DONE |
 
 ## Deadcode Skip Rule
 - Port only features reachable by active UI handlers.
@@ -149,8 +149,8 @@ Notes:
 | Home | Vars list + filters | PARTIAL | preview panel + nav + pagination/sort done; column filters pending |
 | Jobs | Update DB / install / uninstall | DONE | job flow + logs |
 | Scenes | List + actions | PARTIAL | basic list/actions; layout/filters/paging gaps |
-| Hub | Browse + download | PARTIAL | basic list/actions; hub_info/filter/paging gaps |
-| Missing Vars | Link map + actions | PARTIAL | core flow; ignore-version/row nav gaps |
+| Hub | Browse + download | DONE | hub_info filters + cards + paging + repo status |
+| Missing Vars | Link map + actions | DONE | ignore-version + row nav + downloads + map io |
 | Settings | Config read/write | DONE | runtime update |
 | Packaging | Zip layout + smoke test | TODO | |
 
@@ -159,10 +159,10 @@ Notes:
 - Home: Fix Preview entry, full pagination/sort controls, filtered-missing scope should use full filtered set (not current page only). (DONE)
 - Home: column-level filters (WinForms DgvFilter). (TODO)
 - Scenes: three-column hide/normal/fav layout with drag sorting, location filter, creator dropdown linkage, reset filters, full paging + cache preview handling.
-- Hub: hub_info-driven filter lists, InRepository status calculation, full sort/paging controls (first/last + page counts), hub item cards with image + type/user quick filters.
-- Analysis: atom tree/list selection (tri-state tree, listbox) to replace manual atom name/path input.
-- Prepare Saves: save tree view (Scenes/Appearance/Presets) + selectable nodes, output folder picker, strict empty-dir validation.
-- Uninstall Vars: preview image list + type filter + navigation + click-to-preview, dependency grid for selected vars.
-- PackSwitch: existing switch list + current active indicator, input validation before add/delete/rename/set.
-- Missing Vars: ignore-version filter, row navigator/data-grid parity, download status/detail view, save/load map with file picker.
+- Hub: hub_info-driven filter lists, InRepository status calculation, full sort/paging controls (first/last + page counts), hub item cards with image + type/user quick filters. (DONE)
+- Analysis: atom tree/list selection (tri-state tree, listbox) to replace manual atom name/path input. (DONE)
+- Prepare Saves: save tree view (Scenes/Appearance/Presets) + selectable nodes, output folder picker, strict empty-dir validation. (DONE)
+- Uninstall Vars: preview image list + type filter + navigation + click-to-preview, dependency grid for selected vars. (DONE)
+- PackSwitch: existing switch list + current active indicator, input validation before add/delete/rename/set. (DONE)
+- Missing Vars: ignore-version filter, row navigator/data-grid parity, download status/detail view, save/load map with file picker. (DONE)
 - Var Detail: dependency/dependent actions (open url/locate/select in list), dependent save locate actions.

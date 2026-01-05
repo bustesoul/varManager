@@ -10,6 +10,10 @@ final baseUrlProvider = StateProvider<String>((ref) {
   return 'http://127.0.0.1:57123';
 });
 
+final navIndexProvider = StateProvider<int>((ref) {
+  return 0;
+});
+
 final backendClientProvider = Provider<BackendClient>((ref) {
   final baseUrl = ref.watch(baseUrlProvider);
   return BackendClient(baseUrl: baseUrl);

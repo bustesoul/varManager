@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/config.dart';
+import '../models/extra_models.dart';
 import '../models/job_models.dart';
 import '../models/scene_models.dart';
 import '../models/stats.dart';
@@ -89,6 +90,65 @@ class BackendClient {
   Future<StatsResponse> getStats() async {
     final json = await _getJson('/stats');
     return StatsResponse.fromJson(json);
+  }
+
+  Future<PackSwitchListResponse> listPackSwitches() async {
+    final json = await _getJson('/packswitch');
+    return PackSwitchListResponse.fromJson(json);
+  }
+
+  Future<AnalysisAtomsResponse> listAnalysisAtoms(
+      String varName, String entryName) async {
+    final json = await _getJson('/analysis/atoms', {
+      'var_name': varName,
+      'entry_name': entryName,
+    });
+    return AnalysisAtomsResponse.fromJson(json);
+  }
+
+  Future<SavesTreeResponse> getSavesTree() async {
+    final json = await _getJson('/saves/tree');
+    return SavesTreeResponse.fromJson(json);
+  }
+
+  Future<ValidateOutputResponse> validateOutputDir(String path) async {
+    final json = await _postJson('/saves/validate_output', {'path': path});
+    return ValidateOutputResponse.fromJson(json);
+  }
+
+  Future<MissingMapResponse> saveMissingMap(
+      String path, List<MissingMapItem> links) async {
+    final json = await _postJson('/missing/map/save', {
+      'path': path,
+      'links': links.map((item) => item.toJson()).toList(),
+    });
+    return MissingMapResponse.fromJson(json);
+  }
+
+  Future<MissingMapResponse> loadMissingMap(String path) async {
+    final json = await _postJson('/missing/map/load', {'path': path});
+    return MissingMapResponse.fromJson(json);
+  }
+
+  Future<ResolveVarsResponse> resolveVars(List<String> names) async {
+    final json = await _postJson('/vars/resolve', {'names': names});
+    return ResolveVarsResponse.fromJson(json);
+  }
+
+  Future<DependentsResponse> getDependents(String name) async {
+    final json = await _getJson('/dependents', {'name': name});
+    return DependentsResponse.fromJson(json);
+  }
+
+  Future<VarDependenciesResponse> listVarDependencies(
+      List<String> varNames) async {
+    final json = await _postJson('/vars/dependencies', {'var_names': varNames});
+    return VarDependenciesResponse.fromJson(json);
+  }
+
+  Future<VarPreviewsResponse> listVarPreviews(List<String> varNames) async {
+    final json = await _postJson('/vars/previews', {'var_names': varNames});
+    return VarPreviewsResponse.fromJson(json);
   }
 
   Future<StartJobResponse> startJob(String kind,

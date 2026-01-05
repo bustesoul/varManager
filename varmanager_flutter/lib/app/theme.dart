@@ -29,6 +29,15 @@ class AppTheme {
       fontFamily: 'Bahnschrift',
     );
 
+    final cardTheme = CardThemeData(
+      color: scheme.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: scheme.onSurface.withValues(alpha: 0.08)),
+      ),
+    );
+
     return base.copyWith(
       textTheme: base.textTheme.copyWith(
         headlineSmall: base.textTheme.headlineSmall?.copyWith(
@@ -44,14 +53,7 @@ class AppTheme {
         foregroundColor: _onSurface,
         elevation: 0,
       ),
-      cardTheme: CardTheme(
-        color: scheme.surface,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: scheme.onSurface.withOpacity(0.08)),
-        ),
-      ),
+      cardTheme: cardTheme,
     );
   }
 }

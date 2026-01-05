@@ -241,6 +241,7 @@ struct ValidateOutputRequest {
 #[derive(Serialize)]
 struct ValidateOutputResponse {
     ok: bool,
+    reason: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -1151,6 +1152,146 @@ async fn resolve_vars(
     Ok(Json(ResolveVarsResponse { resolved }))
 }
 
+async fn validate_output_dir(
+    Json(req): Json<ValidateOutputRequest>,
+) -> Result<Json<ValidateOutputResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let path_str = req.path.trim();
+    if path_str.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "path is required".to_string(),
+            }),
+        ));
+    }
+    let mut path = PathBuf::from(path_str);
+    if !path.is_absolute() {
+        path = exe_dir().join(&path);
+    }
+    if !path.exists() {
+        return Ok(Json(ValidateOutputResponse {
+            ok: false,
+            reason: Some("path does not exist".to_string()),
+        }));
+    }
+    if !path.is_dir() {
+        return Ok(Json(ValidateOutputResponse {
+            ok: false,
+            reason: Some("path is not a directory".to_string()),
+        }));
+    }
+    let mut entries = std::fs::read_dir(&path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+    if entries.next().is_some() {
+        return Ok(Json(ValidateOutputResponse {
+            ok: false,
+            reason: Some("directory not empty".to_string()),
+        }));
+    }
+    Ok(Json(ValidateOutputResponse { ok: true, reason: None }))
+}
+
+async fn save_missing_map(
+    Json(req): Json<MissingMapSaveRequest>,
+) -> Result<Json<MissingMapResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let path_str = req.path.trim();
+    if path_str.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "path is required".to_string(),
+            }),
+        ));
+    }
+    let mut path = PathBuf::from(path_str);
+    if !path.is_absolute() {
+        path = exe_dir().join(&path);
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: err.to_string(),
+                }),
+            )
+        })?;
+    }
+    let mut lines = Vec::new();
+    let mut saved = Vec::new();
+    for item in req.links {
+        let missing = item.missing_var.trim();
+        let dest = item.dest_var.trim();
+        if missing.is_empty() || dest.is_empty() {
+            continue;
+        }
+        lines.push(format!("{}|{}", missing, dest));
+        saved.push(MissingMapItem {
+            missing_var: missing.to_string(),
+            dest_var: dest.to_string(),
+        });
+    }
+    std::fs::write(&path, lines.join("\n")).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+    Ok(Json(MissingMapResponse { links: saved }))
+}
+
+async fn load_missing_map(
+    Json(req): Json<MissingMapLoadRequest>,
+) -> Result<Json<MissingMapResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let path_str = req.path.trim();
+    if path_str.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "path is required".to_string(),
+            }),
+        ));
+    }
+    let mut path = PathBuf::from(path_str);
+    if !path.is_absolute() {
+        path = exe_dir().join(&path);
+    }
+    let contents = std::fs::read_to_string(&path).map_err(|err| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: err.to_string(),
+            }),
+        )
+    })?;
+    let mut links = Vec::new();
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(2, '|');
+        let missing = parts.next().unwrap_or("").trim();
+        let dest = parts.next().unwrap_or("").trim();
+        if missing.is_empty() || dest.is_empty() {
+            continue;
+        }
+        links.push(MissingMapItem {
+            missing_var: missing.to_string(),
+            dest_var: dest.to_string(),
+        });
+    }
+    Ok(Json(MissingMapResponse { links }))
+}
+
 async fn get_var_detail(
     State(state): State<AppState>,
     Path(name): Path<String>,
@@ -1954,6 +2095,148 @@ async fn list_packswitch(
     };
 
     Ok(Json(PackSwitchListResponse { current, switches }))
+}
+
+async fn list_var_dependencies(
+    Json(req): Json<VarDependenciesRequest>,
+) -> Result<Json<VarDependenciesResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let mut names: Vec<String> = req
+        .var_names
+        .into_iter()
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect();
+    names.sort();
+    names.dedup();
+    if names.is_empty() {
+        return Ok(Json(VarDependenciesResponse { items: Vec::new() }));
+    }
+
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err.to_string() }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err.to_string() }),
+        )
+    })?;
+
+    let placeholders = std::iter::repeat("?")
+        .take(names.len())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT varName, dependency FROM dependencies WHERE varName IN ({}) ORDER BY varName, dependency",
+        placeholders
+    );
+    let mut stmt = db.connection().prepare(&sql).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err.to_string() }),
+        )
+    })?;
+    let rows = stmt
+        .query_map(params_from_iter(names.iter()), |row| {
+            Ok(VarDependencyItem {
+                var_name: row.get(0)?,
+                dependency: row.get(1)?,
+            })
+        })
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: err.to_string() }),
+            )
+        })?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: err.to_string() }),
+            )
+        })?);
+    }
+    Ok(Json(VarDependenciesResponse { items }))
+}
+
+async fn list_var_previews(
+    Json(req): Json<VarPreviewsRequest>,
+) -> Result<Json<VarPreviewsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let mut names: Vec<String> = req
+        .var_names
+        .into_iter()
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect();
+    names.sort();
+    names.dedup();
+    if names.is_empty() {
+        return Ok(Json(VarPreviewsResponse { items: Vec::new() }));
+    }
+
+    let db_path = exe_dir().join("varManager.db");
+    let db = crate::db::Db::open(&db_path).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err.to_string() }),
+        )
+    })?;
+    db.ensure_schema().map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err.to_string() }),
+        )
+    })?;
+
+    let placeholders = std::iter::repeat("?")
+        .take(names.len())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT varName, atomType, previewPic, scenePath, isPreset, isLoadable \
+         FROM scenes WHERE varName IN ({}) AND previewPic IS NOT NULL AND previewPic != '' \
+         ORDER BY varName, atomType, scenePath",
+        placeholders
+    );
+    let mut stmt = db.connection().prepare(&sql).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: err.to_string() }),
+        )
+    })?;
+    let rows = stmt
+        .query_map(params_from_iter(names.iter()), |row| {
+            Ok(VarPreviewItem {
+                var_name: row.get(0)?,
+                atom_type: row.get(1)?,
+                preview_pic: row.get(2)?,
+                scene_path: row.get(3)?,
+                is_preset: row.get::<_, i64>(4)? != 0,
+                is_loadable: row.get::<_, i64>(5)? != 0,
+            })
+        })
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: err.to_string() }),
+            )
+        })?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: err.to_string() }),
+            )
+        })?);
+    }
+    Ok(Json(VarPreviewsResponse { items }))
 }
 
 async fn list_dependents(

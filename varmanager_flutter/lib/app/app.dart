@@ -32,7 +32,6 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _index = 0;
   bool _ready = false;
   String? _error;
 
@@ -65,6 +64,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final logs = ref.watch(jobLogProvider);
+    final index = ref.watch(navIndexProvider);
     final isCompact = MediaQuery.of(context).size.width < 900;
     return Scaffold(
       appBar: AppBar(
@@ -109,16 +109,14 @@ class _AppShellState extends ConsumerState<AppShell> {
                           ? _ErrorPane(message: _error!)
                           : !_ready
                               ? const _LoadingPane()
-                              : _pages[_index].page,
+                              : _pages[index].page,
                     ),
                   ),
                   if (logs.isNotEmpty) const JobLogPanel(),
                   NavigationBar(
-                    selectedIndex: _index,
+                    selectedIndex: index,
                     onDestinationSelected: (value) {
-                      setState(() {
-                        _index = value;
-                      });
+                      ref.read(navIndexProvider.notifier).state = value;
                     },
                     destinations: _pages
                         .map(
@@ -134,12 +132,10 @@ class _AppShellState extends ConsumerState<AppShell> {
             : Row(
                 children: [
                   NavigationRail(
-                    selectedIndex: _index,
+                    selectedIndex: index,
                     labelType: NavigationRailLabelType.all,
                     onDestinationSelected: (value) {
-                      setState(() {
-                        _index = value;
-                      });
+                      ref.read(navIndexProvider.notifier).state = value;
                     },
                     destinations: _pages
                         .map(
@@ -160,7 +156,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                                 ? _ErrorPane(message: _error!)
                                 : !_ready
                                     ? const _LoadingPane()
-                                    : _pages[_index].page,
+                                    : _pages[index].page,
                           ),
                         ),
                         if (logs.isNotEmpty) const JobLogPanel(),
