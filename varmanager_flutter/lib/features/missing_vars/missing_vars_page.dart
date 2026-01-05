@@ -250,8 +250,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   }
 
   Future<void> _saveMap() async {
-    final path = await getSavePath(suggestedName: 'missing_map.txt');
-    if (path == null || path.trim().isEmpty) return;
+    final location = await getSaveLocation(suggestedName: 'missing_map.txt');
+    if (location == null) return;
+    final path = location.path;
     final links = _linkMap.entries
         .where((entry) => entry.value.trim().isNotEmpty)
         .map(
