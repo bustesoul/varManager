@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
@@ -149,6 +151,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   int _previewPerPage = 24;
   int _previewPage = 1;
   int? _previewSelectedIndex;
+  int _previewWheelLastMs = 0;
+  static const int _previewWheelCooldownMs = 350;
 
   // PackSwitch state
   PackSwitchListResponse? _packSwitchData;
@@ -1080,6 +1084,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ? filtered[selectedIndex]
                 : null;
             final client = ref.read(backendClientProvider);
+            final openPreview =
+                (int index) => _openPreviewDialog(context, client, filtered, index);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1210,18 +1216,34 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
                 const Divider(height: 16),
                 Expanded(
-                  child: _buildPreviewGrid(
-                    client: client,
-                    items: pageItems,
-                    startIndex: startIndex,
-                    selectedIndex: selectedIndex,
-                    totalItems: totalItems,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) => _handlePreviewScroll(
+                      notification,
+                      totalItems,
+                      currentPage,
+                      totalPages,
+                    ),
+                    child: _buildPreviewGrid(
+                      client: client,
+                      items: pageItems,
+                      startIndex: startIndex,
+                      selectedIndex: selectedIndex,
+                      totalItems: totalItems,
+                      onOpenPreview: openPreview,
+                    ),
                   ),
                 ),
                 const Divider(height: 16),
                 SizedBox(
                   height: 280,
-                  child: _buildPreviewDetail(context, client, selectedItem),
+                  child: _buildPreviewDetail(
+                    context,
+                    client,
+                    selectedItem,
+                    onOpenPreview: selectedIndex == null
+                        ? null
+                        : () => openPreview(selectedIndex),
+                  ),
                 ),
               ],
             );
@@ -1239,6 +1261,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     required int startIndex,
     required int? selectedIndex,
     required int totalItems,
+    required void Function(int index) onOpenPreview,
   }) {
     if (items.isEmpty) {
       return const Center(child: Text('No preview items'));
@@ -1247,14 +1270,11 @@ class _HomePageState extends ConsumerState<HomePage> {
       builder: (context, constraints) {
         final crossAxisCount =
             (constraints.maxWidth / 140).floor().clamp(2, 6).toInt();
-        return GridView.builder(
+        return MasonryGridView.count(
           itemCount: items.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 1.0,
-          ),
+          crossAxisCount: crossAxisCount,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
           itemBuilder: (context, index) {
             final item = items[index];
             final globalIndex = startIndex + index;
@@ -1262,41 +1282,42 @@ class _HomePageState extends ConsumerState<HomePage> {
             final previewPath = _previewPath(item);
             return InkWell(
               onTap: () => _selectPreviewIndex(globalIndex, totalItems),
+              onDoubleTap: () => onOpenPreview(globalIndex),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey.shade300,
-                          width: isSelected ? 2 : 1,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey.shade300,
+                        width: isSelected ? 2 : 1,
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: previewPath == null
-                            ? Container(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: previewPath == null
+                          ? Container(
+                              color: Colors.grey.shade200,
+                              alignment: Alignment.center,
+                              height: 110,
+                              child: const Icon(Icons.image_not_supported),
+                            )
+                          : Image.network(
+                              client.previewUrl(
+                                root: 'varspath',
+                                path: previewPath,
+                              ),
+                              fit: BoxFit.fitWidth,
+                              errorBuilder: (_, __, ___) => Container(
                                 color: Colors.grey.shade200,
                                 alignment: Alignment.center,
-                                child: const Icon(Icons.image_not_supported),
-                              )
-                            : Image.network(
-                                client.previewUrl(
-                                  root: 'varspath',
-                                  path: previewPath,
-                                ),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.grey.shade200,
-                                  alignment: Alignment.center,
-                                  child: const Icon(Icons.broken_image),
-                                ),
+                                height: 110,
+                                child: const Icon(Icons.broken_image),
                               ),
-                      ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1315,11 +1336,44 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  bool _handlePreviewScroll(
+    ScrollNotification notification,
+    int totalItems,
+    int currentPage,
+    int totalPages,
+  ) {
+    if (totalItems <= 0 || totalPages <= 1) {
+      return false;
+    }
+    if (notification is! ScrollUpdateNotification) {
+      return false;
+    }
+    final delta = notification.scrollDelta;
+    if (delta == null || delta == 0) {
+      return false;
+    }
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (nowMs - _previewWheelLastMs < _previewWheelCooldownMs) {
+      return false;
+    }
+    const edgeThreshold = 18.0;
+    if (delta > 0 && notification.metrics.extentAfter <= edgeThreshold) {
+      _previewWheelLastMs = nowMs;
+      _setPreviewPage(currentPage + 1, totalItems);
+    } else if (delta < 0 &&
+        notification.metrics.extentBefore <= edgeThreshold) {
+      _previewWheelLastMs = nowMs;
+      _setPreviewPage(currentPage - 1, totalItems);
+    }
+    return false;
+  }
+
   Widget _buildPreviewDetail(
     BuildContext context,
     BackendClient client,
-    PreviewItem? item,
-  ) {
+    PreviewItem? item, {
+    VoidCallback? onOpenPreview,
+  }) {
     final isBusy = ref.watch(jobBusyProvider);
     if (item == null) {
       return const Center(child: Text('Select a preview'));
@@ -1330,8 +1384,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         // Set fixed width for preview image (similar to uninstall preview dialog)
         SizedBox(
           width: 360,
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
+          child: GestureDetector(
+            onDoubleTap: onOpenPreview,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: previewPath == null
@@ -1342,7 +1396,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     )
                   : Image.network(
                       client.previewUrl(root: 'varspath', path: previewPath),
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Container(
                         color: Colors.grey.shade200,
                         alignment: Alignment.center,
@@ -1397,6 +1451,242 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _openPreviewDialog(
+    BuildContext context,
+    BackendClient client,
+    List<PreviewItem> items,
+    int initialIndex,
+  ) async {
+    if (items.isEmpty) return;
+    final clampedIndex = initialIndex.clamp(0, items.length - 1);
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        var currentIndex = clampedIndex;
+        var zoom = 1.5;
+        final transformationController =
+            TransformationController(Matrix4.identity()..scale(zoom));
+        return StatefulBuilder(
+          builder: (context, setState) {
+            void setZoom(double value) {
+              zoom = value.clamp(0.5, 4.0).toDouble();
+              transformationController.value =
+                  Matrix4.identity()..scale(zoom);
+            }
+
+            void updateIndex(int next) {
+              final clamped = next.clamp(0, items.length - 1);
+              if (clamped == currentIndex) return;
+              setState(() {
+                currentIndex = clamped;
+                setZoom(1.5);
+              });
+              _selectPreviewIndex(clamped, items.length);
+            }
+
+            final item = items[currentIndex];
+            final previewPath = _previewPath(item);
+            final size = MediaQuery.of(dialogContext).size;
+            final dialogWidth = size.width * 0.95;
+            final dialogHeight = size.height * 0.95;
+            return Shortcuts(
+              shortcuts: {
+                LogicalKeySet(LogicalKeyboardKey.escape):
+                    const _DismissIntent(),
+              },
+              child: Actions(
+                actions: {
+                  _DismissIntent: CallbackAction<_DismissIntent>(
+                    onInvoke: (_) {
+                      Navigator.of(dialogContext).pop();
+                      return null;
+                    },
+                  ),
+                },
+                child: Focus(
+                  autofocus: true,
+                  child: Dialog(
+                    insetPadding: const EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: dialogWidth,
+                      height: dialogHeight,
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${_sceneTitle(item)} (${item.atomType})',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(),
+                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Close',
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: Container(
+                              color: Colors.black,
+                              alignment: Alignment.center,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Center(
+                                      child: previewPath == null
+                                          ? Container(
+                                              color: Colors.grey.shade200,
+                                              alignment: Alignment.center,
+                                              child: const Icon(
+                                                Icons.image_not_supported,
+                                              ),
+                                            )
+                                          : InteractiveViewer(
+                                              transformationController:
+                                                  transformationController,
+                                              minScale: 0.5,
+                                              maxScale: 4.0,
+                                              child: Image.network(
+                                                client.previewUrl(
+                                                  root: 'varspath',
+                                                  path: previewPath,
+                                                ),
+                                                fit: BoxFit.contain,
+                                                errorBuilder:
+                                                    (_, __, ___) => Container(
+                                                  color: Colors.grey.shade200,
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(
+                                                    Icons.broken_image,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    width: 56,
+                                    child: Column(
+                                      children: [
+                                        const Text(
+                                          '4x',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        Expanded(
+                                          child: RotatedBox(
+                                            quarterTurns: -1,
+                                            child: Slider(
+                                              min: 0.5,
+                                              max: 4.0,
+                                              divisions: 35,
+                                              value: zoom,
+                                              onChanged: previewPath == null
+                                                  ? null
+                                                  : (value) {
+                                                      setState(() {
+                                                        setZoom(value);
+                                                      });
+                                                    },
+                                            ),
+                                          ),
+                                        ),
+                                        const Text(
+                                          '0.5x',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '${zoom.toStringAsFixed(2)}x',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  onPressed: currentIndex > 0
+                                      ? () => updateIndex(0)
+                                      : null,
+                                  icon: const Icon(Icons.first_page),
+                                ),
+                                IconButton(
+                                  onPressed: currentIndex > 0
+                                      ? () => updateIndex(currentIndex - 1)
+                                      : null,
+                                  icon: const Icon(Icons.chevron_left),
+                                ),
+                                Text(
+                                  '${currentIndex + 1}/${items.length}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: currentIndex < items.length - 1
+                                      ? () => updateIndex(currentIndex + 1)
+                                      : null,
+                                  icon: const Icon(Icons.chevron_right),
+                                ),
+                                IconButton(
+                                  onPressed: currentIndex < items.length - 1
+                                      ? () => updateIndex(items.length - 1)
+                                      : null,
+                                  icon: const Icon(Icons.last_page),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    item.varName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1800,4 +2090,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     await _runJob('packswitch_set', args: {'name': name});
     await _loadPackSwitches();
   }
+}
+
+class _DismissIntent extends Intent {
+  const _DismissIntent();
 }
