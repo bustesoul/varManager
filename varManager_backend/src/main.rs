@@ -1603,7 +1603,8 @@ fn load_save_scenes(vampath: &StdPath) -> Vec<SceneListItem> {
             let (hide, fav, hide_fav) = read_hide_fav_for_save(path);
             let modified = entry
                 .metadata()
-                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|m| m.modified().ok())
                 .map(format_system_time)
                 .unwrap_or_default();
             items.push(SceneListItem {
