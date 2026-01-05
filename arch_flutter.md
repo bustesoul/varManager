@@ -68,14 +68,14 @@ lib/
 ## UI Pages and Mapping
 | Flutter Feature/Page | WinForms Source | Notes | Status |
 | --- | --- | --- | --- |
-| Home (Vars List) | Form1 | Main list, filters, toolbar actions | TODO |
-| Settings Dialog | FormSettings | Read + edit config | TODO |
+| Home (Vars List) | Form1 | Main list, filters, toolbar actions | PARTIAL |
+| Settings Dialog | FormSettings | Read + edit config | DONE |
 | Missing Vars Dialog | FormMissingVars | Link map + hub actions | DONE |
-| Scenes Page | FormScenes | Scene list + actions | TODO |
+| Scenes Page | FormScenes | Scene list + actions | DONE |
 | Hub Page | FormHub + HubItem | Browse + download | DONE |
 | Analysis Dialog | FormAnalysis | Preset/scene analysis | DONE |
 | Prepare Saves Dialog | PrepareSaves | Output validation + copy list | DONE |
-| Var Detail Dialog | FormVarDetail | Detail + locate + filter | TODO |
+| Var Detail Dialog | FormVarDetail | Detail + locate + filter | DONE |
 | Uninstall Vars Dialog | FormUninstallVars | Preview navigation | DONE |
 | PackSwitch Dialogs | FormSwitchAdd/Rename + VarsMove | Add/rename/move | DONE |
 
@@ -91,24 +91,33 @@ lib/
 4. Fetch `GET /jobs/{id}/result` on success
 
 ## Backend API Contract (Flutter Usage)
-### Existing (Backend Done)
+### Existing (Backend Done / Used by Flutter)
 - `GET /health`
 - `GET /config`
+- `PUT /config`
 - `POST /shutdown`
 - `POST /jobs`
 - `GET /jobs/{id}`
 - `GET /jobs/{id}/logs`
 - `GET /jobs/{id}/result`
+- `GET /vars`
+- `GET /vars/{varName}`
+- `POST /vars/resolve`
+- `POST /vars/dependencies`
+- `POST /vars/previews`
+- `GET /scenes`
+- `GET /creators`
+- `GET /stats`
+- `GET /packswitch`
+- `GET /analysis/atoms`
+- `GET /saves/tree`
+- `POST /saves/validate_output`
+- `POST /missing/map/save`
+- `POST /missing/map/load`
+- `GET /preview`
 
 ### Needed for Flutter UI (To Add in Backend)
-Minimum list/query endpoints to avoid direct SQLite access:
-- `PUT /config` (validate + persist updates)
-- `GET /vars` (filters + pagination + summary)
-- `GET /vars/{varName}` (detail, deps, preview refs)
-- `GET /scenes` (filters + pagination)
-- `GET /creators` (distinct list for filters)
-- `GET /stats` (counts for UI badges)
-- `GET /preview` (stream preview image with allowlist)
+- None (current Flutter UI endpoints are implemented).
 
 Notes:
 - Prefer simple, stable DTOs and pagination.
@@ -146,23 +155,22 @@ Notes:
 | App Shell | Theme + routing + layout | DONE | Material3 baseline + rail |
 | Backend | Process manager + health | DONE | Start/stop flow |
 | Data | BackendClient + DTOs | DONE | Single base URL |
-| Home | Vars list + filters | PARTIAL | preview panel + nav + pagination/sort done; column filters pending |
+| Home | Vars list + filters | PARTIAL | list + preview + pagination/sort done; column-level filters + grid columns pending |
 | Jobs | Update DB / install / uninstall | DONE | job flow + logs |
-| Scenes | List + actions | PARTIAL | basic list/actions; layout/filters/paging gaps |
+| Scenes | List + actions | DONE | 3-column layout + drag + filters + paging done; no width toggles |
 | Hub | Browse + download | DONE | hub_info filters + cards + paging + repo status |
 | Missing Vars | Link map + actions | DONE | ignore-version + row nav + downloads + map io |
 | Settings | Config read/write | DONE | runtime update |
 | Packaging | Zip layout + smoke test | TODO | |
 
 ### Parity TODO (WinForms -> Flutter)
-- Home: preview panel (thumbnails + large preview) + nav (first/prev/next/last/page), PreviewType/Loadable filters, preview install/uninstall button. (DONE)
-- Home: Fix Preview entry, full pagination/sort controls, filtered-missing scope should use full filtered set (not current page only). (DONE)
-- Home: column-level filters (WinForms DgvFilter). (TODO)
-- Scenes: three-column hide/normal/fav layout with drag sorting, location filter, creator dropdown linkage, reset filters, full paging + cache preview handling.
-- Hub: hub_info-driven filter lists, InRepository status calculation, full sort/paging controls (first/last + page counts), hub item cards with image + type/user quick filters. (DONE)
-- Analysis: atom tree/list selection (tri-state tree, listbox) to replace manual atom name/path input. (DONE)
-- Prepare Saves: save tree view (Scenes/Appearance/Presets) + selectable nodes, output folder picker, strict empty-dir validation. (DONE)
-- Uninstall Vars: preview image list + type filter + navigation + click-to-preview, dependency grid for selected vars. (DONE)
-- PackSwitch: existing switch list + current active indicator, input validation before add/delete/rename/set. (DONE)
-- Missing Vars: ignore-version filter, row navigator/data-grid parity, download status/detail view, save/load map with file picker. (DONE)
-- Var Detail: dependency/dependent actions (open url/locate/select in list), dependent save locate actions.
+- Home: column-level filters (WinForms DgvFilter).
+- Home: expose grid-style columns (size/type counts/disabled) or equivalent detail view.
+- Home: Clear Cache action for the current preview entry.
+- Scenes: width toggles for Hide/Normal/Fav columns (optional parity).
+
+## Differences vs WinForms (Current)
+- Home uses a simplified list view; no DataGridView header filters or full column set.
+- Home preview panel lacks the current-entry cache clear action (Form1 buttonClearCache).
+- Settings are editable via `PUT /config` (WinForms settings dialog is read-only).
+- Scenes uses responsive columns with drag/drop; no explicit width-toggle buttons.
