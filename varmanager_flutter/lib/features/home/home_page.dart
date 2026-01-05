@@ -187,7 +187,13 @@ class _HomePageState extends ConsumerState<HomePage> {
       {Map<String, dynamic>? args}) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    return runner.runJob(kind, args: args, onLog: log.addLine);
+    final busy = ref.read(jobBusyProvider.notifier);
+    busy.setBusy(true);
+    try {
+      return await runner.runJob(kind, args: args, onLog: log.addLine);
+    } finally {
+      busy.setBusy(false);
+    }
   }
 
   void _updateQuery(VarsQueryParams Function(VarsQueryParams) updater) {
@@ -653,90 +659,120 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildToolbar(BuildContext context, AsyncValue<VarsListResponse> vars) {
+    final isBusy = ref.watch(jobBusyProvider);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (isBusy)
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
         FilledButton.icon(
-          onPressed: () async {
-            await _runJob('update_db');
-            ref.invalidate(varsListProvider);
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('update_db');
+                  ref.invalidate(varsListProvider);
+                  ref.invalidate(creatorsProvider);
+                },
           icon: const Icon(Icons.sync),
           label: const Text('Update DB'),
         ),
         OutlinedButton.icon(
-          onPressed: () async {
-            await _runJob('vam_start');
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('vam_start');
+                },
           icon: const Icon(Icons.play_arrow),
           label: const Text('Start VaM'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            final result = await _runJob('missing_deps', args: {
-              'scope': 'installed',
-            });
-            _openMissingVars(result);
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  final result = await _runJob('missing_deps', args: {
+                    'scope': 'installed',
+                  });
+                  _openMissingVars(result);
+                },
           child: const Text('Missing deps (installed)'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            final result = await _runJob('missing_deps', args: {
-              'scope': 'all',
-            });
-            _openMissingVars(result);
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  final result = await _runJob('missing_deps', args: {
+                    'scope': 'all',
+                  });
+                  _openMissingVars(result);
+                },
           child: const Text('Missing deps (all)'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            final query = ref.read(varsQueryProvider);
-            final names = await _fetchFilteredVarNames(query);
-            if (names.isEmpty) return;
-            final result = await _runJob('missing_deps', args: {
-              'scope': 'filtered',
-              'var_names': names,
-            });
-            _openMissingVars(result);
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  final query = ref.read(varsQueryProvider);
+                  final names = await _fetchFilteredVarNames(query);
+                  if (names.isEmpty) return;
+                  final result = await _runJob('missing_deps', args: {
+                    'scope': 'filtered',
+                    'var_names': names,
+                  });
+                  _openMissingVars(result);
+                },
           child: const Text('Missing deps (filtered)'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            await _runJob('rebuild_links', args: {'include_missing': true});
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('rebuild_links', args: {'include_missing': true});
+                },
           child: const Text('Rebuild links'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            await _runJob('saves_deps');
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('saves_deps');
+                },
           child: const Text('Analyze Saves'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            await _runJob('log_deps');
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('log_deps');
+                },
           child: const Text('Analyze Log'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            await _runJob('stale_vars');
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('stale_vars');
+                },
           child: const Text('Stale Vars'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            await _runJob('old_version_vars');
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('old_version_vars');
+                },
           child: const Text('Old Versions'),
         ),
         OutlinedButton(
-          onPressed: () async {
-            await _runJob('fix_previews');
-          },
+          onPressed: isBusy
+              ? null
+              : () async {
+                  await _runJob('fix_previews');
+                },
           child: const Text('Fix Preview'),
         ),
         OutlinedButton(
@@ -757,6 +793,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       Set<String> selected,
       VarsQueryParams query,
       String? focusedVar) {
+    final isBusy = ref.watch(jobBusyProvider);
     final totalPages =
         data.total == 0 ? 1 : (data.total + query.perPage - 1) ~/ query.perPage;
     if (data.total > 0 && data.page > totalPages) {
@@ -884,81 +921,93 @@ class _HomePageState extends ConsumerState<HomePage> {
                 runSpacing: 8,
                 children: [
                   FilledButton(
-                    onPressed: () async {
-                      await _runJob('install_vars', args: {
-                        'var_names': selected.toList(),
-                        'include_dependencies': true,
-                      });
-                      ref.invalidate(varsListProvider);
-                    },
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            await _runJob('install_vars', args: {
+                              'var_names': selected.toList(),
+                              'include_dependencies': true,
+                            });
+                            ref.invalidate(varsListProvider);
+                          },
                     child: const Text('Install Selected'),
                   ),
                   FilledButton.tonal(
-                    onPressed: () async {
-                      final preview = await _runJob('preview_uninstall', args: {
-                        'var_names': selected.toList(),
-                        'include_implicated': true,
-                      });
-                      if (!context.mounted) return;
-                      final result = preview.result as Map<String, dynamic>?;
-                      if (result == null) return;
-                      final confirmed = await Navigator.of(context).push<bool>(
-                        MaterialPageRoute(
-                          builder: (_) => UninstallVarsPage(payload: result),
-                        ),
-                      );
-                      if (confirmed == true) {
-                        await _runJob('uninstall_vars', args: {
-                          'var_names': selected.toList(),
-                          'include_implicated': true,
-                        });
-                        ref.invalidate(varsListProvider);
-                      }
-                    },
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            final preview = await _runJob('preview_uninstall', args: {
+                              'var_names': selected.toList(),
+                              'include_implicated': true,
+                            });
+                            if (!context.mounted) return;
+                            final result = preview.result as Map<String, dynamic>?;
+                            if (result == null) return;
+                            final confirmed = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => UninstallVarsPage(payload: result),
+                              ),
+                            );
+                            if (confirmed == true) {
+                              await _runJob('uninstall_vars', args: {
+                                'var_names': selected.toList(),
+                                'include_implicated': true,
+                              });
+                              ref.invalidate(varsListProvider);
+                            }
+                          },
                     child: const Text('Uninstall Selected'),
                   ),
                   OutlinedButton(
-                    onPressed: () async {
-                      await _runJob('delete_vars', args: {
-                        'var_names': selected.toList(),
-                        'include_implicated': true,
-                      });
-                      ref.invalidate(varsListProvider);
-                    },
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            await _runJob('delete_vars', args: {
+                              'var_names': selected.toList(),
+                              'include_implicated': true,
+                            });
+                            ref.invalidate(varsListProvider);
+                          },
                     child: const Text('Delete Selected'),
                   ),
                   OutlinedButton(
-                    onPressed: () async {
-                      final target = await _askText(context, 'Target dir');
-                      if (target == null || target.trim().isEmpty) return;
-                      await _runJob('links_move', args: {
-                        'var_names': selected.toList(),
-                        'target_dir': target.trim(),
-                      });
-                    },
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            final target = await _askText(context, 'Target dir');
+                            if (target == null || target.trim().isEmpty) return;
+                            await _runJob('links_move', args: {
+                              'var_names': selected.toList(),
+                              'target_dir': target.trim(),
+                            });
+                          },
                     child: const Text('Move Links'),
                   ),
                   OutlinedButton(
-                    onPressed: () async {
-                      final path = await _askText(context, 'Export path',
-                          hint: 'installed_vars.txt');
-                      if (path == null || path.trim().isEmpty) return;
-                      await _runJob('vars_export_installed', args: {
-                        'path': path.trim(),
-                      });
-                    },
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            final path = await _askText(context, 'Export path',
+                                hint: 'installed_vars.txt');
+                            if (path == null || path.trim().isEmpty) return;
+                            await _runJob('vars_export_installed', args: {
+                              'path': path.trim(),
+                            });
+                          },
                     child: const Text('Export Installed'),
                   ),
                   OutlinedButton(
-                    onPressed: () async {
-                      final path = await _askText(context, 'Install list path',
-                          hint: 'install_list.txt');
-                      if (path == null || path.trim().isEmpty) return;
-                      await _runJob('vars_install_batch', args: {
-                        'path': path.trim(),
-                      });
-                      ref.invalidate(varsListProvider);
-                    },
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            final path = await _askText(context, 'Install list path',
+                                hint: 'install_list.txt');
+                            if (path == null || path.trim().isEmpty) return;
+                            await _runJob('vars_install_batch', args: {
+                              'path': path.trim(),
+                            });
+                            ref.invalidate(varsListProvider);
+                          },
                     child: const Text('Install from List'),
                   ),
                 ],
@@ -1271,6 +1320,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     BackendClient client,
     PreviewItem? item,
   ) {
+    final isBusy = ref.watch(jobBusyProvider);
     if (item == null) {
       return const Center(child: Text('Select a preview'));
     }
@@ -1320,17 +1370,21 @@ class _HomePageState extends ConsumerState<HomePage> {
                 spacing: 8,
                 children: [
                   FilledButton.icon(
-                    onPressed: () => _togglePreviewInstall(context, item),
+                    onPressed: isBusy
+                        ? null
+                        : () => _togglePreviewInstall(context, item),
                     icon: Icon(
                       item.installed ? Icons.delete_outline : Icons.download,
                     ),
                     label: Text(item.installed ? 'Uninstall' : 'Install'),
                   ),
                   OutlinedButton(
-                    onPressed: () async {
-                      final jobArgs = {'var_name': item.varName};
-                      await _runJob('vars_locate', args: jobArgs);
-                    },
+                    onPressed: isBusy
+                        ? null
+                        : () async {
+                            final jobArgs = {'var_name': item.varName};
+                            await _runJob('vars_locate', args: jobArgs);
+                          },
                     child: const Text('Locate'),
                   ),
                 ],

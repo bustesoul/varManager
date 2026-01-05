@@ -1,13 +1,14 @@
 use crate::db::{delete_var_related_conn, upsert_install_status, Db};
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, resolve_var_file_path, DELETED_DIR, INSTALL_LINK_DIR};
 use crate::var_logic::{implicated_vars, vars_dependencies};
-use crate::{job_log, job_progress, job_set_result, winfs, AppState};
+use crate::{winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use tokio::runtime::Handle;
+use std::time::Instant;
 
 #[derive(Deserialize)]
 struct InstallVarsArgs {
@@ -76,15 +77,13 @@ struct DeleteVarsResult {
 
 pub async fn run_install_vars_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "install_vars args required".to_string())?;
         let args: InstallVarsArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        install_vars_blocking(&reporter, args)
+        install_vars_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -92,15 +91,13 @@ pub async fn run_install_vars_job(
 
 pub async fn run_uninstall_vars_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "uninstall_vars args required".to_string())?;
         let args: UninstallVarsArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        uninstall_vars_blocking(&reporter, args)
+        uninstall_vars_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -108,51 +105,20 @@ pub async fn run_uninstall_vars_job(
 
 pub async fn run_delete_vars_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "delete_vars args required".to_string())?;
         let args: DeleteVarsArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        delete_vars_blocking(&reporter, args)
+        delete_vars_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self
-            .handle
-            .block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
-fn install_vars_blocking(reporter: &JobReporter, args: InstallVarsArgs) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn install_vars_blocking(state: &AppState, reporter: &JobReporter, args: InstallVarsArgs) -> Result<(), String> {
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("InstallVars start".to_string());
     reporter.progress(1);
@@ -211,9 +177,10 @@ fn install_vars_blocking(reporter: &JobReporter, args: InstallVarsArgs) -> Resul
     Ok(())
 }
 
-fn uninstall_vars_blocking(reporter: &JobReporter, args: UninstallVarsArgs) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: UninstallVarsArgs) -> Result<(), String> {
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
+    let started = Instant::now();
     reporter.log("UninstallVars start".to_string());
     reporter.progress(1);
 
@@ -232,16 +199,36 @@ fn uninstall_vars_blocking(reporter: &JobReporter, args: UninstallVarsArgs) -> R
         requested_sample
     ));
     reporter.log(format!("UninstallVars db_path: {}", db_path.display()));
+    let db_start = Instant::now();
     let db = Db::open(&db_path)?;
     db.ensure_schema()?;
+    reporter.log(format!(
+        "UninstallVars db ready in {}ms",
+        db_start.elapsed().as_millis()
+    ));
+    reporter.progress(5);
 
+    if args.include_implicated {
+        reporter.log("UninstallVars resolving implicated vars".to_string());
+    }
+    let resolve_start = Instant::now();
     let var_list = if args.include_implicated {
         implicated_vars(db.connection(), args.var_names)?
     } else {
         args.var_names
     };
-
+    reporter.log(format!(
+        "UninstallVars resolved vars in {}ms (total={})",
+        resolve_start.elapsed().as_millis(),
+        var_list.len()
+    ));
+    let links_start = Instant::now();
     let installed_links = fs_util::collect_installed_links(&vampath);
+    reporter.log(format!(
+        "UninstallVars collected installed links in {}ms (count={})",
+        links_start.elapsed().as_millis(),
+        installed_links.len()
+    ));
     let resolved_sample = var_list
         .iter()
         .take(5)
@@ -283,27 +270,29 @@ fn uninstall_vars_blocking(reporter: &JobReporter, args: UninstallVarsArgs) -> R
     );
 
     reporter.progress(100);
-    reporter.log("UninstallVars completed".to_string());
+    reporter.log(format!(
+        "UninstallVars completed in {}ms",
+        started.elapsed().as_millis()
+    ));
     Ok(())
 }
 
 pub async fn run_preview_uninstall_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "preview_uninstall args required".to_string())?;
         let args: PreviewUninstallArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        preview_uninstall_blocking(&reporter, args)
+        preview_uninstall_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-fn preview_uninstall_blocking(reporter: &JobReporter, args: PreviewUninstallArgs) -> Result<(), String> {
+fn preview_uninstall_blocking(_state: &AppState, reporter: &JobReporter, args: PreviewUninstallArgs) -> Result<(), String> {
+    let started = Instant::now();
     reporter.log("PreviewUninstall start".to_string());
     reporter.progress(1);
 
@@ -321,16 +310,33 @@ fn preview_uninstall_blocking(reporter: &JobReporter, args: PreviewUninstallArgs
         args.var_names.len(),
         requested_sample
     ));
+    reporter.log(format!("PreviewUninstall db_path: {}", db_path.display()));
 
+    let db_start = Instant::now();
     let db = Db::open(&db_path)?;
     db.ensure_schema()?;
+    reporter.log(format!(
+        "PreviewUninstall db ready in {}ms",
+        db_start.elapsed().as_millis()
+    ));
+    reporter.progress(5);
 
     let requested = args.var_names.clone();
+    if args.include_implicated {
+        reporter.log("PreviewUninstall resolving implicated vars".to_string());
+    }
+    let resolve_start = Instant::now();
     let var_list = if args.include_implicated {
         implicated_vars(db.connection(), args.var_names)?
     } else {
         args.var_names
     };
+    reporter.log(format!(
+        "PreviewUninstall resolved vars in {}ms (total={})",
+        resolve_start.elapsed().as_millis(),
+        var_list.len()
+    ));
+    reporter.progress(60);
 
     // Calculate implicated vars (those not in the original request)
     let requested_set: std::collections::HashSet<_> = requested.iter().cloned().collect();
@@ -357,12 +363,15 @@ fn preview_uninstall_blocking(reporter: &JobReporter, args: PreviewUninstallArgs
     );
 
     reporter.progress(100);
-    reporter.log("PreviewUninstall completed".to_string());
+    reporter.log(format!(
+        "PreviewUninstall completed in {}ms",
+        started.elapsed().as_millis()
+    ));
     Ok(())
 }
 
-fn delete_vars_blocking(reporter: &JobReporter, args: DeleteVarsArgs) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVarsArgs) -> Result<(), String> {
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("DeleteVars start".to_string());
     reporter.progress(1);

@@ -33,3 +33,42 @@ class JobLogController extends Notifier<List<String>> {
 final jobLogProvider = NotifierProvider<JobLogController, List<String>>(
   JobLogController.new,
 );
+
+class JobErrorNotice {
+  JobErrorNotice({
+    required this.jobId,
+    required this.kind,
+    required this.message,
+  });
+
+  final int jobId;
+  final String kind;
+  final String message;
+}
+
+class JobErrorController extends Notifier<JobErrorNotice?> {
+  @override
+  JobErrorNotice? build() => null;
+
+  void report(JobErrorNotice notice) {
+    state = notice;
+  }
+}
+
+final jobErrorProvider = NotifierProvider<JobErrorController, JobErrorNotice?>(
+  JobErrorController.new,
+);
+
+/// Tracks whether a job is currently running
+class JobBusyController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setBusy(bool value) {
+    state = value;
+  }
+}
+
+final jobBusyProvider = NotifierProvider<JobBusyController, bool>(
+  JobBusyController.new,
+);

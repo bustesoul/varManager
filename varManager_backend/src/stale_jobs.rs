@@ -1,13 +1,13 @@
 use crate::db::{delete_var_related_conn, upsert_install_status, Db};
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, resolve_var_file_path, OLD_VERSION_DIR, STALE_DIR};
-use crate::{job_log, job_progress, job_set_result, system_ops, winfs, AppState};
+use crate::{system_ops, winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use tokio::runtime::Handle;
 
 #[derive(Deserialize)]
 struct StaleVarsArgs {
@@ -32,21 +32,19 @@ struct CombinedStaleResult {
 
 pub async fn run_stale_vars_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args
             .map(|value| serde_json::from_value::<StaleVarsArgs>(value).map_err(|e| e.to_string()))
             .transpose()?
             .unwrap_or(StaleVarsArgs {
                 include_old_versions: false,
             });
-        let stale = stale_vars_blocking(&reporter)?;
+        let stale = stale_vars_blocking(&state, &reporter)?;
         let old_version = if args.include_old_versions {
-            Some(old_version_vars_blocking(&reporter)?)
+            Some(old_version_vars_blocking(&state, &reporter)?)
         } else {
             None
         };
@@ -62,14 +60,12 @@ pub async fn run_stale_vars_job(
 
 pub async fn run_old_version_vars_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
-        let stale = stale_vars_blocking(&reporter)?;
-        let old_version = Some(old_version_vars_blocking(&reporter)?);
+        let stale = stale_vars_blocking(&state, &reporter)?;
+        let old_version = Some(old_version_vars_blocking(&state, &reporter)?);
         reporter.set_result(
             serde_json::to_value(CombinedStaleResult { stale, old_version })
                 .map_err(|e| e.to_string())?,
@@ -78,33 +74,6 @@ pub async fn run_old_version_vars_job(
     })
     .await
     .map_err(|err| err.to_string())?
-}
-
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self.handle.block_on(job_set_result(&self.state, self.id, result));
-    }
 }
 
 #[derive(Clone)]
@@ -118,10 +87,10 @@ struct VarInfo {
     look: i64,
 }
 
-fn stale_vars_blocking(reporter: &JobReporter) -> Result<StaleVarsResult, String> {
+fn stale_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<StaleVarsResult, String> {
     reporter.log("StaleVars start".to_string());
     reporter.progress(1);
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
     let db_path = crate::exe_dir().join("varManager.db");
@@ -183,10 +152,10 @@ fn stale_vars_blocking(reporter: &JobReporter) -> Result<StaleVarsResult, String
     })
 }
 
-fn old_version_vars_blocking(reporter: &JobReporter) -> Result<StaleVarsResult, String> {
+fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<StaleVarsResult, String> {
     reporter.log("OldVersionVars start".to_string());
     reporter.progress(1);
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
     let db_path = crate::exe_dir().join("varManager.db");

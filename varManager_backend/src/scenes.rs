@@ -1,8 +1,9 @@
 use crate::db::{var_exists_conn, Db};
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR};
 use crate::var_logic::vars_dependencies;
-use crate::{exe_dir, job_log, job_progress, job_set_result, util, winfs, AppState};
+use crate::{exe_dir, util, winfs, AppState};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -12,7 +13,6 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use tokio::runtime::Handle;
 use zip::ZipArchive;
 
 #[derive(Clone, Serialize)]
@@ -192,15 +192,13 @@ struct CacheClearArgs {
 
 pub async fn run_scene_load_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "scene_load args required".to_string())?;
         let args: SceneLoadArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        scene_load_blocking(&reporter, args)
+        scene_load_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -208,15 +206,13 @@ pub async fn run_scene_load_job(
 
 pub async fn run_scene_analyze_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "scene_analyze args required".to_string())?;
         let args: SceneAnalyzeArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        scene_analyze_blocking(&reporter, args)
+        scene_analyze_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -224,16 +220,14 @@ pub async fn run_scene_analyze_job(
 
 pub async fn run_scene_preset_look_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "scene_preset_look args required".to_string())?;
         let args: ScenePresetLookArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
-        scene_preset_look_blocking(&reporter, args)
+        scene_preset_look_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -241,40 +235,38 @@ pub async fn run_scene_preset_look_job(
 
 pub async fn run_scene_preset_plugin_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_preset_job(state, id, args, PresetKind::Plugin).await
+    run_scene_preset_job(state, reporter, args, PresetKind::Plugin).await
 }
 
 pub async fn run_scene_preset_pose_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_preset_job(state, id, args, PresetKind::Pose).await
+    run_scene_preset_job(state, reporter, args, PresetKind::Pose).await
 }
 
 pub async fn run_scene_preset_animation_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_preset_job(state, id, args, PresetKind::Animation).await
+    run_scene_preset_job(state, reporter, args, PresetKind::Animation).await
 }
 
 pub async fn run_scene_preset_scene_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "scene_preset_scene args required".to_string())?;
         let args: ScenePresetSceneArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
-        scene_preset_scene_blocking(&reporter, args)
+        scene_preset_scene_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -282,97 +274,68 @@ pub async fn run_scene_preset_scene_job(
 
 pub async fn run_scene_add_atoms_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_atoms_job(state, id, args, false).await
+    run_scene_atoms_job(state, reporter, args, false).await
 }
 
 pub async fn run_scene_add_subscene_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_atoms_job(state, id, args, true).await
+    run_scene_atoms_job(state, reporter, args, true).await
 }
 
 pub async fn run_scene_hide_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_hide_fav_job(state, id, args, -1).await
+    run_scene_hide_fav_job(state, reporter, args, -1).await
 }
 
 pub async fn run_scene_fav_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_hide_fav_job(state, id, args, 1).await
+    run_scene_hide_fav_job(state, reporter, args, 1).await
 }
 
 pub async fn run_scene_unhide_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_hide_fav_job(state, id, args, 0).await
+    run_scene_hide_fav_job(state, reporter, args, 0).await
 }
 
 pub async fn run_scene_unfav_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    run_scene_hide_fav_job(state, id, args, 0).await
+    run_scene_hide_fav_job(state, reporter, args, 0).await
 }
 
 pub async fn run_cache_clear_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "cache_clear args required".to_string())?;
         let args: CacheClearArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        cache_clear_blocking(&reporter, args)
+        cache_clear_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self.handle.block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
-fn scene_load_blocking(reporter: &JobReporter, args: SceneLoadArgs) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+fn scene_load_blocking(state: &AppState, reporter: &JobReporter, args: SceneLoadArgs) -> Result<(), String> {
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let mut json_ls = args.json;
     let resources = json_ls
@@ -400,7 +363,7 @@ fn scene_load_blocking(reporter: &JobReporter, args: SceneLoadArgs) -> Result<()
             .as_deref()
             .unwrap_or("unknown")
             .to_string();
-        read_save_name(&reporter.state, &save_name, &gender, false)?;
+        read_save_name(state, &save_name, &gender, false)?;
     }
 
     let deps = read_lines(&depend_path)?;
@@ -414,6 +377,7 @@ fn scene_load_blocking(reporter: &JobReporter, args: SceneLoadArgs) -> Result<()
     };
 
     let result = build_loadscene(
+        state,
         reporter,
         &vampath,
         &mut json_ls,
@@ -427,9 +391,9 @@ fn scene_load_blocking(reporter: &JobReporter, args: SceneLoadArgs) -> Result<()
     Ok(())
 }
 
-fn scene_analyze_blocking(reporter: &JobReporter, args: SceneAnalyzeArgs) -> Result<(), String> {
+fn scene_analyze_blocking(state: &AppState, reporter: &JobReporter, args: SceneAnalyzeArgs) -> Result<(), String> {
     let gender = args.character_gender.unwrap_or_else(|| "female".to_string());
-    let result = read_save_name(&reporter.state, &args.save_name, &gender, true)?;
+    let result = read_save_name(state, &args.save_name, &gender, true)?;
     reporter.set_result(
         serde_json::to_value(SceneAnalyzeResult {
             var_name: result.var_name,
@@ -443,18 +407,19 @@ fn scene_analyze_blocking(reporter: &JobReporter, args: SceneAnalyzeArgs) -> Res
 }
 
 fn scene_preset_look_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: ScenePresetLookArgs,
 ) -> Result<(), String> {
     let (var_name, entry_name) = normalize_cache_key(&args.var_name, &args.entry_name);
     let cache_root = cache_dir(&var_name, &entry_name);
-    ensure_analysis_cache(&reporter.state, &var_name, &entry_name, &cache_root)?;
+    ensure_analysis_cache(state, &var_name, &entry_name, &cache_root)?;
 
     let atom = load_person_atom(&cache_root, &args.atom_name)?;
     let mut save_names = Vec::new();
     let mut character_gender = "unknown".to_string();
     save_preset(
-        &reporter.state,
+        state,
         &var_name,
         &atom,
         args.morphs,
@@ -470,10 +435,11 @@ fn scene_preset_look_blocking(
     )?;
 
     let deps = read_lines(&cache_root.join("depend.txt"))?;
-    let vampath = config_paths(&reporter.state)?
+    let vampath = config_paths(state)?
         .1
         .ok_or_else(|| "vampath is required in config.json".to_string())?;
     let result = build_loadscene(
+        state,
         reporter,
         &vampath,
         &mut json!({ "resources": save_names }),
@@ -496,29 +462,28 @@ enum PresetKind {
 
 async fn run_scene_preset_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
     kind: PresetKind,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "scene_preset args required".to_string())?;
         let args: ScenePresetArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        scene_preset_blocking(&reporter, args, kind)
+        scene_preset_blocking(&state, &reporter, args, kind)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
 fn scene_preset_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: ScenePresetArgs,
     kind: PresetKind,
 ) -> Result<(), String> {
     let (var_name, entry_name) = normalize_cache_key(&args.var_name, &args.entry_name);
     let cache_root = cache_dir(&var_name, &entry_name);
-    ensure_analysis_cache(&reporter.state, &var_name, &entry_name, &cache_root)?;
+    ensure_analysis_cache(state, &var_name, &entry_name, &cache_root)?;
 
     let atom = load_person_atom(&cache_root, &args.atom_name)?;
     let mut save_names = Vec::new();
@@ -527,7 +492,7 @@ fn scene_preset_blocking(
 
     match kind {
         PresetKind::Plugin => save_plugin_preset(
-            &reporter.state,
+            state,
             &var_name,
             &atom,
             &mut save_names,
@@ -536,7 +501,7 @@ fn scene_preset_blocking(
             person_order,
         )?,
         PresetKind::Pose => save_pose_preset(
-            &reporter.state,
+            state,
             &var_name,
             &atom,
             &mut save_names,
@@ -547,7 +512,7 @@ fn scene_preset_blocking(
         PresetKind::Animation => {
             let core = load_core_control(&cache_root)?;
             save_pose_preset(
-                &reporter.state,
+                state,
                 &var_name,
                 &atom,
                 &mut save_names,
@@ -556,7 +521,7 @@ fn scene_preset_blocking(
                 person_order,
             )?;
             save_animation_preset(
-                &reporter.state,
+                state,
                 &var_name,
                 &atom,
                 &core,
@@ -569,10 +534,11 @@ fn scene_preset_blocking(
     }
 
     let deps = read_lines(&cache_root.join("depend.txt"))?;
-    let vampath = config_paths(&reporter.state)?
+    let vampath = config_paths(state)?
         .1
         .ok_or_else(|| "vampath is required in config.json".to_string())?;
     let result = build_loadscene(
+        state,
         reporter,
         &vampath,
         &mut json!({ "resources": save_names }),
@@ -587,12 +553,13 @@ fn scene_preset_blocking(
 }
 
 fn scene_preset_scene_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: ScenePresetSceneArgs,
 ) -> Result<(), String> {
     let (var_name, entry_name) = normalize_cache_key(&args.var_name, &args.entry_name);
     let cache_root = cache_dir(&var_name, &entry_name);
-    ensure_analysis_cache(&reporter.state, &var_name, &entry_name, &cache_root)?;
+    ensure_analysis_cache(state, &var_name, &entry_name, &cache_root)?;
 
     let mut save_names = Vec::new();
     add_preset_resource(
@@ -604,7 +571,7 @@ fn scene_preset_scene_blocking(
         args.person_order.unwrap_or(0) + 1,
     );
     let atom_resources = add_atom_resources(
-        &reporter.state,
+        state,
         &cache_root,
         &args.atom_paths,
         args.ignore_gender,
@@ -614,10 +581,11 @@ fn scene_preset_scene_blocking(
     save_names.extend(atom_resources);
 
     let deps = read_lines(&cache_root.join("depend.txt"))?;
-    let vampath = config_paths(&reporter.state)?
+    let vampath = config_paths(state)?
         .1
         .ok_or_else(|| "vampath is required in config.json".to_string())?;
     let result = build_loadscene(
+        state,
         reporter,
         &vampath,
         &mut json!({ "resources": save_names }),
@@ -633,32 +601,31 @@ fn scene_preset_scene_blocking(
 
 async fn run_scene_atoms_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
     as_subscene: bool,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "scene_add_atoms args required".to_string())?;
         let mut args: SceneAtomsArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
         args.as_subscene = as_subscene || args.as_subscene;
-        scene_add_atoms_blocking(&reporter, args)
+        scene_add_atoms_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
 fn scene_add_atoms_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: SceneAtomsArgs,
 ) -> Result<(), String> {
     let (var_name, entry_name) = normalize_cache_key(&args.var_name, &args.entry_name);
     let cache_root = cache_dir(&var_name, &entry_name);
-    ensure_analysis_cache(&reporter.state, &var_name, &entry_name, &cache_root)?;
+    ensure_analysis_cache(state, &var_name, &entry_name, &cache_root)?;
 
     let atom_resources = add_atom_resources(
-        &reporter.state,
+        state,
         &cache_root,
         &args.atom_paths,
         args.ignore_gender,
@@ -667,10 +634,11 @@ fn scene_add_atoms_blocking(
     )?;
 
     let deps = read_lines(&cache_root.join("depend.txt"))?;
-    let vampath = config_paths(&reporter.state)?
+    let vampath = config_paths(state)?
         .1
         .ok_or_else(|| "vampath is required in config.json".to_string())?;
     let result = build_loadscene(
+        state,
         reporter,
         &vampath,
         &mut json!({ "resources": atom_resources }),
@@ -686,16 +654,14 @@ fn scene_add_atoms_blocking(
 
 async fn run_scene_hide_fav_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
     hide_fav: i32,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "scene_hide_fav args required".to_string())?;
         let args: SceneHideFavArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        set_hide_fav(&reporter.state, args.var_name.as_deref(), &args.scene_path, hide_fav)?;
+        set_hide_fav(&state, args.var_name.as_deref(), &args.scene_path, hide_fav)?;
         reporter.log("scene hide/fav updated");
         Ok(())
     })
@@ -703,7 +669,7 @@ async fn run_scene_hide_fav_job(
     .map_err(|err| err.to_string())?
 }
 
-fn cache_clear_blocking(reporter: &JobReporter, args: CacheClearArgs) -> Result<(), String> {
+fn cache_clear_blocking(_state: &AppState, reporter: &JobReporter, args: CacheClearArgs) -> Result<(), String> {
     let (var_name, entry_name) = normalize_cache_key(&args.var_name, &args.entry_name);
     let cache_root = cache_dir(&var_name, &entry_name);
     if cache_root.exists() {
@@ -1440,6 +1406,7 @@ fn set_hide_fav(
 }
 
 fn build_loadscene(
+    state: &AppState,
     reporter: &JobReporter,
     vampath: &Path,
     json_ls: &mut Value,
@@ -1483,7 +1450,7 @@ fn build_loadscene(
     });
     deps = distinct(deps);
 
-    let (temp_installed, rescan) = install_temp(reporter, &deps)?;
+    let (temp_installed, rescan) = install_temp(state, reporter, &deps)?;
     for installed in &temp_installed {
         let target = format!("{}.var", installed.to_ascii_lowercase());
         delete_temp.retain(|f| f != &target);
@@ -1512,8 +1479,8 @@ fn build_loadscene(
     })
 }
 
-fn install_temp(reporter: &JobReporter, deps: &[String]) -> Result<(Vec<String>, bool), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn install_temp(state: &AppState, reporter: &JobReporter, deps: &[String]) -> Result<(Vec<String>, bool), String> {
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
     let db_path = crate::exe_dir().join("varManager.db");

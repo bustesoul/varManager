@@ -1,10 +1,10 @@
+use crate::job_channel::JobReporter;
 use crate::var_logic::resolve_var_exist_name;
-use crate::{job_log, job_progress, job_set_result, AppState};
+use crate::AppState;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use tokio::runtime::Handle;
 
 const HUB_API: &str = "https://hub.virtamate.com/citizenx/api.php";
 const HUB_PACKAGES: &str = "https://s3cdn.virtamate.com/data/packages.json";
@@ -56,12 +56,10 @@ pub struct HubDownloadAllArgs {
 
 pub async fn run_hub_missing_scan_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args: HubFindPackagesArgs =
             args.map_or_else(|| Ok(HubFindPackagesArgs { packages: Vec::new() }), serde_json::from_value)
                 .map_err(|err| err.to_string())?;
@@ -73,12 +71,10 @@ pub async fn run_hub_missing_scan_job(
 
 pub async fn run_hub_updates_scan_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         updates_scan_blocking(&reporter)
     })
     .await
@@ -87,24 +83,20 @@ pub async fn run_hub_updates_scan_job(
 
 pub async fn run_hub_download_all_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "hub download args required".to_string())?;
         let args: HubDownloadAllArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        download_all_blocking(&reporter, args)
+        download_all_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-pub async fn run_hub_info_job(state: AppState, id: u64) -> Result<(), String> {
-    let handle = Handle::current();
+pub async fn run_hub_info_job(state: AppState, reporter: JobReporter) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let info = get_info()?;
         reporter.set_result(info);
         Ok(())
@@ -115,12 +107,10 @@ pub async fn run_hub_info_job(state: AppState, id: u64) -> Result<(), String> {
 
 pub async fn run_hub_resources_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "hub_resources args required".to_string())?;
         let query: HubResourcesQuery = serde_json::from_value(args).map_err(|err| err.to_string())?;
         let resources = get_resources(query)?;
@@ -133,12 +123,10 @@ pub async fn run_hub_resources_job(
 
 pub async fn run_hub_resource_detail_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "hub_resource_detail args required".to_string())?;
         let args: HubResourceDetailArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
@@ -159,12 +147,10 @@ pub async fn run_hub_resource_detail_job(
 
 pub async fn run_hub_find_packages_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "hub_find_packages args required".to_string())?;
         let args: HubFindPackagesArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
@@ -180,35 +166,6 @@ pub async fn run_hub_find_packages_job(
     })
     .await
     .map_err(|err| err.to_string())?
-}
-
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self
-            .handle
-            .block_on(job_set_result(&self.state, self.id, result));
-    }
 }
 
 fn missing_scan_blocking(reporter: &JobReporter, args: HubFindPackagesArgs) -> Result<(), String> {
@@ -288,10 +245,10 @@ fn updates_scan_blocking(reporter: &JobReporter) -> Result<(), String> {
     Ok(())
 }
 
-fn download_all_blocking(reporter: &JobReporter, args: HubDownloadAllArgs) -> Result<(), String> {
+fn download_all_blocking(state: &AppState, reporter: &JobReporter, args: HubDownloadAllArgs) -> Result<(), String> {
     reporter.log(format!("Hub download all start ({} urls)", args.urls.len()));
     reporter.progress(1);
-    crate::system_ops::run_downloader(&reporter.state, &args.urls)?;
+    crate::system_ops::run_downloader(state, &args.urls)?;
     reporter.progress(100);
     reporter.log("Hub download all completed".to_string());
     Ok(())

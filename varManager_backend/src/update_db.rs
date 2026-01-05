@@ -3,9 +3,10 @@ use crate::db::{
     upsert_var, var_exists_conn, Db, SceneRecord, VarRecord,
 };
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::resolve_var_file_path;
 use crate::var_logic::vars_dependencies;
-use crate::{job_log, job_progress, system_ops, winfs, AppState};
+use crate::{system_ops, winfs, AppState};
 use chrono::{DateTime, Local};
 use regex::Regex;
 use std::collections::HashSet;
@@ -13,7 +14,6 @@ use std::fs::{self, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use tokio::runtime::Handle;
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
@@ -30,41 +30,16 @@ const MISSING_LINK_DIR: &str = "___MissingVarLink___";
 const TEMP_LINK_DIR: &str = "___TempVarLink___";
 const VARS_FOR_INSTALL_FILE: &str = "varsForInstall.txt";
 
-pub async fn run_update_db_job(state: AppState, id: u64) -> Result<(), String> {
-    let handle = Handle::current();
+pub async fn run_update_db_job(state: AppState, reporter: JobReporter) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
-        update_db_blocking(&reporter)
+        update_db_blocking(&state, &reporter)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-}
-
-fn update_db_blocking(reporter: &JobReporter) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
+    let (varspath, vampath) = config_paths(state)?;
     reporter.log(format!("UpdateDB start: varspath={}", varspath.display()));
     reporter.progress(1);
 
@@ -196,7 +171,7 @@ fn update_db_blocking(reporter: &JobReporter) -> Result<(), String> {
     if let Some(vampath) = vampath.as_ref() {
         refresh_install_status(db.connection(), vampath, reporter)?;
         reporter.progress(97);
-        match system_ops::rescan_packages(&reporter.state) {
+        match system_ops::rescan_packages(state) {
             Ok(true) => reporter.log("RescanPackages triggered".to_string()),
             Ok(false) => reporter.log("RescanPackages skipped (VaM not running)".to_string()),
             Err(err) => reporter.log(format!("RescanPackages failed ({})", err)),

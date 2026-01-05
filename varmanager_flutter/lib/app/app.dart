@@ -45,20 +45,23 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() async {
-      try {
-        await ref.read(backendProcessManagerProvider).start();
-        if (!mounted) return;
-        setState(() {
-          _ready = true;
-        });
-      } catch (err) {
-        if (!mounted) return;
-        setState(() {
-          _error = err.toString();
-        });
-      }
-    });
+    Future.microtask(_initBackend);
+  }
+
+  Future<void> _initBackend() async {
+    try {
+      // baseUrl is already resolved and injected in main.dart via overrideWithValue
+      await ref.read(backendProcessManagerProvider).start();
+      if (!mounted) return;
+      setState(() {
+        _ready = true;
+      });
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _error = err.toString();
+      });
+    }
   }
 
   @override
@@ -66,6 +69,20 @@ class _AppShellState extends ConsumerState<AppShell> {
     final logs = ref.watch(jobLogProvider);
     final index = ref.watch(navIndexProvider);
     final isCompact = MediaQuery.of(context).size.width < 900;
+
+    // Listen for job errors and show snackbar
+    ref.listen<JobErrorNotice?>(jobErrorProvider, (previous, next) {
+      if (!mounted || next == null) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Job failed: ${next.kind} (${next.message})'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('varManager'),

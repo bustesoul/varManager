@@ -1,12 +1,12 @@
 use crate::db::Db;
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, resolve_var_file_path, PREVIEW_DIR};
-use crate::{job_log, job_progress, job_set_result, AppState};
+use crate::AppState;
 use serde::Serialize;
 use serde_json::Value;
 use std::fs::{self, File};
 use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
-use tokio::runtime::Handle;
 use zip::ZipArchive;
 
 #[derive(Serialize)]
@@ -19,49 +19,16 @@ struct FixPreviewResult {
 
 pub async fn run_fix_previews_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
-    tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
-        fix_previews_blocking(&reporter)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || fix_previews_blocking(&state, &reporter))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self
-            .handle
-            .block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
-fn fix_previews_blocking(reporter: &JobReporter) -> Result<(), String> {
-    let (varspath, _) = config_paths(&reporter.state)?;
+fn fix_previews_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
+    let (varspath, _) = config_paths(state)?;
     reporter.log("FixPreviews start".to_string());
     reporter.progress(1);
 

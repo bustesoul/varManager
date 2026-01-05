@@ -10,7 +10,7 @@ use rusqlite::{params_from_iter, types::Value as SqlValue};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     env,
     net::SocketAddr,
     path::{Component, Path as StdPath, PathBuf},
@@ -19,7 +19,7 @@ use std::{
         Arc, RwLock,
     },
 };
-use tokio::sync::{oneshot, Mutex, Semaphore};
+use tokio::sync::{oneshot, Semaphore};
 use tokio::time::{interval, Duration};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use walkdir::WalkDir;
@@ -29,6 +29,7 @@ mod db;
 mod deps_jobs;
 mod fs_util;
 mod hub;
+pub mod job_channel;
 mod links;
 mod missing_deps;
 mod packswitch;
@@ -45,7 +46,11 @@ mod vars_misc;
 mod vars_jobs;
 mod winfs;
 
-const LOG_CAPACITY: usize = 1000;
+use job_channel::{
+    create_job_channel, create_job_map, JobEventSender, JobManager, JobMap,
+    JobState, JobStatus, JobView, JobLogsResponse, JobResultResponse, JobReporter,
+    send_job_started, send_job_finished, send_job_failed,
+};
 const PARENT_PID_ENV: &str = "VARMANAGER_PARENT_PID";
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -85,77 +90,11 @@ impl Default for Config {
 #[derive(Clone)]
 pub(crate) struct AppState {
     config: Arc<RwLock<Config>>,
-    shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
-    jobs: Arc<Mutex<HashMap<u64, Job>>>,
+    shutdown_tx: Arc<tokio::sync::Mutex<Option<oneshot::Sender<()>>>>,
+    jobs: JobMap,
     job_counter: Arc<AtomicU64>,
     job_semaphore: Arc<RwLock<Arc<Semaphore>>>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum JobStatus {
-    Queued,
-    Running,
-    Succeeded,
-    Failed,
-}
-
-#[derive(Clone, Debug)]
-struct Job {
-    id: u64,
-    kind: String,
-    status: JobStatus,
-    progress: u8,
-    message: String,
-    error: Option<String>,
-    logs: VecDeque<String>,
-    log_offset: usize,
-    result: Option<Value>,
-}
-
-impl Job {
-    fn new(id: u64, kind: String) -> Self {
-        Self {
-            id,
-            kind,
-            status: JobStatus::Queued,
-            progress: 0,
-            message: String::new(),
-            error: None,
-            logs: VecDeque::new(),
-            log_offset: 0,
-            result: None,
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct JobView {
-    id: u64,
-    kind: String,
-    status: JobStatus,
-    progress: u8,
-    message: String,
-    error: Option<String>,
-    log_offset: usize,
-    log_count: usize,
-    result_available: bool,
-}
-
-impl From<&Job> for JobView {
-    fn from(job: &Job) -> Self {
-        Self {
-            id: job.id,
-            kind: job.kind.clone(),
-            status: job.status.clone(),
-            progress: job.progress,
-            message: job.message.clone(),
-            error: job.error.clone(),
-            log_offset: job.log_offset,
-            log_count: job.logs.len(),
-            result_available: job.result.is_some(),
-        }
-    }
+    job_tx: JobEventSender,
 }
 
 #[derive(Deserialize)]
@@ -324,21 +263,6 @@ struct UpdateConfigRequest {
     vam_exec: Option<String>,
     downloader_path: Option<String>,
     downloader_save_path: Option<String>,
-}
-
-#[derive(Serialize)]
-struct JobLogsResponse {
-    id: u64,
-    from: usize,
-    next: usize,
-    dropped: bool,
-    lines: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct JobResultResponse {
-    id: u64,
-    result: Value,
 }
 
 #[derive(Serialize)]
@@ -517,7 +441,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let log_dir = exe_dir();
     let file_appender = tracing_appender::rolling::never(&log_dir, "backend.log");
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
-    let stdout_layer = tracing_subscriber::fmt::layer().with_filter(env_filter);
+
+    // IMPORTANT: Also use non_blocking for stdout to prevent blocking tokio threads
+    // when Flutter frontend doesn't read stdout pipe fast enough
+    let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
+    let stdout_layer = tracing_subscriber::fmt::layer()
+        .with_writer(stdout_writer)
+        .with_filter(env_filter);
 
     // File layer: debug for our crate, info for third-party libraries
     let file_filter = EnvFilter::new("varManager_backend=debug,h2=info,reqwest=info,hyper=info,hyper_util=info");
@@ -531,15 +461,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(file_layer)
         .init();
     let _file_guard = file_guard;
+    let _stdout_guard = stdout_guard;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    let (job_tx, job_rx) = create_job_channel();
+    let jobs = create_job_map();
     let state = AppState {
         config: Arc::new(RwLock::new(config.clone())),
-        shutdown_tx: Arc::new(Mutex::new(Some(shutdown_tx))),
-        jobs: Arc::new(Mutex::new(HashMap::new())),
+        shutdown_tx: Arc::new(tokio::sync::Mutex::new(Some(shutdown_tx))),
+        jobs: jobs.clone(),
         job_counter: Arc::new(AtomicU64::new(1)),
         job_semaphore: Arc::new(RwLock::new(Arc::new(Semaphore::new(config.job_concurrency)))),
+        job_tx,
     };
+
+    // Start JobManager to consume job events and update state
+    let job_manager = JobManager::new(job_rx, jobs);
+    tokio::spawn(async move {
+        job_manager.run().await;
+    });
 
     if let Some(parent_pid) = read_parent_pid() {
         tracing::info!(parent_pid, "parent watchdog enabled");
@@ -657,9 +597,9 @@ async fn start_job(
     }
 
     let id = state.job_counter.fetch_add(1, Ordering::SeqCst);
-    let job = Job::new(id, kind.to_string());
+    let job = JobState::new(id, kind.to_string());
     {
-        let mut jobs = state.jobs.lock().await;
+        let mut jobs = state.jobs.write().await;
         jobs.insert(id, job);
     }
 
@@ -675,7 +615,7 @@ async fn get_job(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> Result<Json<JobView>, (StatusCode, Json<ErrorResponse>)> {
-    let jobs = state.jobs.lock().await;
+    let jobs = state.jobs.read().await;
     let job = jobs.get(&id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -692,7 +632,7 @@ async fn get_job_logs(
     Path(id): Path<u64>,
     Query(query): Query<JobLogsQuery>,
 ) -> Result<Json<JobLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let jobs = state.jobs.lock().await;
+    let jobs = state.jobs.read().await;
     let job = jobs.get(&id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -722,7 +662,7 @@ async fn get_job_result(
     State(state): State<AppState>,
     Path(id): Path<u64>,
 ) -> Result<Json<JobResultResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let jobs = state.jobs.lock().await;
+    let jobs = state.jobs.read().await;
     let job = jobs.get(&id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -2800,6 +2740,7 @@ pub(crate) fn exe_dir() -> PathBuf {
 }
 
 fn spawn_job(state: AppState, id: u64, kind: String, args: Option<Value>) {
+    let job_tx = state.job_tx.clone();
     tokio::spawn(async move {
         let semaphore = match state.job_semaphore.read() {
             Ok(guard) => guard.clone(),
@@ -2807,22 +2748,26 @@ fn spawn_job(state: AppState, id: u64, kind: String, args: Option<Value>) {
         };
         let permit = semaphore.acquire().await;
         if permit.is_err() {
-            job_fail(&state, id, "failed to acquire job slot".to_string()).await;
+            send_job_failed(&job_tx, id, "failed to acquire job slot".to_string()).await;
             return;
         }
         let _permit = permit.unwrap();
-        job_start(&state, id, &format!("job started: {}", kind)).await;
-        if let Err(err) = run_job(&state, id, &kind, args).await {
-            job_fail(&state, id, err).await;
+        send_job_started(&job_tx, id, format!("job started: {}", kind)).await;
+
+        // Create JobReporter for this job
+        let reporter = JobReporter::new(id, kind.clone(), job_tx.clone());
+
+        if let Err(err) = run_job(&state, &reporter, &kind, args).await {
+            send_job_failed(&job_tx, id, err).await;
             return;
         }
-        job_finish(&state, id, "job completed".to_string()).await;
+        send_job_finished(&job_tx, id, "job completed".to_string()).await;
     });
 }
 
 async fn run_job(
     state: &AppState,
-    id: u64,
+    reporter: &JobReporter,
     kind: &str,
     args: Option<Value>,
 ) -> Result<(), String> {
@@ -2831,137 +2776,59 @@ async fn run_job(
             let _args = args;
             for step in 0..=5 {
                 let progress = (step * 20) as u8;
-                job_progress(state, id, progress).await;
-                job_log(state, id, format!("noop step {}/5", step)).await;
+                reporter.progress(progress);
+                reporter.log(format!("noop step {}/5", step));
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
             Ok(())
         }
-        "update_db" => update_db::run_update_db_job(state.clone(), id).await,
-        "missing_deps" => missing_deps::run_missing_deps_job(state.clone(), id, args).await,
-        "rebuild_links" => links::run_rebuild_links_job(state.clone(), id, args).await,
-        "links_move" => links::run_move_links_job(state.clone(), id, args).await,
-        "links_missing_create" => links::run_missing_links_create_job(state.clone(), id, args).await,
-        "install_vars" => vars_jobs::run_install_vars_job(state.clone(), id, args).await,
-        "preview_uninstall" => vars_jobs::run_preview_uninstall_job(state.clone(), id, args).await,
-        "uninstall_vars" => vars_jobs::run_uninstall_vars_job(state.clone(), id, args).await,
-        "delete_vars" => vars_jobs::run_delete_vars_job(state.clone(), id, args).await,
-        "vars_export_installed" => vars_misc::run_export_installed_job(state.clone(), id, args).await,
-        "vars_install_batch" => vars_misc::run_install_batch_job(state.clone(), id, args).await,
-        "vars_toggle_install" => vars_misc::run_toggle_install_job(state.clone(), id, args).await,
-        "vars_locate" => vars_misc::run_locate_job(state.clone(), id, args).await,
-        "refresh_install_status" => vars_misc::run_refresh_install_status_job(state.clone(), id, args).await,
-        "saves_deps" => deps_jobs::run_saves_deps_job(state.clone(), id, args).await,
-        "log_deps" => deps_jobs::run_log_deps_job(state.clone(), id, args).await,
-        "fix_previews" => preview_jobs::run_fix_previews_job(state.clone(), id, args).await,
-        "stale_vars" => stale_jobs::run_stale_vars_job(state.clone(), id, args).await,
-        "old_version_vars" => stale_jobs::run_old_version_vars_job(state.clone(), id, args).await,
-        "packswitch_add" => packswitch::run_packswitch_add_job(state.clone(), id, args).await,
-        "packswitch_delete" => packswitch::run_packswitch_delete_job(state.clone(), id, args).await,
-        "packswitch_rename" => packswitch::run_packswitch_rename_job(state.clone(), id, args).await,
-        "packswitch_set" => packswitch::run_packswitch_set_job(state.clone(), id, args).await,
-        "hub_missing_scan" => hub::run_hub_missing_scan_job(state.clone(), id, args).await,
-        "hub_updates_scan" => hub::run_hub_updates_scan_job(state.clone(), id, args).await,
-        "hub_download_all" => hub::run_hub_download_all_job(state.clone(), id, args).await,
-        "hub_info" => hub::run_hub_info_job(state.clone(), id).await,
-        "hub_resources" => hub::run_hub_resources_job(state.clone(), id, args).await,
-        "hub_resource_detail" => hub::run_hub_resource_detail_job(state.clone(), id, args).await,
-        "hub_find_packages" => hub::run_hub_find_packages_job(state.clone(), id, args).await,
-        "scene_load" => scenes::run_scene_load_job(state.clone(), id, args).await,
-        "scene_analyze" => scenes::run_scene_analyze_job(state.clone(), id, args).await,
-        "scene_preset_look" => scenes::run_scene_preset_look_job(state.clone(), id, args).await,
-        "scene_preset_plugin" => scenes::run_scene_preset_plugin_job(state.clone(), id, args).await,
-        "scene_preset_pose" => scenes::run_scene_preset_pose_job(state.clone(), id, args).await,
-        "scene_preset_animation" => scenes::run_scene_preset_animation_job(state.clone(), id, args).await,
-        "scene_preset_scene" => scenes::run_scene_preset_scene_job(state.clone(), id, args).await,
-        "scene_add_atoms" => scenes::run_scene_add_atoms_job(state.clone(), id, args).await,
-        "scene_add_subscene" => scenes::run_scene_add_subscene_job(state.clone(), id, args).await,
-        "scene_hide" => scenes::run_scene_hide_job(state.clone(), id, args).await,
-        "scene_fav" => scenes::run_scene_fav_job(state.clone(), id, args).await,
-        "scene_unhide" => scenes::run_scene_unhide_job(state.clone(), id, args).await,
-        "scene_unfav" => scenes::run_scene_unfav_job(state.clone(), id, args).await,
-        "cache_clear" => scenes::run_cache_clear_job(state.clone(), id, args).await,
-        "vam_start" => system_jobs::run_vam_start_job(state.clone(), id, args).await,
-        "rescan_packages" => system_jobs::run_rescan_packages_job(state.clone(), id, args).await,
-        "open_url" => system_jobs::run_open_url_job(state.clone(), id, args).await,
+        "update_db" => update_db::run_update_db_job(state.clone(), reporter.clone()).await,
+        "missing_deps" => missing_deps::run_missing_deps_job(state.clone(), reporter.clone(), args).await,
+        "rebuild_links" => links::run_rebuild_links_job(state.clone(), reporter.clone(), args).await,
+        "links_move" => links::run_move_links_job(state.clone(), reporter.clone(), args).await,
+        "links_missing_create" => links::run_missing_links_create_job(state.clone(), reporter.clone(), args).await,
+        "install_vars" => vars_jobs::run_install_vars_job(state.clone(), reporter.clone(), args).await,
+        "preview_uninstall" => vars_jobs::run_preview_uninstall_job(state.clone(), reporter.clone(), args).await,
+        "uninstall_vars" => vars_jobs::run_uninstall_vars_job(state.clone(), reporter.clone(), args).await,
+        "delete_vars" => vars_jobs::run_delete_vars_job(state.clone(), reporter.clone(), args).await,
+        "vars_export_installed" => vars_misc::run_export_installed_job(state.clone(), reporter.clone(), args).await,
+        "vars_install_batch" => vars_misc::run_install_batch_job(state.clone(), reporter.clone(), args).await,
+        "vars_toggle_install" => vars_misc::run_toggle_install_job(state.clone(), reporter.clone(), args).await,
+        "vars_locate" => vars_misc::run_locate_job(state.clone(), reporter.clone(), args).await,
+        "refresh_install_status" => vars_misc::run_refresh_install_status_job(state.clone(), reporter.clone(), args).await,
+        "saves_deps" => deps_jobs::run_saves_deps_job(state.clone(), reporter.clone(), args).await,
+        "log_deps" => deps_jobs::run_log_deps_job(state.clone(), reporter.clone(), args).await,
+        "fix_previews" => preview_jobs::run_fix_previews_job(state.clone(), reporter.clone(), args).await,
+        "stale_vars" => stale_jobs::run_stale_vars_job(state.clone(), reporter.clone(), args).await,
+        "old_version_vars" => stale_jobs::run_old_version_vars_job(state.clone(), reporter.clone(), args).await,
+        "packswitch_add" => packswitch::run_packswitch_add_job(state.clone(), reporter.clone(), args).await,
+        "packswitch_delete" => packswitch::run_packswitch_delete_job(state.clone(), reporter.clone(), args).await,
+        "packswitch_rename" => packswitch::run_packswitch_rename_job(state.clone(), reporter.clone(), args).await,
+        "packswitch_set" => packswitch::run_packswitch_set_job(state.clone(), reporter.clone(), args).await,
+        "hub_missing_scan" => hub::run_hub_missing_scan_job(state.clone(), reporter.clone(), args).await,
+        "hub_updates_scan" => hub::run_hub_updates_scan_job(state.clone(), reporter.clone(), args).await,
+        "hub_download_all" => hub::run_hub_download_all_job(state.clone(), reporter.clone(), args).await,
+        "hub_info" => hub::run_hub_info_job(state.clone(), reporter.clone()).await,
+        "hub_resources" => hub::run_hub_resources_job(state.clone(), reporter.clone(), args).await,
+        "hub_resource_detail" => hub::run_hub_resource_detail_job(state.clone(), reporter.clone(), args).await,
+        "hub_find_packages" => hub::run_hub_find_packages_job(state.clone(), reporter.clone(), args).await,
+        "scene_load" => scenes::run_scene_load_job(state.clone(), reporter.clone(), args).await,
+        "scene_analyze" => scenes::run_scene_analyze_job(state.clone(), reporter.clone(), args).await,
+        "scene_preset_look" => scenes::run_scene_preset_look_job(state.clone(), reporter.clone(), args).await,
+        "scene_preset_plugin" => scenes::run_scene_preset_plugin_job(state.clone(), reporter.clone(), args).await,
+        "scene_preset_pose" => scenes::run_scene_preset_pose_job(state.clone(), reporter.clone(), args).await,
+        "scene_preset_animation" => scenes::run_scene_preset_animation_job(state.clone(), reporter.clone(), args).await,
+        "scene_preset_scene" => scenes::run_scene_preset_scene_job(state.clone(), reporter.clone(), args).await,
+        "scene_add_atoms" => scenes::run_scene_add_atoms_job(state.clone(), reporter.clone(), args).await,
+        "scene_add_subscene" => scenes::run_scene_add_subscene_job(state.clone(), reporter.clone(), args).await,
+        "scene_hide" => scenes::run_scene_hide_job(state.clone(), reporter.clone(), args).await,
+        "scene_fav" => scenes::run_scene_fav_job(state.clone(), reporter.clone(), args).await,
+        "scene_unhide" => scenes::run_scene_unhide_job(state.clone(), reporter.clone(), args).await,
+        "scene_unfav" => scenes::run_scene_unfav_job(state.clone(), reporter.clone(), args).await,
+        "cache_clear" => scenes::run_cache_clear_job(state.clone(), reporter.clone(), args).await,
+        "vam_start" => system_jobs::run_vam_start_job(state.clone(), reporter.clone(), args).await,
+        "rescan_packages" => system_jobs::run_rescan_packages_job(state.clone(), reporter.clone(), args).await,
+        "open_url" => system_jobs::run_open_url_job(state.clone(), reporter.clone(), args).await,
         _ => Err(format!("job kind not implemented: {}", kind)),
     }
-}
-
-pub(crate) async fn job_start(state: &AppState, id: u64, message: &str) {
-    let mut jobs = state.jobs.lock().await;
-    if let Some(job) = jobs.get_mut(&id) {
-        job.status = JobStatus::Running;
-        job.message = message.to_string();
-        push_log(job, message.to_string());
-        job.result = None;
-        tracing::info!(job_id = id, job_kind = %job.kind, msg = %message, "job started");
-    }
-}
-
-pub(crate) async fn job_finish(state: &AppState, id: u64, message: String) {
-    let mut jobs = state.jobs.lock().await;
-    if let Some(job) = jobs.get_mut(&id) {
-        let log_message = message;
-        job.status = JobStatus::Succeeded;
-        job.progress = 100;
-        job.message = log_message.clone();
-        job.error = None;
-        push_log(job, log_message.clone());
-        tracing::info!(job_id = id, job_kind = %job.kind, msg = %log_message, "job completed");
-    }
-}
-
-pub(crate) async fn job_fail(state: &AppState, id: u64, error: String) {
-    let mut jobs = state.jobs.lock().await;
-    if let Some(job) = jobs.get_mut(&id) {
-        let error_message = error;
-        job.status = JobStatus::Failed;
-        job.message = "job failed".to_string();
-        job.error = Some(error_message.clone());
-        push_log(job, format!("error: {}", error_message));
-        tracing::error!(
-            job_id = id,
-            job_kind = %job.kind,
-            error = %error_message,
-            "job failed"
-        );
-    }
-}
-
-pub(crate) async fn job_progress(state: &AppState, id: u64, progress: u8) {
-    let mut jobs = state.jobs.lock().await;
-    if let Some(job) = jobs.get_mut(&id) {
-        job.progress = progress.min(100);
-        tracing::debug!(
-            job_id = id,
-            job_kind = %job.kind,
-            progress = job.progress,
-            "job progress"
-        );
-    }
-}
-
-pub(crate) async fn job_log(state: &AppState, id: u64, line: String) {
-    let mut jobs = state.jobs.lock().await;
-    if let Some(job) = jobs.get_mut(&id) {
-        tracing::debug!(job_id = id, job_kind = %job.kind, line = %line, "job log");
-        push_log(job, line);
-    }
-}
-
-pub(crate) async fn job_set_result(state: &AppState, id: u64, result: Value) {
-    let mut jobs = state.jobs.lock().await;
-    if let Some(job) = jobs.get_mut(&id) {
-        job.result = Some(result);
-        tracing::debug!(job_id = id, job_kind = %job.kind, "job result set");
-    }
-}
-
-fn push_log(job: &mut Job, line: String) {
-    if job.logs.len() >= LOG_CAPACITY {
-        job.logs.pop_front();
-        job.log_offset += 1;
-    }
-    job.logs.push_back(line);
 }

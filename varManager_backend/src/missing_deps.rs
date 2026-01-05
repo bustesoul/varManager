@@ -2,13 +2,13 @@ use crate::db::{
     list_dependencies_all, list_dependencies_for_installed, list_dependencies_for_vars,
     list_var_versions, upsert_install_status, var_exists_conn, Db,
 };
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
-use crate::{job_log, job_progress, job_set_result, winfs, AppState};
+use crate::{winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use tokio::runtime::Handle;
 
 #[derive(Deserialize)]
 struct MissingDepsArgs {
@@ -28,51 +28,20 @@ struct MissingDepsResult {
 
 pub async fn run_missing_deps_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "missing_deps args required".to_string())?;
         let args: MissingDepsArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
-        missing_deps_blocking(&reporter, args)
+        missing_deps_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self
-            .handle
-            .block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
-fn missing_deps_blocking(reporter: &JobReporter, args: MissingDepsArgs) -> Result<(), String> {
+fn missing_deps_blocking(state: &AppState, reporter: &JobReporter, args: MissingDepsArgs) -> Result<(), String> {
     reporter.log(format!("MissingDeps start: scope={}", args.scope));
     reporter.progress(1);
 
@@ -97,7 +66,7 @@ fn missing_deps_blocking(reporter: &JobReporter, args: MissingDepsArgs) -> Resul
 
     let auto_install = args.scope == "installed";
     let (varspath, vampath) = if auto_install {
-        let (varspath, vampath) = config_paths(&reporter.state)?;
+        let (varspath, vampath) = config_paths(state)?;
         let vampath = vampath.ok_or_else(|| "vampath is required for install".to_string())?;
         (Some(varspath), Some(vampath))
     } else {

@@ -4,9 +4,10 @@ import '../models/job_models.dart';
 import 'backend_client.dart';
 
 class JobRunner {
-  JobRunner({required this.client});
+  JobRunner({required this.client, this.onJobFailed});
 
   final BackendClient client;
+  final void Function(JobView job)? onJobFailed;
 
   Future<JobResult<dynamic>> runJob(
     String kind, {
@@ -33,6 +34,9 @@ class JobRunner {
     dynamic result;
     if (job.resultAvailable) {
       result = await client.getJobResult(start.id);
+    }
+    if (job.isFailed) {
+      onJobFailed?.call(job);
     }
     return JobResult(job: job, result: result);
   }

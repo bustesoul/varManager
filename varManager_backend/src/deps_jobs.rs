@@ -1,8 +1,9 @@
 use crate::db::{upsert_install_status, Db};
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
 use crate::var_logic::{resolve_var_exist_name, vars_dependencies};
-use crate::{job_log, job_progress, job_set_result, winfs, AppState};
+use crate::{winfs, AppState};
 use chrono::{DateTime, Local};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,6 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use tokio::runtime::Handle;
 use walkdir::WalkDir;
 
 #[derive(Deserialize)]
@@ -34,14 +34,12 @@ enum InstallOutcome {
 
 pub async fn run_saves_deps_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = SavesDepsArgs {};
-        saves_deps_blocking(&reporter, args)
+        saves_deps_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -49,50 +47,19 @@ pub async fn run_saves_deps_job(
 
 pub async fn run_log_deps_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = LogDepsArgs {};
-        log_deps_blocking(&reporter, args)
+        log_deps_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self
-            .handle
-            .block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
-fn saves_deps_blocking(reporter: &JobReporter, _args: SavesDepsArgs) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDepsArgs) -> Result<(), String> {
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("SavesDeps start".to_string());
     reporter.progress(1);
@@ -159,8 +126,8 @@ fn saves_deps_blocking(reporter: &JobReporter, _args: SavesDepsArgs) -> Result<(
     Ok(())
 }
 
-fn log_deps_blocking(reporter: &JobReporter, _args: LogDepsArgs) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn log_deps_blocking(state: &AppState, reporter: &JobReporter, _args: LogDepsArgs) -> Result<(), String> {
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("LogDeps start".to_string());
     reporter.progress(1);

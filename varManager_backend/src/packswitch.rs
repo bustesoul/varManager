@@ -1,12 +1,12 @@
 use crate::db::{upsert_install_status, var_exists_conn, Db};
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::{addon_packages_dir, addon_switch_root, config_paths};
-use crate::{job_log, job_set_result, system_ops, winfs, AppState};
+use crate::{system_ops, winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use tokio::runtime::Handle;
 
 #[derive(Deserialize)]
 struct PackSwitchArgs {
@@ -26,15 +26,13 @@ struct PackSwitchResult {
 
 pub async fn run_packswitch_add_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "packswitch_add args required".to_string())?;
         let args: PackSwitchArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        add_switch_blocking(&reporter, args)
+        add_switch_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -42,15 +40,13 @@ pub async fn run_packswitch_add_job(
 
 pub async fn run_packswitch_delete_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "packswitch_delete args required".to_string())?;
         let args: PackSwitchArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        delete_switch_blocking(&reporter, args)
+        delete_switch_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -58,16 +54,14 @@ pub async fn run_packswitch_delete_job(
 
 pub async fn run_packswitch_rename_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "packswitch_rename args required".to_string())?;
         let args: PackSwitchRenameArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
-        rename_switch_blocking(&reporter, args)
+        rename_switch_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -75,15 +69,13 @@ pub async fn run_packswitch_rename_job(
 
 pub async fn run_packswitch_set_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "packswitch_set args required".to_string())?;
         let args: PackSwitchArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        set_switch_blocking(&reporter, &args.name)?;
+        set_switch_blocking(&state, &reporter, &args.name)?;
         reporter.set_result(
             serde_json::to_value(PackSwitchResult { name: args.name })
                 .map_err(|err| err.to_string())?,
@@ -94,29 +86,8 @@ pub async fn run_packswitch_set_job(
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self.handle.block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
-fn add_switch_blocking(reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+fn add_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let name = args.name.trim();
     if name.is_empty() {
@@ -138,8 +109,8 @@ fn add_switch_blocking(reporter: &JobReporter, args: PackSwitchArgs) -> Result<(
     Ok(())
 }
 
-fn delete_switch_blocking(reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+fn delete_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let name = args.name.trim();
     if name.is_empty() {
@@ -163,10 +134,11 @@ fn delete_switch_blocking(reporter: &JobReporter, args: PackSwitchArgs) -> Resul
 }
 
 fn rename_switch_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: PackSwitchRenameArgs,
 ) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let old_name = args.old_name.trim();
     let new_name = args.new_name.trim();
@@ -186,7 +158,7 @@ fn rename_switch_blocking(
         return Err(format!("switch already exists: {}", new_name));
     }
     fs::rename(&src, &dest).map_err(|err| err.to_string())?;
-    set_switch_blocking(reporter, new_name)?;
+    set_switch_blocking(state, reporter, new_name)?;
     reporter.set_result(
         serde_json::to_value(PackSwitchResult {
             name: new_name.to_string(),
@@ -196,8 +168,8 @@ fn rename_switch_blocking(
     Ok(())
 }
 
-fn set_switch_blocking(reporter: &JobReporter, name: &str) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+fn set_switch_blocking(state: &AppState, reporter: &JobReporter, name: &str) -> Result<(), String> {
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let switch_root = addon_switch_root(&vampath);
     let target = switch_root.join(name);
@@ -225,7 +197,7 @@ fn set_switch_blocking(reporter: &JobReporter, name: &str) -> Result<(), String>
 
     winfs::create_symlink_dir(&addon_path, &target)?;
     let _ = refresh_install_status(&vampath);
-    let _ = system_ops::rescan_packages(&reporter.state);
+    let _ = system_ops::rescan_packages(state);
     reporter.log(format!("switch to {}", name));
     Ok(())
 }

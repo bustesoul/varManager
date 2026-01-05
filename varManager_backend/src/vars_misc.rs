@@ -1,13 +1,13 @@
 use crate::db::{upsert_install_status, var_exists_conn, Db};
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
 use crate::var_logic::{implicated_vars, vars_dependencies};
-use crate::{job_log, job_progress, job_set_result, util, winfs, AppState};
+use crate::{util, winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tokio::runtime::Handle;
 
 #[derive(Deserialize)]
 struct ExportInstalledArgs {
@@ -66,15 +66,13 @@ fn default_true() -> bool {
 
 pub async fn run_export_installed_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "vars_export_installed args required".to_string())?;
         let args: ExportInstalledArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        export_installed_blocking(&reporter, args)
+        export_installed_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -82,15 +80,13 @@ pub async fn run_export_installed_job(
 
 pub async fn run_install_batch_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "vars_install_batch args required".to_string())?;
         let args: InstallBatchArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        install_batch_blocking(&reporter, args)
+        install_batch_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -98,15 +94,13 @@ pub async fn run_install_batch_job(
 
 pub async fn run_toggle_install_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "vars_toggle_install args required".to_string())?;
         let args: ToggleInstallArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        toggle_install_blocking(&reporter, args)
+        toggle_install_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -114,15 +108,13 @@ pub async fn run_toggle_install_job(
 
 pub async fn run_locate_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "vars_locate args required".to_string())?;
         let args: LocateArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        locate_blocking(&reporter, args)
+        locate_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -130,46 +122,18 @@ pub async fn run_locate_job(
 
 pub async fn run_refresh_install_status_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
-        refresh_install_status_blocking(&reporter)
+        refresh_install_status_blocking(&state, &reporter)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self.handle.block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
 fn export_installed_blocking(
+    _state: &AppState,
     reporter: &JobReporter,
     args: ExportInstalledArgs,
 ) -> Result<(), String> {
@@ -204,10 +168,11 @@ fn export_installed_blocking(
 }
 
 fn install_batch_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: InstallBatchArgs,
 ) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
     let contents = fs::read_to_string(&args.path).map_err(|err| err.to_string())?;
@@ -262,10 +227,11 @@ fn install_batch_blocking(
 }
 
 fn toggle_install_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: ToggleInstallArgs,
 ) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
     let db_path = crate::exe_dir().join("varManager.db");
@@ -347,8 +313,8 @@ fn toggle_install_blocking(
     Ok(())
 }
 
-fn locate_blocking(reporter: &JobReporter, args: LocateArgs) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn locate_blocking(state: &AppState, reporter: &JobReporter, args: LocateArgs) -> Result<(), String> {
+    let (varspath, vampath) = config_paths(state)?;
 
     if let Some(var_name) = args.var_name.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         let path = resolve_var_file_path(&varspath, var_name)?;
@@ -373,8 +339,8 @@ fn locate_blocking(reporter: &JobReporter, args: LocateArgs) -> Result<(), Strin
     Err("vars_locate requires var_name or path".to_string())
 }
 
-fn refresh_install_status_blocking(reporter: &JobReporter) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+fn refresh_install_status_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
     let db_path = crate::exe_dir().join("varManager.db");

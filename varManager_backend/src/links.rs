@@ -1,12 +1,12 @@
 use crate::db::{upsert_install_status, var_exists_conn, Db};
 use crate::fs_util;
+use crate::job_channel::JobReporter;
 use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR};
-use crate::{job_log, job_progress, job_set_result, winfs, AppState};
+use crate::{winfs, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tokio::runtime::Handle;
 use walkdir::WalkDir;
 
 #[derive(Deserialize)]
@@ -61,17 +61,15 @@ struct MissingLinksResult {
 
 pub async fn run_rebuild_links_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args
             .map(|value| serde_json::from_value::<RebuildLinksArgs>(value).map_err(|e| e.to_string()))
             .transpose()?
             .unwrap_or(RebuildLinksArgs { include_missing: true });
-        rebuild_links_blocking(&reporter, args)
+        rebuild_links_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -79,15 +77,13 @@ pub async fn run_rebuild_links_job(
 
 pub async fn run_move_links_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "links_move args required".to_string())?;
         let args: MoveLinksArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        move_links_blocking(&reporter, args)
+        move_links_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -95,51 +91,20 @@ pub async fn run_move_links_job(
 
 pub async fn run_missing_links_create_job(
     state: AppState,
-    id: u64,
+    reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    let handle = Handle::current();
     tokio::task::spawn_blocking(move || {
-        let reporter = JobReporter::new(state, id, handle);
         let args = args.ok_or_else(|| "links_missing_create args required".to_string())?;
         let args: MissingLinksArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        missing_links_create_blocking(&reporter, args)
+        missing_links_create_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-struct JobReporter {
-    state: AppState,
-    id: u64,
-    handle: Handle,
-}
-
-impl JobReporter {
-    fn new(state: AppState, id: u64, handle: Handle) -> Self {
-        Self { state, id, handle }
-    }
-
-    fn log(&self, msg: impl Into<String>) {
-        let msg = msg.into();
-        let _ = self.handle.block_on(job_log(&self.state, self.id, msg));
-    }
-
-    fn progress(&self, value: u8) {
-        let _ = self
-            .handle
-            .block_on(job_progress(&self.state, self.id, value));
-    }
-
-    fn set_result(&self, result: Value) {
-        let _ = self
-            .handle
-            .block_on(job_set_result(&self.state, self.id, result));
-    }
-}
-
-fn rebuild_links_blocking(reporter: &JobReporter, args: RebuildLinksArgs) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: RebuildLinksArgs) -> Result<(), String> {
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("RebuildLinks start".to_string());
     reporter.progress(1);
@@ -256,8 +221,8 @@ fn rebuild_links_blocking(reporter: &JobReporter, args: RebuildLinksArgs) -> Res
     Ok(())
 }
 
-fn move_links_blocking(reporter: &JobReporter, args: MoveLinksArgs) -> Result<(), String> {
-    let (_, vampath) = config_paths(&reporter.state)?;
+fn move_links_blocking(state: &AppState, reporter: &JobReporter, args: MoveLinksArgs) -> Result<(), String> {
+    let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let target_dir = args.target_dir.trim();
     if target_dir.is_empty() {
@@ -305,10 +270,11 @@ fn move_links_blocking(reporter: &JobReporter, args: MoveLinksArgs) -> Result<()
 }
 
 fn missing_links_create_blocking(
+    state: &AppState,
     reporter: &JobReporter,
     args: MissingLinksArgs,
 ) -> Result<(), String> {
-    let (varspath, vampath) = config_paths(&reporter.state)?;
+    let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let missing_dir = vampath.join("AddonPackages").join(MISSING_LINK_DIR);
     fs::create_dir_all(&missing_dir).map_err(|err| err.to_string())?;
