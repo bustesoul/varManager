@@ -1,4 +1,4 @@
-use crate::db::{delete_var_related_conn, upsert_install_status, var_exists_conn, Db};
+use crate::db::{delete_var_related_conn, upsert_install_status, Db};
 use crate::fs_util;
 use crate::paths::{config_paths, resolve_var_file_path, OLD_VERSION_DIR, STALE_DIR};
 use crate::{job_log, job_progress, job_set_result, system_ops, winfs, AppState};

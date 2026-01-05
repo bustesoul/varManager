@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
-    path::{Component, Path, PathBuf},
+    path::{Component, Path as StdPath, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, RwLock,
@@ -949,7 +949,7 @@ async fn list_vars(
         "SELECT COUNT(1) FROM vars v LEFT JOIN installStatus i ON v.varName = i.varName {}",
         where_clause
     );
-    let total: u64 = db
+    let total: i64 = db
         .connection()
         .query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))
         .map_err(|err| {
@@ -960,6 +960,7 @@ async fn list_vars(
                 }),
             )
         })?;
+    let total = total as u64;
 
     let mut list_params = params.clone();
     list_params.push(SqlValue::from(per_page as i64));
@@ -1161,7 +1162,7 @@ async fn get_var_detail(
                 Json(ErrorResponse { error: err }),
             )
         })?;
-    let dependents = list_dependents(db.connection(), &name).map_err(|err| {
+    let dependents = list_dependents_conn(db.connection(), &name).map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse { error: err }),
@@ -1517,14 +1518,14 @@ fn parse_hide_fav_filter(raw: Option<&str>) -> Option<std::collections::HashSet<
 }
 
 fn scene_name(path: &str) -> String {
-    Path::new(path)
+    StdPath::new(path)
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or(path)
         .to_string()
 }
 
-fn load_save_scenes(vampath: &Path) -> Vec<SceneListItem> {
+fn load_save_scenes(vampath: &StdPath) -> Vec<SceneListItem> {
     let mut items = Vec::new();
     let groups = vec![
         ("scenes", vampath.join("Saves").join("scene"), "json"),
@@ -1629,7 +1630,7 @@ fn load_save_scenes(vampath: &Path) -> Vec<SceneListItem> {
     items
 }
 
-fn load_missing_link_scenes(db: &crate::db::Db, vampath: &Path) -> Vec<SceneListItem> {
+fn load_missing_link_scenes(db: &crate::db::Db, vampath: &StdPath) -> Vec<SceneListItem> {
     let mut items = Vec::new();
     let root = crate::paths::missing_links_dir(vampath);
     if !root.exists() {
@@ -1721,12 +1722,12 @@ fn load_missing_link_scenes(db: &crate::db::Db, vampath: &Path) -> Vec<SceneList
     items
 }
 
-fn read_hide_fav_for_var(vampath: &Path, var_name: &str, scene_path: &str) -> (bool, bool, i32) {
-    let scenepath = Path::new(scene_path)
+fn read_hide_fav_for_var(vampath: &StdPath, var_name: &str, scene_path: &str) -> (bool, bool, i32) {
+    let scenepath = StdPath::new(scene_path)
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-    let scenename = Path::new(scene_path)
+    let scenename = StdPath::new(scene_path)
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("")
@@ -1742,7 +1743,7 @@ fn read_hide_fav_for_var(vampath: &Path, var_name: &str, scene_path: &str) -> (b
     (hide, fav, hide_fav)
 }
 
-fn read_hide_fav_for_save(path: &Path) -> (bool, bool, i32) {
+fn read_hide_fav_for_save(path: &StdPath) -> (bool, bool, i32) {
     let hide = path.with_extension(format!(
         "{}.hide",
         path.extension().and_then(|s| s.to_str()).unwrap_or("")
@@ -2093,28 +2094,28 @@ async fn get_stats(
 
     let vars_total: u64 = db
         .connection()
-        .query_row("SELECT COUNT(1) FROM vars", [], |row| row.get(0))
-        .unwrap_or(0);
+        .query_row("SELECT COUNT(1) FROM vars", [], |row| row.get::<_, i64>(0))
+        .unwrap_or(0) as u64;
     let vars_installed: u64 = db
         .connection()
         .query_row(
             "SELECT COUNT(1) FROM installStatus WHERE installed = 1",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0),
         )
-        .unwrap_or(0);
+        .unwrap_or(0) as u64;
     let vars_disabled: u64 = db
         .connection()
         .query_row(
             "SELECT COUNT(1) FROM installStatus WHERE disabled = 1",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0),
         )
-        .unwrap_or(0);
+        .unwrap_or(0) as u64;
     let scenes_total: u64 = db
         .connection()
-        .query_row("SELECT COUNT(1) FROM scenes", [], |row| row.get(0))
-        .unwrap_or(0);
+        .query_row("SELECT COUNT(1) FROM scenes", [], |row| row.get::<_, i64>(0))
+        .unwrap_or(0) as u64;
     let missing_deps: u64 = db
         .connection()
         .query_row(
@@ -2123,9 +2124,9 @@ async fn get_stats(
              LEFT JOIN vars v ON d.dependency = v.varName
              WHERE v.varName IS NULL",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0),
         )
-        .unwrap_or(0);
+        .unwrap_or(0) as u64;
 
     Ok(Json(StatsResponse {
         vars_total,
@@ -2247,7 +2248,7 @@ fn list_dependencies_with_status(
     Ok(result)
 }
 
-fn list_dependents(conn: &rusqlite::Connection, var_name: &str) -> Result<Vec<String>, String> {
+fn list_dependents_conn(conn: &rusqlite::Connection, var_name: &str) -> Result<Vec<String>, String> {
     let mut names = Vec::new();
     let targets = dependency_targets(conn, var_name)?;
     let mut stmt = conn
