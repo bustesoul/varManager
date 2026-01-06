@@ -263,8 +263,8 @@ function Stage-PluginFiles {
 function Stage-VaMPlugins {
     # Copy VaM plugin scripts (user needs to manually copy these to VaM/Custom/Scripts/)
     $pluginScripts = @(
-        "_archived\\varManager\\Custom\\Scripts\\loadscene.cs",
-        "_archived\\varManager\\Custom\\Scripts\\MorphMerger.cs"
+        "Custom\\Scripts\\loadscene.cs",
+        "Custom\\Scripts\\MorphMerger.cs"
     )
 
     $dest = Join-Path $releaseRoot "vam_plugins"
@@ -290,8 +290,8 @@ These C# scripts are designed to run inside Virt-A-Mate (VaM) game engine.
 ## Installation
 
 1. Locate your VaM installation directory
-2. Navigate to `Custom\Scripts\` folder
-3. Copy these `.cs` files to that folder
+2. Navigate to ``Custom\Scripts\`` folder
+3. Copy these ``.cs`` files to that folder
 4. The scripts will be available in VaM's plugin list
 
 ## Included Scripts
@@ -306,7 +306,7 @@ These C# scripts are designed to run inside Virt-A-Mate (VaM) game engine.
 
 ## Source Code
 
-Full source code with LibMMD library is available in the `LoadScene/` directory of the main repository.
+Full source code with LibMMD library is available in the ``LoadScene/`` directory of the main repository.
 "@
     Set-Content -Path (Join-Path $dest "README.txt") -Value $readmeContent -Encoding UTF8
 }
