@@ -291,6 +291,30 @@ function Build-VamDownloader {
     }
 }
 
+function Clean-VamDownloader {
+    Write-Host "Cleaning vam_downloader..."
+
+    $downloaderDir = Join-Path $root "external\vam_downloader"
+    $targetDir = Join-Path $downloaderDir "target"
+
+    # Clean Rust build artifacts
+    if (Test-Path -LiteralPath $targetDir) {
+        Write-Host "Removing $targetDir..."
+        Remove-Item -LiteralPath $targetDir -Recurse -Force
+    }
+
+    # Clean plugin directory
+    $pluginDir = Join-Path $root "plugin"
+    $downloaderExe = Join-Path $pluginDir "vam_downloader.exe"
+
+    if (Test-Path -LiteralPath $downloaderExe) {
+        Write-Host "Removing vam_downloader.exe from plugin/..."
+        Remove-Item -LiteralPath $downloaderExe -Force
+    }
+
+    Write-Host "vam_downloader cleaned."
+}
+
 function Stage-PluginFiles {
     # Copy vam_downloader.exe if available
     $pluginDir = Join-Path $root "plugin"
@@ -474,6 +498,7 @@ switch ($Action) {
     "clean" {
         if ($doFlutter) { Clean-Flutter }
         if ($doBackend) { Clean-Backend }
+        Clean-VamDownloader
         if (Test-Path -LiteralPath $releaseRoot) {
             Write-Host "Cleaning release directory..."
             Remove-Item -LiteralPath $releaseRoot -Recurse -Force
