@@ -52,6 +52,10 @@ use job_channel::{
     send_job_started, send_job_finished, send_job_failed,
 };
 const PARENT_PID_ENV: &str = "VARMANAGER_PARENT_PID";
+const APP_VERSION: &str = match option_env!("APP_VERSION") {
+    Some(value) => value,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Config {
@@ -518,7 +522,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addr: SocketAddr = format!("{}:{}", config.listen_host, config.listen_port).parse()?;
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    tracing::info!(%addr, "backend listening");
+    tracing::info!(%addr, version = APP_VERSION, "backend listening");
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(shutdown_rx))
@@ -528,7 +532,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn health() -> impl IntoResponse {
-    Json(json!({ "status": "ok" }))
+    Json(json!({ "status": "ok", "version": APP_VERSION }))
 }
 
 async fn get_config(State(state): State<AppState>) -> impl IntoResponse {

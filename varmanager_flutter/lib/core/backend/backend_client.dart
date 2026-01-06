@@ -183,6 +183,10 @@ class BackendClient {
     await _postJson('/shutdown');
   }
 
+  Future<Map<String, dynamic>> getHealth() async {
+    return _getJson('/health');
+  }
+
   String previewUrl({required String root, required String path}) {
     final query = <String, String>{
       'root': root,

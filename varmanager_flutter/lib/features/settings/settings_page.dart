@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../core/app_version.dart';
 import '../../core/models/config.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -24,6 +25,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _downloaderSavePath = TextEditingController();
 
   AppConfig? _config;
+  String? _backendVersion;
+  String? _appVersion;
 
   @override
   void initState() {
@@ -34,9 +37,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _load() async {
     final client = ref.read(backendClientProvider);
     final cfg = await client.getConfig();
+    final appVersion = await loadAppVersion();
+    String? backendVersion;
+    try {
+      final health = await client.getHealth();
+      backendVersion = health['version']?.toString();
+    } catch (_) {
+      backendVersion = null;
+    }
     if (!mounted) return;
     setState(() {
       _config = cfg;
+      _backendVersion = backendVersion;
+      _appVersion = appVersion;
       _listenHost.text = cfg.listenHost;
       _listenPort.text = cfg.listenPort.toString();
       _logLevel.text = cfg.logLevel;
@@ -124,6 +137,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
             ),
             const SizedBox(height: 12),
+            _section(
+              title: 'About',
+              child: Column(
+                children: [
+                  _infoRow('App version', _appVersion ?? '-'),
+                  _infoRow('Backend version', _backendVersion ?? '-'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton(
@@ -164,6 +187,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           labelText: label,
           border: const OutlineInputBorder(),
         ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(value),
+        ],
       ),
     );
   }
