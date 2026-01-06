@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
-import '../../core/backend/job_runner.dart';
 import '../../core/models/var_models.dart';
 import '../home/home_page.dart';
 
@@ -199,7 +198,7 @@ class VarDetailPage extends ConsumerWidget {
                           width: 120,
                           height: 120,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             width: 120,
                             height: 120,
                             color: Colors.grey.shade200,

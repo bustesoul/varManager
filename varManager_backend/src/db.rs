@@ -140,6 +140,7 @@ impl Db {
     }
 }
 
+#[allow(dead_code)]
 pub fn var_exists(tx: &Transaction<'_>, var_name: &str) -> Result<bool, String> {
     let exists: Option<i64> = tx
         .query_row(

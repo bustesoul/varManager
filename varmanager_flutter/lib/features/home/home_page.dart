@@ -7,7 +7,6 @@ import 'package:path/path.dart' as p;
 import '../../app/providers.dart';
 import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
-import '../../core/backend/job_runner.dart';
 import '../../core/backend/query_params.dart';
 import '../../core/models/extra_models.dart';
 import '../../core/models/job_models.dart';
@@ -293,7 +292,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       width: 120,
                       child: LinearProgressIndicator(),
                     ),
-                    error: (_, __) => const Text('Creators load failed'),
+                    error: (_, _) => const Text('Creators load failed'),
                   ),
                   DropdownButton<String>(
                     value: query.installed,
@@ -864,7 +863,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           Expanded(
             child: ListView.separated(
               itemCount: data.items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final item = data.items[index];
                 final isChecked = selected.contains(item.varName);
@@ -1084,8 +1083,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ? filtered[selectedIndex]
                 : null;
             final client = ref.read(backendClientProvider);
-            final openPreview =
-                (int index) => _openPreviewDialog(context, client, filtered, index);
+            void openPreview(int index) {
+              _openPreviewDialog(context, client, filtered, index);
+            }
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1311,7 +1311,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 path: previewPath,
                               ),
                               fit: BoxFit.fitWidth,
-                              errorBuilder: (_, __, ___) => Container(
+                              errorBuilder: (_, _, _) => Container(
                                 color: Colors.grey.shade200,
                                 alignment: Alignment.center,
                                 height: 110,
@@ -1397,7 +1397,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   : Image.network(
                       client.previewUrl(root: 'varspath', path: previewPath),
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         color: Colors.grey.shade200,
                         alignment: Alignment.center,
                         child: const Icon(Icons.broken_image),
@@ -1468,14 +1468,15 @@ class _HomePageState extends ConsumerState<HomePage> {
       builder: (dialogContext) {
         var currentIndex = clampedIndex;
         var zoom = 1.5;
-        final transformationController =
-            TransformationController(Matrix4.identity()..scale(zoom));
+        final transformationController = TransformationController(
+          Matrix4.identity()..scaleByDouble(zoom, zoom, zoom, 1.0),
+        );
         return StatefulBuilder(
           builder: (context, setState) {
             void setZoom(double value) {
               zoom = value.clamp(0.5, 4.0).toDouble();
               transformationController.value =
-                  Matrix4.identity()..scale(zoom);
+                  Matrix4.identity()..scaleByDouble(zoom, zoom, zoom, 1.0);
             }
 
             void updateIndex(int next) {
@@ -1570,8 +1571,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                   path: previewPath,
                                                 ),
                                                 fit: BoxFit.contain,
-                                                errorBuilder:
-                                                    (_, __, ___) => Container(
+                                                errorBuilder: (_, _, _) =>
+                                                    Container(
                                                   color: Colors.grey.shade200,
                                                   alignment: Alignment.center,
                                                   child: const Icon(

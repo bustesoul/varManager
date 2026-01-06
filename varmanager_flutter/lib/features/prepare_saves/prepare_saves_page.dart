@@ -56,10 +56,11 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
           ..addAll(paths);
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _loadingTree = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingTree = false;
+        });
+      }
     }
   }
 

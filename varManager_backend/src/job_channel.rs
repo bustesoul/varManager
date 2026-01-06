@@ -49,6 +49,7 @@ pub fn create_job_channel() -> (JobEventSender, JobEventReceiver) {
 #[derive(Clone)]
 pub struct JobReporter {
     id: u64,
+    #[allow(dead_code)]
     kind: String,
     tx: JobEventSender,
 }

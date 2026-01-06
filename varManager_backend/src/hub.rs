@@ -32,11 +32,13 @@ pub struct HubResourceDetailArgs {
     pub resource_id: String,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 pub struct HubFindPackagesResult {
     pub packages: Vec<HubPackage>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 pub struct HubPackage {
     pub filename: String,
@@ -55,7 +57,7 @@ pub struct HubDownloadAllArgs {
 }
 
 pub async fn run_hub_missing_scan_job(
-    state: AppState,
+    _state: AppState,
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
@@ -70,7 +72,7 @@ pub async fn run_hub_missing_scan_job(
 }
 
 pub async fn run_hub_updates_scan_job(
-    state: AppState,
+    _state: AppState,
     reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
@@ -95,7 +97,7 @@ pub async fn run_hub_download_all_job(
     .map_err(|err| err.to_string())?
 }
 
-pub async fn run_hub_info_job(state: AppState, reporter: JobReporter) -> Result<(), String> {
+pub async fn run_hub_info_job(_state: AppState, reporter: JobReporter) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let info = get_info()?;
         reporter.set_result(info);
@@ -106,7 +108,7 @@ pub async fn run_hub_info_job(state: AppState, reporter: JobReporter) -> Result<
 }
 
 pub async fn run_hub_resources_job(
-    state: AppState,
+    _state: AppState,
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
@@ -122,7 +124,7 @@ pub async fn run_hub_resources_job(
 }
 
 pub async fn run_hub_resource_detail_job(
-    state: AppState,
+    _state: AppState,
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
@@ -146,7 +148,7 @@ pub async fn run_hub_resource_detail_job(
 }
 
 pub async fn run_hub_find_packages_job(
-    state: AppState,
+    _state: AppState,
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {

@@ -164,24 +164,26 @@ class _PackSwitchPageState extends ConsumerState<PackSwitchPage> {
                     ),
                     const Divider(height: 1),
                     Expanded(
-                      child: ListView.builder(
-                        itemCount: switches.length,
-                        itemBuilder: (context, index) {
-                          final name = switches[index];
-                          return RadioListTile<String>(
-                            value: name,
-                            groupValue: _selected,
-                            onChanged: (value) {
-                              setState(() {
-                                _selected = value;
-                              });
-                            },
-                            title: Text(name),
-                            secondary: name == current
-                                ? const Chip(label: Text('Active'))
-                                : null,
-                          );
+                      child: RadioGroup<String>(
+                        groupValue: _selected,
+                        onChanged: (value) {
+                          setState(() {
+                            _selected = value;
+                          });
                         },
+                        child: ListView.builder(
+                          itemCount: switches.length,
+                          itemBuilder: (context, index) {
+                            final name = switches[index];
+                            return RadioListTile<String>(
+                              value: name,
+                              title: Text(name),
+                              secondary: name == current
+                                  ? const Chip(label: Text('Active'))
+                                  : null,
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],

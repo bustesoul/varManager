@@ -2224,7 +2224,7 @@ async fn list_var_previews(
 }
 
 async fn list_dependents(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(query): Query<DependentsQuery>,
 ) -> Result<Json<DependentsResponse>, (StatusCode, Json<ErrorResponse>)> {
     let db_path = exe_dir().join("varManager.db");

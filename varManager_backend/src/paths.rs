@@ -67,6 +67,7 @@ pub fn missing_links_dir(vampath: &Path) -> PathBuf {
     addon_packages_dir(vampath).join(MISSING_LINK_DIR)
 }
 
+#[allow(dead_code)]
 pub fn install_links_dir(vampath: &Path) -> PathBuf {
     addon_packages_dir(vampath).join(INSTALL_LINK_DIR)
 }

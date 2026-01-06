@@ -1037,7 +1037,6 @@ fn save_preset(
                 let breast_geom = json!({ "id": "geometry" });
                 let mut breast_geom = breast_geom;
                 let glute_geom = json!({ "id": "geometry" });
-                let mut glute_geom = glute_geom;
                 let skin_geom = json!({ "id": "geometry" });
                 let mut skin_geom = skin_geom;
                 let hair_geom = json!({ "id": "geometry" });
@@ -1223,7 +1222,7 @@ fn save_pose_preset(
 
 fn save_animation_preset(
     state: &AppState,
-    var_name: &str,
+    _var_name: &str,
     atom: &Value,
     core: &Value,
     save_names: &mut Vec<Value>,
@@ -1515,7 +1514,7 @@ fn install_temp(state: &AppState, reporter: &JobReporter, deps: &[String]) -> Re
 }
 
 fn install_temp_var(
-    conn: &rusqlite::Connection,
+    _conn: &rusqlite::Connection,
     varspath: &Path,
     temp_dir: &Path,
     var_name: &str,

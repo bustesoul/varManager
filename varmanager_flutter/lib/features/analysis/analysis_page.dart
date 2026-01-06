@@ -60,10 +60,11 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
             _personAtoms.isNotEmpty ? _personAtoms.first : _selectedPerson;
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _loadingAtoms = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingAtoms = false;
+        });
+      }
     }
   }
 
@@ -211,22 +212,24 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     if (_personAtoms.isEmpty) {
       return const Text('No person atoms found');
     }
-    return Column(
-      children: _personAtoms
-          .map(
-            (person) => RadioListTile<String>(
-              value: person,
-              groupValue: _selectedPerson,
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  _selectedPerson = value;
-                });
-              },
-              title: Text(person),
-            ),
-          )
-          .toList(),
+    return RadioGroup<String>(
+      groupValue: _selectedPerson,
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _selectedPerson = value;
+        });
+      },
+      child: Column(
+        children: _personAtoms
+            .map(
+              (person) => RadioListTile<String>(
+                value: person,
+                title: Text(person),
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 

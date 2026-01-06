@@ -170,7 +170,7 @@ fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result
 
     let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let mut moved = 0;
-    let mut skipped = 0;
+    let skipped = 0;
     let mut failed = 0;
     let total = old_vars.len();
 

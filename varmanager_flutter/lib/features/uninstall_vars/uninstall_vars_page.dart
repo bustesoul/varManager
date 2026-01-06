@@ -25,7 +25,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
 
   String _previewType = 'all';
   int _previewPage = 1;
-  int _previewPerPage = 60;
+  final int _previewPerPage = 60;
 
   @override
   void initState() {
@@ -132,7 +132,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
             width: 480,
             height: 480,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const SizedBox(
+            errorBuilder: (_, _, _) => const SizedBox(
               width: 240,
               height: 240,
               child: Center(child: Icon(Icons.broken_image)),
@@ -197,7 +197,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                           Expanded(
                             child: ListView.separated(
                               itemCount: _varList.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, _) => const Divider(height: 1),
                               itemBuilder: (context, index) {
                                 final name = _varList[index];
                                 final tags = <String>[];
@@ -342,7 +342,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                       child: Image.network(
                                                         url,
                                                         fit: BoxFit.cover,
-                                                        errorBuilder: (_, __, ___) => Container(
+                                                        errorBuilder: (_, _, _) => Container(
                                                           color: Colors.grey.shade200,
                                                           child: const Icon(Icons.broken_image),
                                                         ),

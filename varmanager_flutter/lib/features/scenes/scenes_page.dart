@@ -203,7 +203,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                       width: 120,
                       child: LinearProgressIndicator(),
                     ),
-                    error: (_, __) => const Text('Creators load failed'),
+                    error: (_, _) => const Text('Creators load failed'),
                   ),
                   DropdownButton<String>(
                     value: query.sort,
@@ -442,7 +442,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     required int targetHideFav,
   }) {
     return DragTarget<SceneListItem>(
-      onAccept: (item) => _moveScene(item, targetHideFav),
+      onAcceptWithDetails: (details) => _moveScene(details.data, targetHideFav),
       builder: (context, candidate, rejected) {
         return Card(
           child: Column(
@@ -518,7 +518,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                           width: 72,
                           height: 72,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             width: 72,
                             height: 72,
                             color: Colors.grey.shade200,

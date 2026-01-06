@@ -138,10 +138,11 @@ class _HubPageState extends ConsumerState<HubPage> {
       });
       await _refreshResources(force: true);
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _loadingInfo = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingInfo = false;
+        });
+      }
     }
   }
 
@@ -422,6 +423,9 @@ class _HubPageState extends ConsumerState<HubPage> {
   @override
   Widget build(BuildContext context) {
     final options = _info;
+    final sortPrimaryValue = options == null || options.sorts.isEmpty
+        ? null
+        : (_sortPrimary.isEmpty ? options.sorts.first : _sortPrimary);
     final downloadUrls = _downloadByUrl.keys.toList();
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -447,7 +451,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _location,
+                      key: ValueKey(_location),
+                      initialValue: _location,
                       items: _optionsWithAll(options?.locations ?? [])
                           .map((value) => DropdownMenuItem(
                                 value: value,
@@ -468,7 +473,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _payType,
+                      key: ValueKey(_payType),
+                      initialValue: _payType,
                       items: _optionsWithAll(options?.payTypes ?? [])
                           .map((value) => DropdownMenuItem(
                                 value: value,
@@ -489,7 +495,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _category,
+                      key: ValueKey(_category),
+                      initialValue: _category,
                       items: _optionsWithAll(options?.categories ?? [])
                           .map((value) => DropdownMenuItem(
                                 value: value,
@@ -510,7 +517,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _creator,
+                      key: ValueKey(_creator),
+                      initialValue: _creator,
                       items: _optionsWithAll(options?.creators ?? [])
                           .map((value) => DropdownMenuItem(
                                 value: value,
@@ -531,7 +539,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _tags,
+                      key: ValueKey(_tags),
+                      initialValue: _tags,
                       items: _optionsWithAll(options?.tags ?? [])
                           .map((value) => DropdownMenuItem(
                                 value: value,
@@ -552,11 +561,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: options == null || options.sorts.isEmpty
-                          ? null
-                          : (_sortPrimary.isEmpty
-                              ? options.sorts.first
-                              : _sortPrimary),
+                      key: ValueKey(sortPrimaryValue ?? ''),
+                      initialValue: sortPrimaryValue,
                       items: (options?.sorts ?? [])
                           .map((value) => DropdownMenuItem(
                                 value: value,
@@ -577,7 +583,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: _sortSecondary,
+                      key: ValueKey(_sortSecondary),
+                      initialValue: _sortSecondary,
                       items: ['']
                           .followedBy(options?.sorts ?? [])
                           .map((value) => DropdownMenuItem(
@@ -822,7 +829,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                           width: 96,
                           height: 96,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             width: 96,
                             height: 96,
                             color: Colors.grey.shade200,

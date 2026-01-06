@@ -15,7 +15,6 @@ pub fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
         return Vec::new();
     }
     let mut files = Vec::new();
-    let mut scanned = 0usize;
     let walker = WalkDir::new(root)
         .follow_links(false)
         .max_depth(if recursive { usize::MAX } else { 1 })
@@ -26,7 +25,6 @@ pub fn collect_symlink_vars(root: &Path, recursive: bool) -> Vec<PathBuf> {
             Err(_) => continue,
         };
         if entry.file_type().is_file() || entry.file_type().is_symlink() {
-            scanned += 1;
             if let Some(ext) = entry.path().extension() {
                 if ext.eq_ignore_ascii_case("var") && is_symlink(entry.path()) {
                     files.push(entry.path().to_path_buf());
