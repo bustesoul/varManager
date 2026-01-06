@@ -125,6 +125,50 @@ Simply run the new version in the same folder and everything will work.
 
 ---
 
+## Building from Source (Developers)
+
+If you want to build varManager from source:
+
+### Prerequisites
+- **Flutter SDK** 3.10+ (for frontend)
+- **Rust toolchain** (for backend)
+- **Git** with submodule support
+
+### Clone with Submodules
+```powershell
+# Clone the repository with all submodules
+git clone --recursive https://github.com/yourusername/varManager.git
+
+# Or if you already cloned without --recursive:
+git submodule update --init --recursive
+```
+
+### Build Everything
+```powershell
+# Build debug version (Flutter + Rust Backend + vam_downloader)
+.\build.ps1 -Action build
+
+# Build release package
+.\build.ps1 -Action release
+```
+
+The build script automatically:
+1. Builds the Flutter frontend
+2. Compiles the Rust backend
+3. Builds vam_downloader from the Git submodule at `external/vam_downloader/`
+4. Copies VaM plugin scripts
+5. Packages everything into `release/varManager_<version>/`
+
+### Git Submodules
+
+This project uses Git submodules for external dependencies:
+
+- **external/vam_downloader/** - Hub downloader tool ([source](https://github.com/bustesoul/vam_downloader))
+
+The submodule is automatically built during the build process and the resulting `vam_downloader.exe` is placed in the `plugin/` directory.
+
+---
+
 ## Legacy Version History
 
 ### Version 1.0.4.13 Update Tips (Archived):

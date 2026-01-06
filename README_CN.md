@@ -121,7 +121,51 @@ varManager_v2.0.0/
 - ✅ 场景收藏和隐藏列表已保留
 - ✅ 缺失 var 链接映射已保留
 
-只需在同一文件夹中运行新版本，一切都会正常工作。
+只需在同一文件夹中运行新版本,一切都会正常工作。
+
+---
+
+## 从源码构建（开发者）
+
+如果你想从源码构建 varManager：
+
+### 前置要求
+- **Flutter SDK** 3.10+ (用于前端)
+- **Rust toolchain** (用于后端)
+- **Git** 支持子模块
+
+### 克隆包含子模块
+```powershell
+# 克隆仓库及所有子模块
+git clone --recursive https://github.com/yourusername/varManager.git
+
+# 或者如果你已经克隆了但没有使用 --recursive：
+git submodule update --init --recursive
+```
+
+### 构建所有组件
+```powershell
+# 构建 debug 版本 (Flutter + Rust 后端 + vam_downloader)
+.\build.ps1 -Action build
+
+# 构建 release 发布包
+.\build.ps1 -Action release
+```
+
+构建脚本会自动：
+1. 构建 Flutter 前端
+2. 编译 Rust 后端
+3. 从 Git 子模块 `external/vam_downloader/` 构建 vam_downloader
+4. 复制 VaM 插件脚本
+5. 打包所有文件到 `release/varManager_<version>/`
+
+### Git 子模块
+
+本项目使用 Git 子模块管理外部依赖：
+
+- **external/vam_downloader/** - Hub 下载器工具 ([源码](https://github.com/bustesoul/vam_downloader))
+
+子模块会在构建过程中自动编译，生成的 `vam_downloader.exe` 会被放置在 `plugin/` 目录。
 
 ---
 

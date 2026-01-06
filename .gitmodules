@@ -1,0 +1,4 @@
+[submodule "external/vam_downloader"]
+	path = external/vam_downloader
+	url = https://github.com/bustesoul/vam_downloader.git
+	branch = master

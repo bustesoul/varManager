@@ -234,6 +234,63 @@ function Stage-BackendRelease {
     }
 }
 
+function Build-VamDownloader {
+    param([ValidateSet("debug", "release")] [string]$Mode)
+
+    $downloaderDir = Join-Path $root "external\vam_downloader"
+
+    # Check if submodule exists
+    if (-not (Test-Path -LiteralPath $downloaderDir)) {
+        Write-Warning "vam_downloader submodule not found at: $downloaderDir"
+        Write-Host "To initialize submodule, run:"
+        Write-Host "  git submodule update --init --recursive"
+        return
+    }
+
+    # Check if submodule is initialized
+    $cargoToml = Join-Path $downloaderDir "Cargo.toml"
+    if (-not (Test-Path -LiteralPath $cargoToml)) {
+        Write-Warning "vam_downloader submodule not initialized."
+        Write-Host "Run: git submodule update --init --recursive"
+        return
+    }
+
+    Ensure-Tool "cargo"
+
+    Write-Host "Building vam_downloader ($Mode)..."
+
+    $cargoArgs = @("build")
+    if ($Mode -eq "release") {
+        $cargoArgs += "--release"
+    }
+
+    Push-Location $downloaderDir
+    try {
+        & cargo @cargoArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "vam_downloader build failed"
+        }
+
+        # Copy to plugin directory
+        $exeName = "vam_downloader.exe"
+        $targetSubdir = if ($Mode -eq "release") { "release" } else { "debug" }
+        $srcExe = Join-Path $downloaderDir "target\$targetSubdir\$exeName"
+
+        if (Test-Path -LiteralPath $srcExe) {
+            $pluginDir = Join-Path $root "plugin"
+            New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
+            Copy-Item -LiteralPath $srcExe -Destination $pluginDir -Force
+            Write-Host "vam_downloader.exe copied to plugin/"
+        }
+        else {
+            Write-Warning "vam_downloader.exe not found at: $srcExe"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Stage-PluginFiles {
     # Copy vam_downloader.exe if available
     $pluginDir = Join-Path $root "plugin"
@@ -425,10 +482,12 @@ switch ($Action) {
     "build" {
         if ($doFlutter) { Build-Flutter "debug" }
         if ($doBackend) { Build-Backend "debug" }
+        Build-VamDownloader "debug"
     }
     "release" {
         if ($doFlutter) { Build-Flutter "release" }
         if ($doBackend) { Build-Backend "release" }
+        Build-VamDownloader "release"
         if ($doFlutter) { Stage-FlutterRelease }
         if ($doBackend) { Stage-BackendRelease }
         Stage-PluginFiles

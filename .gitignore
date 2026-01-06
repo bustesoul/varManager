@@ -387,3 +387,5 @@ varmanager_flutter/app.*.map.json
 varmanager_flutter/android/app/debug
 varmanager_flutter/android/app/profile
 varmanager_flutter/android/app/release
+# External submodule build artifacts
+external/vam_downloader/target/
