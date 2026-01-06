@@ -1,5 +1,6 @@
-use crate::paths::{addon_packages_dir, loadscene_path};
-use crate::{exe_dir, util, AppState};
+use crate::infra::paths::{addon_packages_dir, loadscene_path};
+use crate::app::{exe_dir, AppState};
+use crate::util;
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};

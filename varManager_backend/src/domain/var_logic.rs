@@ -1,4 +1,4 @@
-use crate::db::list_var_versions;
+use crate::infra::db::list_var_versions;
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::HashSet;
 

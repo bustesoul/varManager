@@ -1,5 +1,7 @@
-use crate::job_channel::JobReporter;
-use crate::{system_ops, util, AppState};
+use crate::jobs::job_channel::JobReporter;
+use crate::app::AppState;
+use crate::infra::system_ops;
+use crate::util;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

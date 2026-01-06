@@ -1,8 +1,9 @@
-use crate::db::{delete_var_related_conn, upsert_install_status, Db};
-use crate::fs_util;
-use crate::job_channel::JobReporter;
-use crate::paths::{config_paths, resolve_var_file_path, OLD_VERSION_DIR, STALE_DIR};
-use crate::{system_ops, winfs, AppState};
+use crate::infra::db::{self, delete_var_related_conn, upsert_install_status};
+use crate::infra::fs_util;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{config_paths, resolve_var_file_path, OLD_VERSION_DIR, STALE_DIR};
+use crate::app::AppState;
+use crate::infra::{system_ops, winfs};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -93,9 +94,7 @@ fn stale_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<Stale
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let vars = load_vars(db.connection(), false)?;
     let (old_vars, _latest) = find_old_versions(&vars);
@@ -158,9 +157,7 @@ fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let vars = load_vars(db.connection(), true)?;
     let (old_vars, latest_by_base) = find_old_versions(&vars);
@@ -321,7 +318,7 @@ fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
     ];
     for typename in types {
         let dir = varspath
-            .join(crate::paths::PREVIEW_DIR)
+            .join(crate::infra::paths::PREVIEW_DIR)
             .join(typename)
             .join(var_name);
         if dir.exists() {
@@ -341,7 +338,7 @@ fn install_var(
     vampath: &Path,
     var_name: &str,
 ) -> Result<(), String> {
-    let link_dir = vampath.join("AddonPackages").join(crate::paths::INSTALL_LINK_DIR);
+    let link_dir = vampath.join("AddonPackages").join(crate::infra::paths::INSTALL_LINK_DIR);
     fs::create_dir_all(&link_dir).map_err(|err| err.to_string())?;
     let link_path = link_dir.join(format!("{}.var", var_name));
     if link_path.exists() {

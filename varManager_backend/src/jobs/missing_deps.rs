@@ -1,10 +1,11 @@
-use crate::db::{
-    list_dependencies_all, list_dependencies_for_installed, list_dependencies_for_vars,
-    list_var_versions, upsert_install_status, var_exists_conn, Db,
+use crate::infra::db::{
+    self, list_dependencies_all, list_dependencies_for_installed, list_dependencies_for_vars,
+    list_var_versions, upsert_install_status, var_exists_conn,
 };
-use crate::job_channel::JobReporter;
-use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
-use crate::{winfs, AppState};
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
+use crate::app::AppState;
+use crate::infra::winfs;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -45,9 +46,7 @@ fn missing_deps_blocking(state: &AppState, reporter: &JobReporter, args: Missing
     reporter.log(format!("MissingDeps start: scope={}", args.scope));
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let deps = match args.scope.as_str() {
         "installed" => list_dependencies_for_installed(db.connection())?,

@@ -1,12 +1,13 @@
-use crate::db::{
-    delete_var_related, list_vars, replace_dependencies, replace_scenes, upsert_install_status,
-    upsert_var, var_exists_conn, Db, SceneRecord, VarRecord,
+use crate::infra::db::{
+    self, delete_var_related, list_vars, replace_dependencies, replace_scenes,
+    upsert_install_status, upsert_var, var_exists_conn, SceneRecord, VarRecord,
 };
-use crate::fs_util;
-use crate::job_channel::JobReporter;
-use crate::paths::resolve_var_file_path;
-use crate::var_logic::vars_dependencies;
-use crate::{system_ops, winfs, AppState};
+use crate::infra::fs_util;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::resolve_var_file_path;
+use crate::domain::var_logic::vars_dependencies;
+use crate::app::AppState;
+use crate::infra::{system_ops, winfs};
 use chrono::{DateTime, Local};
 use regex::Regex;
 use std::collections::HashSet;
@@ -69,9 +70,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     )?;
     reporter.progress(10);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let mut db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let mut db = db::open_default()?;
     reporter.log(format!("DB ready: {}", db.path().display()));
 
     let tidied_dir = varspath.join(TIDIED_DIR);
@@ -387,7 +386,7 @@ fn comply_var_name(name: &str) -> bool {
 }
 
 fn vars_for_install_path() -> PathBuf {
-    crate::exe_dir().join(VARS_FOR_INSTALL_FILE)
+    crate::app::exe_dir().join(VARS_FOR_INSTALL_FILE)
 }
 
 fn load_vars_for_install() -> Vec<String> {

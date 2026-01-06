@@ -1,3 +1,4 @@
+use crate::app::exe_dir;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Transaction};
 use std::path::{Path, PathBuf};
 
@@ -138,6 +139,17 @@ impl Db {
     pub fn transaction(&mut self) -> Result<Transaction<'_>, String> {
         self.conn.transaction().map_err(|err| err.to_string())
     }
+}
+
+pub fn default_path() -> PathBuf {
+    exe_dir().join("varManager.db")
+}
+
+pub fn open_default() -> Result<Db, String> {
+    let path = default_path();
+    let db = Db::open(&path)?;
+    db.ensure_schema()?;
+    Ok(db)
 }
 
 #[allow(dead_code)]

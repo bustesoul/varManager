@@ -1,9 +1,10 @@
-use crate::db::{upsert_install_status, Db};
-use crate::fs_util;
-use crate::job_channel::JobReporter;
-use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
-use crate::var_logic::{resolve_var_exist_name, vars_dependencies};
-use crate::{winfs, AppState};
+use crate::infra::db::{self, upsert_install_status};
+use crate::infra::fs_util;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
+use crate::domain::var_logic::{resolve_var_exist_name, vars_dependencies};
+use crate::app::AppState;
+use crate::infra::winfs;
 use chrono::{DateTime, Local};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -64,9 +65,7 @@ fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDep
     reporter.log("SavesDeps start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     db.connection()
         .execute("DELETE FROM savedepens", [])
@@ -155,9 +154,7 @@ fn log_deps_blocking(state: &AppState, reporter: &JobReporter, _args: LogDepsArg
     }
     dependencies = distinct(dependencies);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let (missing, installed_now) =
         install_missing_dependencies(reporter, db.connection(), &varspath, &vampath, &dependencies)?;

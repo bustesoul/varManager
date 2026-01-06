@@ -1,8 +1,9 @@
-use crate::db::{upsert_install_status, var_exists_conn, Db};
-use crate::fs_util;
-use crate::job_channel::JobReporter;
-use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR};
-use crate::{winfs, AppState};
+use crate::infra::db::{self, upsert_install_status, var_exists_conn};
+use crate::infra::fs_util;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR};
+use crate::app::AppState;
+use crate::infra::winfs;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -109,9 +110,7 @@ fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: Rebuil
     reporter.log("RebuildLinks start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let mut links =
         fs_util::collect_symlink_vars(&vampath.join("AddonPackages").join(INSTALL_LINK_DIR), true);

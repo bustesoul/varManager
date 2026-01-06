@@ -1,4 +1,4 @@
-use crate::AppState;
+use crate::app::AppState;
 use std::path::{Path, PathBuf};
 
 pub const TIDIED_DIR: &str = "___VarTidied___";

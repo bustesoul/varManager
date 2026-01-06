@@ -1,9 +1,11 @@
-use crate::db::{upsert_install_status, var_exists_conn, Db};
-use crate::fs_util;
-use crate::job_channel::JobReporter;
-use crate::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
-use crate::var_logic::{implicated_vars, vars_dependencies};
-use crate::{util, winfs, AppState};
+use crate::infra::db::{self, upsert_install_status, var_exists_conn};
+use crate::infra::fs_util;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
+use crate::domain::var_logic::{implicated_vars, vars_dependencies};
+use crate::app::AppState;
+use crate::infra::winfs;
+use crate::util;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -137,9 +139,7 @@ fn export_installed_blocking(
     reporter: &JobReporter,
     args: ExportInstalledArgs,
 ) -> Result<(), String> {
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let mut stmt = db
         .connection()
@@ -185,9 +185,7 @@ fn install_batch_blocking(
     targets.sort();
     targets.dedup();
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let total = targets.len();
@@ -234,9 +232,7 @@ fn toggle_install_blocking(
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let key = args.var_name.to_ascii_lowercase();
@@ -343,9 +339,7 @@ fn refresh_install_status_blocking(state: &AppState, reporter: &JobReporter) -> 
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
     db.connection()
         .execute("DELETE FROM installStatus", [])
         .map_err(|err| err.to_string())?;
@@ -386,7 +380,7 @@ fn install_var(
     let link_path = if temp {
         vampath
             .join("AddonPackages")
-            .join(crate::paths::TEMP_LINK_DIR)
+            .join(crate::infra::paths::TEMP_LINK_DIR)
             .join(format!("{}.var", var_name))
     } else {
         link_dir.join(format!("{}.var", var_name))

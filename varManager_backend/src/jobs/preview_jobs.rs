@@ -1,7 +1,7 @@
-use crate::db::Db;
-use crate::job_channel::JobReporter;
-use crate::paths::{config_paths, resolve_var_file_path, PREVIEW_DIR};
-use crate::AppState;
+use crate::infra::db;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{config_paths, resolve_var_file_path, PREVIEW_DIR};
+use crate::app::AppState;
 use serde::Serialize;
 use serde_json::Value;
 use std::fs::{self, File};
@@ -32,9 +32,7 @@ fn fix_previews_blocking(state: &AppState, reporter: &JobReporter) -> Result<(),
     reporter.log("FixPreviews start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let scenes = list_scenes_with_preview(db.connection())?;
     let total = scenes.len();

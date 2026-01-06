@@ -1,9 +1,10 @@
-use crate::db::{delete_var_related_conn, upsert_install_status, Db};
-use crate::fs_util;
-use crate::job_channel::JobReporter;
-use crate::paths::{config_paths, resolve_var_file_path, DELETED_DIR, INSTALL_LINK_DIR};
-use crate::var_logic::{implicated_vars, vars_dependencies};
-use crate::{winfs, AppState};
+use crate::infra::db::{self, delete_var_related_conn, upsert_install_status};
+use crate::infra::fs_util;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{config_paths, resolve_var_file_path, DELETED_DIR, INSTALL_LINK_DIR};
+use crate::domain::var_logic::{implicated_vars, vars_dependencies};
+use crate::app::AppState;
+use crate::infra::winfs;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -123,9 +124,7 @@ fn install_vars_blocking(state: &AppState, reporter: &JobReporter, args: Install
     reporter.log("InstallVars start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let var_list = if args.include_dependencies {
         vars_dependencies(db.connection(), args.var_names)?
@@ -184,7 +183,7 @@ fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: Unins
     reporter.log("UninstallVars start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
+    let db_path = db::default_path();
     let requested_sample = args
         .var_names
         .iter()
@@ -200,8 +199,7 @@ fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: Unins
     ));
     reporter.log(format!("UninstallVars db_path: {}", db_path.display()));
     let db_start = Instant::now();
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
     reporter.log(format!(
         "UninstallVars db ready in {}ms",
         db_start.elapsed().as_millis()
@@ -296,7 +294,7 @@ fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: Pr
     reporter.log("PreviewUninstall start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
+    let db_path = db::default_path();
     let requested_sample = args
         .var_names
         .iter()
@@ -313,8 +311,7 @@ fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: Pr
     reporter.log(format!("PreviewUninstall db_path: {}", db_path.display()));
 
     let db_start = Instant::now();
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
     reporter.log(format!(
         "PreviewUninstall db ready in {}ms",
         db_start.elapsed().as_millis()
@@ -339,7 +336,7 @@ fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: Pr
     reporter.progress(60);
 
     // Filter out uninstalled vars - only show installed ones
-    let (_, vampath) = crate::paths::config_paths(state)?;
+    let (_, vampath) = crate::infra::paths::config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let installed_links = fs_util::collect_installed_links(&vampath);
 
@@ -397,9 +394,7 @@ fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVa
     reporter.log("DeleteVars start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let var_list = if args.include_implicated {
         implicated_vars(db.connection(), args.var_names)?
@@ -472,7 +467,7 @@ fn install_var(
     let link_path = if temp {
         vampath
             .join("AddonPackages")
-            .join(crate::paths::TEMP_LINK_DIR)
+            .join(crate::infra::paths::TEMP_LINK_DIR)
             .join(format!("{}.var", var_name))
     } else {
         link_dir.join(format!("{}.var", var_name))
@@ -530,7 +525,7 @@ fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
         "scenes", "looks", "hairstyle", "clothing", "assets", "morphs", "skin", "pose",
     ];
     for typename in types {
-        let dir = varspath.join(crate::paths::PREVIEW_DIR).join(typename).join(var_name);
+        let dir = varspath.join(crate::infra::paths::PREVIEW_DIR).join(typename).join(var_name);
         if dir.exists() {
             fs::remove_dir_all(&dir).map_err(|err| err.to_string())?;
         }

@@ -1,8 +1,9 @@
-use crate::db::{upsert_install_status, var_exists_conn, Db};
-use crate::fs_util;
-use crate::job_channel::JobReporter;
-use crate::paths::{addon_packages_dir, addon_switch_root, config_paths};
-use crate::{system_ops, winfs, AppState};
+use crate::infra::db::{self, upsert_install_status, var_exists_conn};
+use crate::infra::fs_util;
+use crate::jobs::job_channel::JobReporter;
+use crate::infra::paths::{addon_packages_dir, addon_switch_root, config_paths};
+use crate::app::AppState;
+use crate::infra::{system_ops, winfs};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -203,9 +204,7 @@ fn set_switch_blocking(state: &AppState, reporter: &JobReporter, name: &str) -> 
 }
 
 fn refresh_install_status(vampath: &Path) -> Result<usize, String> {
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
     db.connection()
         .execute("DELETE FROM installStatus", [])
         .map_err(|err| err.to_string())?;

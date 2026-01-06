@@ -1,6 +1,7 @@
-use crate::job_channel::JobReporter;
-use crate::var_logic::resolve_var_exist_name;
-use crate::AppState;
+use crate::jobs::job_channel::JobReporter;
+use crate::domain::var_logic::resolve_var_exist_name;
+use crate::app::AppState;
+use crate::infra::db;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -174,9 +175,7 @@ fn missing_scan_blocking(reporter: &JobReporter, args: HubFindPackagesArgs) -> R
     reporter.log("Hub missing scan start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = crate::db::Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let missing = if args.packages.is_empty() {
         collect_missing_dependencies(db.connection())?
@@ -201,9 +200,7 @@ fn updates_scan_blocking(reporter: &JobReporter) -> Result<(), String> {
     reporter.log("Hub updates scan start".to_string());
     reporter.progress(1);
 
-    let db_path = crate::exe_dir().join("varManager.db");
-    let db = crate::db::Db::open(&db_path)?;
-    db.ensure_schema()?;
+    let db = db::open_default()?;
 
     let hub_packages = fetch_hub_packages()?;
     let mut newest_by_package: HashMap<String, (i64, String)> = HashMap::new();
@@ -250,7 +247,7 @@ fn updates_scan_blocking(reporter: &JobReporter) -> Result<(), String> {
 fn download_all_blocking(state: &AppState, reporter: &JobReporter, args: HubDownloadAllArgs) -> Result<(), String> {
     reporter.log(format!("Hub download all start ({} urls)", args.urls.len()));
     reporter.progress(1);
-    crate::system_ops::run_downloader(state, &args.urls)?;
+    crate::infra::system_ops::run_downloader(state, &args.urls)?;
     reporter.progress(100);
     reporter.log("Hub download all completed".to_string());
     Ok(())
