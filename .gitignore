@@ -8,6 +8,10 @@
 CAsign
 ./.idea
 
+
+# Plugin directory (vam_downloader.exe is built externally)
+plugin/
+
 # User-specific files
 *.rsuser
 *.suo

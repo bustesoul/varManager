@@ -1,10 +1,133 @@
 # varManager
 [English](README.md) | [简体中文](README_CN.md)
-varManager
-用于 Virt-A-Mate 的 var 管理工具。
-主要方式：把所有 var 文件放到仓库目录，需要使用时在 AddonPackages 中建立指向该 var 的符号链接。
 
-### 版本 1.0.4.13 更新提示：
+现代化的 Virt-A-Mate var 包管理工具。使用符号链接高效管理 var 文件，配备精美的跨平台界面和强大的后端服务。
+
+## 当前版本：2.0.0（重大更新）
+
+### v2.0.0 新特性
+
+**完全架构重写** - 我们使用现代技术从零重构了 varManager：
+
+#### 新架构
+```
+┌─────────────────────────────────┐
+│  Flutter 前端 (Dart)            │  跨平台界面，Material Design 3
+├─────────────────────────────────┤
+│  Rust 后端 (HTTP 服务)          │  高性能异步作业系统
+├─────────────────────────────────┤
+│  SQLite 数据库                  │  轻量级数据存储
+└─────────────────────────────────┘
+```
+
+#### 核心改进
+
+**1. 现代化用户界面**
+- Material Design 3 主题，响应式布局
+- 实时作业日志流式输出
+- 增强的过滤和搜索功能
+- 更好的预览图管理
+- PackSwitch 集成到主窗口
+
+**2. 性能与可靠性**
+- Rust 驱动的后端，处理速度更快
+- 异步作业队列，支持并发执行
+- 更好的内存管理和缓存机制
+- 原生 Windows 符号链接支持
+
+**3. 跨平台就绪**
+- 使用 Flutter 构建 - 支持 Windows、macOS 和 Linux
+- 无需 .NET Runtime 依赖
+- 更小的部署包体积
+- 安装更简单
+
+**4. 功能增强**
+- 完整的依赖分析（快速/普通/递归 三种模式）
+- Hub 集成，支持批量下载
+- 场景分析，支持拖拽排序
+- 缺失 var 智能链接解析
+- 过时包清理功能
+
+#### 安装与部署
+
+**发布包结构：**
+```
+varManager_v2.0.0/
+├── varmanager_flutter.exe      # 主程序（Flutter）
+├── varManager_backend.exe      # 后端服务（Rust）
+├── data/                        # Flutter 运行时数据
+├── plugin/                      # 外部工具
+│   └── vam_downloader.exe      # Hub 下载器（Rust）
+├── VaM_Plugins/                 # VaM 游戏插件（可选）
+│   ├── loadscene.cs            # MMD 场景加载器
+│   ├── MorphMerger.cs          # 形态合并工具
+│   └── README.txt              # 插件安装指南
+└── config.json                 # 首次运行自动生成
+```
+
+**首次运行：**
+1. 解压所有文件到一个文件夹
+2. 运行 `varmanager_flutter.exe`
+3. 后端服务将自动启动
+4. 在设置页面配置 VaM 路径
+5. 点击 "Update DB" 扫描你的 var 文件
+
+**VaM 插件（可选）：**
+
+发布包中包含了可选的 VaM 插件脚本，位于 `VaM_Plugins/` 文件夹：
+
+- **loadscene.cs** - 在 VaM 中直接加载 MMD 场景和动画
+- **MorphMerger.cs** - 角色形态合并工具
+
+使用这些插件：
+1. 找到你的 VaM 安装目录
+2. 进入 `Custom\Scripts\` 文件夹
+3. 将 `VaM_Plugins/` 中的 `.cs` 文件复制到该文件夹
+4. 启动 VaM，在插件列表中找到这些插件
+
+⚠️ **注意：** 这些脚本运行在 VaM 的 Unity 引擎中，与 varManager 应用程序是分离的。
+
+**Hub 下载器：**
+
+`plugin/vam_downloader.exe` 是一个基于 Rust 的工具，用于直接从 VaM Hub 下载 var 包：
+
+- 自动集成在 Hub 浏览功能中
+- 支持批量下载
+- 处理 VaM Hub 身份验证
+- 源码：[vam_downloader GitHub](https://github.com/bustesoul/vam_downloader)
+
+首次使用 Hub 下载功能时会自动配置下载器。
+
+**无需额外运行时：**
+- ❌ 无需安装 .NET Runtime
+- ❌ 无需管理员权限（正常操作）
+- ✅ 自包含可执行文件
+- ✅ 便携式 - 可从任意文件夹运行
+
+#### C# 版本去哪了？
+
+旧版 C# WinForms 应用程序（v1.0.4.x）已被**归档**到 `_archived/` 文件夹供参考。所有功能已迁移到新的 Flutter + Rust 架构，并保持功能对等和改进。
+
+**如果你需要旧版 C# 程序：**
+- 可在 `_archived/varManager/` 目录中找到
+- 需要 .NET 9.0 Runtime
+- 不再积极维护
+
+#### 从 v1.0.4.x 迁移
+
+你的数据是安全的！新版本使用相同的 SQLite 数据库格式：
+- ✅ var 仓库配置已保留
+- ✅ 所有包安装状态已保留
+- ✅ 场景收藏和隐藏列表已保留
+- ✅ 缺失 var 链接映射已保留
+
+只需在同一文件夹中运行新版本，一切都会正常工作。
+
+---
+
+## 历史版本记录
+
+### 版本 1.0.4.13 更新提示（已归档）：
 0. **升级注意**：部署新版本前建议删除旧程序目录。清理指引（若保留目录）：`varManager.mdb`（旧 Access 数据库）、`varManager.exe`、`varManager.pdb`、`varManager.dll.config`（你可以编辑文本以提取旧版本配置）、`varManager.db*`、`varManager.log`。
 1. **升级**：数据库切换为 SQLite，并升级到 .NET 9。
 2. **首次运行注意**：首次运行请点击 `UPD_DB` 重建数据库。

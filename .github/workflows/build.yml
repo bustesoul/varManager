@@ -36,6 +36,28 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
+      - name: Clone and build vam_downloader
+        run: |
+          Write-Host "Cloning vam_downloader..."
+          git clone --depth 1 --branch master https://github.com/bustesoul/vam_downloader.git ../vam_downloader
+
+          Write-Host "Building vam_downloader..."
+          cd ../vam_downloader
+          cargo build --release --target x86_64-pc-windows-msvc
+
+          Write-Host "Copying vam_downloader.exe to project..."
+          $downloaderExe = "target/x86_64-pc-windows-msvc/release/vam_downloader.exe"
+          if (Test-Path $downloaderExe) {
+            $projectRoot = "$env:GITHUB_WORKSPACE"
+            $pluginDir = Join-Path $projectRoot "plugin"
+            New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
+            Copy-Item $downloaderExe -Destination $pluginDir -Force
+            Write-Host "vam_downloader.exe copied to plugin/"
+          } else {
+            Write-Error "vam_downloader.exe not found at $downloaderExe"
+            exit 1
+          }
+
       - name: Build release (Flutter + Backend)
         run: .\build.ps1 -Action release
 

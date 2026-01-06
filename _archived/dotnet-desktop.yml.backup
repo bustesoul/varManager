@@ -1,0 +1,89 @@
+name: .NET Core Desktop
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        configuration: [Release]
+
+    runs-on: windows-latest
+
+    env:
+      Solution_Name: varManager.sln                    # 解决方案名称
+      Project_Path: varManager/varManager.csproj       # 项目路径
+      Project_Version: v1.0.4.13                       # 项目版本
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Clone the external project to the correct directory
+      - name: Clone DgvFilterPopup
+        run: git clone --branch main https://github.com/farosch/DgvFilterPopup.git ../DgvFilterPopup
+
+      # Install the .NET Core workload
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            9.0.x
+
+      # Add MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v2
+
+      # Restore the application to populate the obj folder with RuntimeIdentifiers
+      - name: Restore the application
+        run: msbuild ${{ env.Solution_Name }} /t:Restore /p:Configuration=${{ matrix.configuration }}
+
+      # Decode the base 64 encoded pfx and save the Signing_Certificate
+      - name: Decode the pfx
+        run: |
+          $pfx_cert_byte = [System.Convert]::FromBase64String("${{ secrets.Base64_Encoded_Pfx }}")
+          $certificatePath = "varManager/GitHubActionsWorkflow.pfx"
+          [IO.File]::WriteAllBytes("$certificatePath", $pfx_cert_byte)
+
+      # Build the project
+      - name: Build the project
+        run: msbuild ${{ env.Project_Path }} /p:Configuration=${{ matrix.configuration }}
+
+      # Package the application with self-contained deployment
+      - name: Package the application
+        run: |
+          dotnet publish ${{ env.Project_Path }} -c ${{ matrix.configuration }} -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PackageCertificateKeyFile="varManager/GitHubActionsWorkflow.pfx" -p:PackageCertificatePassword=${{ secrets.Pfx_Key }}
+
+      # Remove the pfx
+      - name: Remove the pfx
+        run: Remove-Item -path "varManager/GitHubActionsWorkflow.pfx"
+
+      # Clone vam_downloader repository and build it
+      - name: Clone vam_downloader
+        run: git clone --branch master https://github.com/bustesoul/vam_downloader.git ../vam_downloader
+
+      - name: Build vam_downloader
+        run: |
+          cd ../vam_downloader
+          rustup toolchain install stable-x86_64-pc-windows-msvc
+          rustup default stable-x86_64-pc-windows-msvc
+          cargo build --release --target x86_64-pc-windows-msvc -j $env:NUMBER_OF_PROCESSORS
+
+      - name: Copy vam_downloader to plugin directory
+        run: |
+          mkdir -p varManager/bin/${{ matrix.configuration }}/net9.0-windows/win-x64/publish/plugin
+          cp ../vam_downloader/target/x86_64-pc-windows-msvc/release/vam_downloader.exe varManager/bin/${{ matrix.configuration }}/net9.0-windows/win-x64/publish/plugin/
+
+      # Upload the build artifacts
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: varManager_${{ env.Project_Version }}
+          path: varManager/bin/${{ matrix.configuration }}/net9.0-windows/win-x64/publish

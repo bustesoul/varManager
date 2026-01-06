@@ -234,6 +234,83 @@ function Stage-BackendRelease {
     }
 }
 
+function Stage-PluginFiles {
+    # Copy vam_downloader.exe if available
+    $pluginDir = Join-Path $root "plugin"
+    $dest = Join-Path $releaseRoot "plugin"
+
+    if (Test-Path -LiteralPath $pluginDir) {
+        Ensure-EmptyDir $dest
+        $downloader = Join-Path $pluginDir "vam_downloader.exe"
+        if (Test-Path -LiteralPath $downloader) {
+            Copy-Item -LiteralPath $downloader -Destination $dest -Force
+            Write-Host "Copied vam_downloader.exe to release/plugin/"
+        }
+        else {
+            Write-Warning "vam_downloader.exe not found in plugin/ directory."
+            Write-Warning "Hub download functionality will not be available."
+            Write-Host "To build vam_downloader:"
+            Write-Host "  1. Clone: git clone https://github.com/bustesoul/vam_downloader.git ../vam_downloader"
+            Write-Host "  2. Build: cd ../vam_downloader && cargo build --release"
+            Write-Host "  3. Copy:  cp target/release/vam_downloader.exe <project>/plugin/"
+        }
+    }
+    else {
+        Write-Warning "plugin/ directory not found. Skipping vam_downloader."
+    }
+}
+
+function Stage-VaMPlugins {
+    # Copy VaM plugin scripts (user needs to manually copy these to VaM/Custom/Scripts/)
+    $pluginScripts = @(
+        "_archived\\varManager\\Custom\\Scripts\\loadscene.cs",
+        "_archived\\varManager\\Custom\\Scripts\\MorphMerger.cs"
+    )
+
+    $dest = Join-Path $releaseRoot "vam_plugins"
+    Ensure-EmptyDir $dest
+
+    foreach ($script in $pluginScripts) {
+        $src = Join-Path $root $script
+        if (Test-Path -LiteralPath $src) {
+            Copy-Item -LiteralPath $src -Destination $dest -Force
+            Write-Host "Copied VaM plugin: $script"
+        }
+        else {
+            Write-Warning "VaM plugin script not found: $src"
+        }
+    }
+
+    # Create README for VaM plugins
+    $readmeContent = @"
+# VaM Plugins
+
+These C# scripts are designed to run inside Virt-A-Mate (VaM) game engine.
+
+## Installation
+
+1. Locate your VaM installation directory
+2. Navigate to `Custom\Scripts\` folder
+3. Copy these `.cs` files to that folder
+4. The scripts will be available in VaM's plugin list
+
+## Included Scripts
+
+- **loadscene.cs** - Scene loader with MMD support
+- **MorphMerger.cs** - Morph merging utility
+
+## Requirements
+
+- Virt-A-Mate installed
+- These scripts use Unity engine APIs and cannot run outside VaM
+
+## Source Code
+
+Full source code with LibMMD library is available in the `LoadScene/` directory of the main repository.
+"@
+    Set-Content -Path (Join-Path $dest "README.txt") -Value $readmeContent -Encoding UTF8
+}
+
 function Assemble-ReleasePackage {
     if (-not $script:ProjectVersion) {
         $script:ProjectVersion = Get-ProjectVersion
@@ -242,6 +319,7 @@ function Assemble-ReleasePackage {
     $target = Join-Path $releaseRoot $targetName
     Ensure-EmptyDir $target
 
+    # Copy Flutter frontend
     $flutterSrc = Join-Path $releaseRoot "flutter\\windows"
     if (Test-Path -LiteralPath $flutterSrc) {
         Copy-Item -Path (Join-Path $flutterSrc "*") -Destination $target -Recurse -Force
@@ -250,6 +328,7 @@ function Assemble-ReleasePackage {
         Write-Warning "Flutter release folder not found: $flutterSrc"
     }
 
+    # Copy Rust backend
     $backendSrc = Join-Path $releaseRoot "backend"
     if (Test-Path -LiteralPath $backendSrc) {
         Copy-Item -Path (Join-Path $backendSrc "*") -Destination $target -Recurse -Force
@@ -258,6 +337,31 @@ function Assemble-ReleasePackage {
         Write-Warning "Backend release folder not found: $backendSrc"
     }
 
+    # Copy VaM plugin scripts
+    $vamPluginsSrc = Join-Path $releaseRoot "vam_plugins"
+    if (Test-Path -LiteralPath $vamPluginsSrc) {
+        $vamPluginsDest = Join-Path $target "VaM_Plugins"
+        New-Item -ItemType Directory -Path $vamPluginsDest -Force | Out-Null
+        Copy-Item -Path (Join-Path $vamPluginsSrc "*") -Destination $vamPluginsDest -Recurse -Force
+        Write-Host "VaM plugins staged to: VaM_Plugins\"
+    }
+    else {
+        Write-Warning "VaM plugins folder not found: $vamPluginsSrc"
+    }
+
+    # Copy plugin files (vam_downloader.exe)
+    $pluginSrc = Join-Path $releaseRoot "plugin"
+    if (Test-Path -LiteralPath $pluginSrc) {
+        $pluginDest = Join-Path $target "plugin"
+        New-Item -ItemType Directory -Path $pluginDest -Force | Out-Null
+        Copy-Item -Path (Join-Path $pluginSrc "*") -Destination $pluginDest -Recurse -Force
+        Write-Host "Plugin files staged to: plugin\"
+    }
+    else {
+        Write-Warning "Plugin folder not found (vam_downloader not included)"
+    }
+
+    # Copy documentation files
     $docFiles = @("VERSION", "README.md", "README_CN.md")
     foreach ($doc in $docFiles) {
         $src = Join-Path $root $doc
@@ -265,6 +369,41 @@ function Assemble-ReleasePackage {
             Copy-Item -LiteralPath $src -Destination (Join-Path $target $doc) -Force
         }
     }
+
+    # Create INSTALL.txt with quick start guide
+    $installGuide = @"
+# varManager v$script:ProjectVersion Quick Start
+
+## Installation
+
+1. Extract all files to a folder
+2. Run varmanager_flutter.exe
+3. The backend service will start automatically
+4. Configure VaM paths in Settings
+5. Click "Update DB" to scan your var files
+
+## VaM Plugins (Optional)
+
+If you want to use MMD scene loading features in VaM:
+1. Open the `VaM_Plugins` folder
+2. Copy the .cs files to your `VaM\Custom\Scripts\` directory
+3. See VaM_Plugins\README.txt for details
+
+## Requirements
+
+- Windows 10/11 (64-bit)
+- No additional runtime required (self-contained)
+
+## Documentation
+
+- README.md - Full documentation (English)
+- README_CN.md - 完整文档 (中文)
+
+## Support
+
+GitHub: https://github.com/bustesoul/varManager
+"@
+    Set-Content -Path (Join-Path $target "INSTALL.txt") -Value $installGuide -Encoding UTF8
 }
 
 $doFlutter = @("all", "flutter") -contains $Project
@@ -278,6 +417,10 @@ switch ($Action) {
     "clean" {
         if ($doFlutter) { Clean-Flutter }
         if ($doBackend) { Clean-Backend }
+        if (Test-Path -LiteralPath $releaseRoot) {
+            Write-Host "Cleaning release directory..."
+            Remove-Item -LiteralPath $releaseRoot -Recurse -Force
+        }
     }
     "build" {
         if ($doFlutter) { Build-Flutter "debug" }
@@ -288,7 +431,21 @@ switch ($Action) {
         if ($doBackend) { Build-Backend "release" }
         if ($doFlutter) { Stage-FlutterRelease }
         if ($doBackend) { Stage-BackendRelease }
+        Stage-PluginFiles
+        Stage-VaMPlugins
         Assemble-ReleasePackage
+        Write-Host "`nRelease package created at: release\varManager_$script:ProjectVersion"
+        Write-Host "Package contents:"
+        Write-Host "  - Flutter frontend (varmanager_flutter.exe)"
+        Write-Host "  - Rust backend (varManager_backend.exe)"
+        Write-Host "  - VaM plugins (VaM_Plugins\*.cs)"
+        $pluginCheck = Join-Path $releaseRoot "plugin\vam_downloader.exe"
+        if (Test-Path -LiteralPath $pluginCheck) {
+            Write-Host "  - Hub downloader (plugin\vam_downloader.exe)"
+        } else {
+            Write-Host "  - Hub downloader: NOT INCLUDED (see warnings above)"
+        }
+        Write-Host "  - Documentation (README.md, README_CN.md, INSTALL.txt)"
     }
 }
 
