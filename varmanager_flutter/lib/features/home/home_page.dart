@@ -23,6 +23,8 @@ class HomePage extends ConsumerStatefulWidget {
   ConsumerState<HomePage> createState() => _HomePageState();
 }
 
+enum _ActionGroup { core, maintenance }
+
 class _HomePageState extends ConsumerState<HomePage> {
   final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
   final _filterDebounce = Debouncer(const Duration(milliseconds: 300));
@@ -33,6 +35,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _minDepController = TextEditingController();
   final TextEditingController _maxDepController = TextEditingController();
   bool _showAdvancedFilters = false;
+  _ActionGroup _actionGroup = _ActionGroup.core;
+  String _missingDepsScope = 'installed';
+
+  static const Duration _tooltipDelay = Duration(seconds: 1);
 
   // PackSwitch state
   PackSwitchListResponse? _packSwitchData;
@@ -67,6 +73,44 @@ class _HomePageState extends ConsumerState<HomePage> {
       return await runner.runJob(kind, args: args, onLog: log.addLine);
     } finally {
       busy.setBusy(false);
+    }
+  }
+
+  Widget _withTooltip(String message, Widget child) {
+    return Tooltip(
+      message: message,
+      waitDuration: _tooltipDelay,
+      showDuration: const Duration(seconds: 6),
+      child: child,
+    );
+  }
+
+  Future<void> _runMissingDeps(VarsQueryParams query) async {
+    JobResult<dynamic>? result;
+    switch (_missingDepsScope) {
+      case 'installed':
+        result = await _runJob('missing_deps', args: {'scope': 'installed'});
+        break;
+      case 'all':
+        result = await _runJob('missing_deps', args: {'scope': 'all'});
+        break;
+      case 'filtered':
+        final names = await _fetchFilteredVarNames(query);
+        if (names.isEmpty) return;
+        result = await _runJob('missing_deps', args: {
+          'scope': 'filtered',
+          'var_names': names,
+        });
+        break;
+      case 'saves':
+        result = await _runJob('saves_deps');
+        break;
+      case 'log':
+        result = await _runJob('log_deps');
+        break;
+    }
+    if (result != null) {
+      await _openMissingVars(result);
     }
   }
 
@@ -108,7 +152,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildToolbar(context, varsAsync),
+          _buildToolbar(context, varsAsync, query),
           const SizedBox(height: 12),
           Card(
             child: Padding(
@@ -216,69 +260,90 @@ class _HomePageState extends ConsumerState<HomePage> {
                     },
                   ),
                   Text('Selected ${selected.length}'),
-                  TextButton(
-                    onPressed: () {
-                      final items = varsAsync.asData?.value.items ?? [];
-                      if (items.isEmpty) return;
-                      final pageNames = items.map((e) => e.varName).toSet();
-                      final next = <String>{...selected, ...pageNames};
-                      ref.read(selectedVarsProvider.notifier).setSelection(next);
-                    },
-                    child: const Text('Select page'),
+                  _withTooltip(
+                    'Select all items on the current page.',
+                    TextButton(
+                      onPressed: () {
+                        final items = varsAsync.asData?.value.items ?? [];
+                        if (items.isEmpty) return;
+                        final pageNames = items.map((e) => e.varName).toSet();
+                        final next = <String>{...selected, ...pageNames};
+                        ref.read(selectedVarsProvider.notifier).setSelection(next);
+                      },
+                      child: const Text('Select page'),
+                    ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      final items = varsAsync.asData?.value.items ?? [];
-                      if (items.isEmpty) return;
-                      final pageNames = items.map((e) => e.varName).toSet();
-                      final next = <String>{};
-                      // Add items not on this page
-                      for (final name in selected) {
-                        if (!pageNames.contains(name)) {
-                          next.add(name);
+                  _withTooltip(
+                    'Invert selection on the current page.',
+                    TextButton(
+                      onPressed: () {
+                        final items = varsAsync.asData?.value.items ?? [];
+                        if (items.isEmpty) return;
+                        final pageNames = items.map((e) => e.varName).toSet();
+                        final next = <String>{};
+                        // Add items not on this page
+                        for (final name in selected) {
+                          if (!pageNames.contains(name)) {
+                            next.add(name);
+                          }
                         }
-                      }
-                      // Add unselected items from this page
-                      for (final name in pageNames) {
-                        if (!selected.contains(name)) {
-                          next.add(name);
+                        // Add unselected items from this page
+                        for (final name in pageNames) {
+                          if (!selected.contains(name)) {
+                            next.add(name);
+                          }
                         }
-                      }
-                      ref.read(selectedVarsProvider.notifier).setSelection(next);
-                    },
-                    child: const Text('Invert page'),
+                        ref
+                            .read(selectedVarsProvider.notifier)
+                            .setSelection(next);
+                      },
+                      child: const Text('Invert page'),
+                    ),
                   ),
-                  TextButton(
-                    onPressed: selected.isEmpty
-                        ? null
-                        : () {
-                            ref.read(selectedVarsProvider.notifier).clear();
-                          },
-                    child: const Text('Clear all'),
+                  _withTooltip(
+                    'Clear all selected items.',
+                    TextButton(
+                      onPressed: selected.isEmpty
+                          ? null
+                          : () {
+                              ref.read(selectedVarsProvider.notifier).clear();
+                            },
+                      child: const Text('Clear all'),
+                    ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      ref.read(varsQueryProvider.notifier).reset();
-                      _packageController.clear();
-                      _versionController.clear();
-                      _minSizeController.clear();
-                      _maxSizeController.clear();
-                      _minDepController.clear();
-                      _maxDepController.clear();
-                      setState(() {
-                        _showAdvancedFilters = false;
-                      });
-                    },
-                    child: const Text('Reset filters'),
+                  _withTooltip(
+                    'Reset all filters to defaults.',
+                    TextButton(
+                      onPressed: () {
+                        ref.read(varsQueryProvider.notifier).reset();
+                        _packageController.clear();
+                        _versionController.clear();
+                        _minSizeController.clear();
+                        _maxSizeController.clear();
+                        _minDepController.clear();
+                        _maxDepController.clear();
+                        setState(() {
+                          _showAdvancedFilters = false;
+                        });
+                      },
+                      child: const Text('Reset filters'),
+                    ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _showAdvancedFilters = !_showAdvancedFilters;
-                      });
-                    },
-                    child: Text(
-                      _showAdvancedFilters ? 'Hide advanced' : 'Advanced filters',
+                  _withTooltip(
+                    _showAdvancedFilters
+                        ? 'Hide advanced filters.'
+                        : 'Show advanced filters.',
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _showAdvancedFilters = !_showAdvancedFilters;
+                        });
+                      },
+                      child: Text(
+                        _showAdvancedFilters
+                            ? 'Hide advanced'
+                            : 'Advanced filters',
+                      ),
                     ),
                   ),
                 ],
@@ -519,132 +584,300 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  Widget _buildToolbar(BuildContext context, AsyncValue<VarsListResponse> vars) {
+  Widget _buildToolbar(
+    BuildContext context,
+    AsyncValue<VarsListResponse> _vars,
+    VarsQueryParams query,
+  ) {
     final isBusy = ref.watch(jobBusyProvider);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        if (isBusy)
-          const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        FilledButton.icon(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('update_db');
-                  ref.invalidate(varsListProvider);
-                },
-          icon: const Icon(Icons.sync),
-          label: const Text('Update DB'),
+    final compactPadding =
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 520;
+                final title = Text(
+                  'Actions',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                );
+                final switcher = SegmentedButton<_ActionGroup>(
+                  segments: const [
+                    ButtonSegment(
+                      value: _ActionGroup.core,
+                      label: Text('Core'),
+                      tooltip: 'Core actions and dependency checks.',
+                    ),
+                    ButtonSegment(
+                      value: _ActionGroup.maintenance,
+                      label: Text('Maintenance'),
+                      tooltip: 'Cleanup and maintenance jobs.',
+                    ),
+                  ],
+                  selected: {_actionGroup},
+                  onSelectionChanged: (value) {
+                    setState(() {
+                      _actionGroup = value.first;
+                    });
+                  },
+                );
+                if (wide) {
+                  return Row(
+                    children: [
+                      title,
+                      const Spacer(),
+                      if (isBusy)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      const SizedBox(width: 8),
+                      switcher,
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        title,
+                        const Spacer(),
+                        if (isBusy)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    switcher,
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _buildActionGroupContent(
+                context,
+                query,
+                isBusy,
+                compactPadding,
+              ),
+            ),
+          ],
         ),
-        OutlinedButton.icon(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('vam_start');
-                },
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('Start VaM'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  final result = await _runJob('missing_deps', args: {
-                    'scope': 'installed',
-                  });
-                  _openMissingVars(result);
-                },
-          child: const Text('Missing deps (installed)'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  final result = await _runJob('missing_deps', args: {
-                    'scope': 'all',
-                  });
-                  _openMissingVars(result);
-                },
-          child: const Text('Missing deps (all)'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  final query = ref.read(varsQueryProvider);
-                  final names = await _fetchFilteredVarNames(query);
-                  if (names.isEmpty) return;
-                  final result = await _runJob('missing_deps', args: {
-                    'scope': 'filtered',
-                    'var_names': names,
-                  });
-                  _openMissingVars(result);
-                },
-          child: const Text('Missing deps (filtered)'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('rebuild_links', args: {'include_missing': true});
-                },
-          child: const Text('Rebuild links'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('saves_deps');
-                },
-          child: const Text('Analyze Saves'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('log_deps');
-                },
-          child: const Text('Analyze Log'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('stale_vars');
-                },
-          child: const Text('Stale Vars'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('old_version_vars');
-                },
-          child: const Text('Old Versions'),
-        ),
-        OutlinedButton(
-          onPressed: isBusy
-              ? null
-              : () async {
-                  await _runJob('fix_previews');
-                },
-          child: const Text('Fix Preview'),
-        ),
-        OutlinedButton(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PrepareSavesPage()),
-            );
-          },
-          child: const Text('Prepare Saves'),
-        ),
-      ],
+      ),
     );
+  }
+
+  Widget _buildActionGroupContent(
+    BuildContext context,
+    VarsQueryParams query,
+    bool isBusy,
+    EdgeInsets compactPadding,
+  ) {
+    switch (_actionGroup) {
+      case _ActionGroup.core:
+        return Wrap(
+          key: const ValueKey('core-actions'),
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _withTooltip(
+              'Scan vars, extract previews, and update the database.',
+              FilledButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        await _runJob('update_db');
+                        ref.invalidate(varsListProvider);
+                      },
+                icon: const Icon(Icons.sync),
+                label: const Text('Update DB'),
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            _withTooltip(
+              'Launch the VaM application.',
+              OutlinedButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        await _runJob('vam_start');
+                      },
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start VaM'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            _withTooltip(
+              'Open the saves preparation and dependency tools.',
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PrepareSavesPage(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.build_circle),
+                label: const Text('Prepare Saves'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 230,
+              child: _withTooltip(
+                'Choose the source used to detect missing dependencies.',
+                DropdownButtonFormField<String>(
+                  value: _missingDepsScope,
+                  decoration: const InputDecoration(
+                    labelText: 'Missing deps source',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'installed',
+                      child: Text('Installed packages'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'all',
+                      child: Text('All packages'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'filtered',
+                      child: Text('Filtered list'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'saves',
+                      child: Text('Saves folder'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'log',
+                      child: Text('Log (output_log.txt)'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _missingDepsScope = value;
+                    });
+                  },
+                ),
+              ),
+            ),
+            _withTooltip(
+              'Analyze missing dependencies and open the results.',
+              FilledButton.icon(
+                onPressed: isBusy ? null : () => _runMissingDeps(query),
+                icon: const Icon(Icons.search),
+                label: const Text('Run Missing Deps'),
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+          ],
+        );
+      case _ActionGroup.maintenance:
+        return Wrap(
+          key: const ValueKey('maintenance-actions'),
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _withTooltip(
+              'Rebuild symlinks after changing the Vars source directory.',
+              OutlinedButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        await _runJob('rebuild_links',
+                            args: {'include_missing': true});
+                      },
+                icon: const Icon(Icons.link),
+                label: const Text('Rebuild Links'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            _withTooltip(
+              'Re-extract missing preview images.',
+              OutlinedButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        await _runJob('fix_previews');
+                      },
+                icon: const Icon(Icons.image_search),
+                label: const Text('Fix Preview'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            _withTooltip(
+              'Move old versions not referenced by dependencies.',
+              OutlinedButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        await _runJob('stale_vars');
+                      },
+                icon: const Icon(Icons.inventory_2_outlined),
+                label: const Text('Stale Vars'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            _withTooltip(
+              'Find or manage old package versions.',
+              OutlinedButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        await _runJob('old_version_vars');
+                      },
+                icon: const Icon(Icons.layers_clear),
+                label: const Text('Old Versions'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+          ],
+        );
+    }
   }
 
   Widget _buildList(
@@ -780,95 +1013,126 @@ class _HomePageState extends ConsumerState<HomePage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  FilledButton(
-                    onPressed: isBusy
-                        ? null
-                        : () async {
-                            await _runJob('install_vars', args: {
-                              'var_names': selected.toList(),
-                              'include_dependencies': true,
-                            });
-                            ref.invalidate(varsListProvider);
-                          },
-                    child: const Text('Install Selected'),
+                  _withTooltip(
+                    'Install selected vars and dependencies.',
+                    FilledButton(
+                      onPressed: isBusy
+                          ? null
+                          : () async {
+                              await _runJob('install_vars', args: {
+                                'var_names': selected.toList(),
+                                'include_dependencies': true,
+                              });
+                              ref.invalidate(varsListProvider);
+                            },
+                      child: const Text('Install Selected'),
+                    ),
                   ),
-                  FilledButton.tonal(
-                    onPressed: isBusy
-                        ? null
-                        : () async {
-                            final preview = await _runJob('preview_uninstall', args: {
-                              'var_names': selected.toList(),
-                              'include_implicated': true,
-                            });
-                            if (!context.mounted) return;
-                            final result = preview.result as Map<String, dynamic>?;
-                            if (result == null) return;
-                            final confirmed = await Navigator.of(context).push<bool>(
-                              MaterialPageRoute(
-                                builder: (_) => UninstallVarsPage(payload: result),
-                              ),
-                            );
-                            if (confirmed == true) {
-                              await _runJob('uninstall_vars', args: {
+                  _withTooltip(
+                    'Uninstall selected vars and affected items.',
+                    FilledButton.tonal(
+                      onPressed: isBusy
+                          ? null
+                          : () async {
+                              final preview =
+                                  await _runJob('preview_uninstall', args: {
+                                'var_names': selected.toList(),
+                                'include_implicated': true,
+                              });
+                              if (!context.mounted) return;
+                              final result =
+                                  preview.result as Map<String, dynamic>?;
+                              if (result == null) return;
+                              final confirmed =
+                                  await Navigator.of(context).push<bool>(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      UninstallVarsPage(payload: result),
+                                ),
+                              );
+                              if (confirmed == true) {
+                                await _runJob('uninstall_vars', args: {
+                                  'var_names': selected.toList(),
+                                  'include_implicated': true,
+                                });
+                                ref.invalidate(varsListProvider);
+                              }
+                            },
+                      child: const Text('Uninstall Selected'),
+                    ),
+                  ),
+                  _withTooltip(
+                    'Delete selected vars and affected items.',
+                    OutlinedButton(
+                      onPressed: isBusy
+                          ? null
+                          : () async {
+                              await _runJob('delete_vars', args: {
                                 'var_names': selected.toList(),
                                 'include_implicated': true,
                               });
                               ref.invalidate(varsListProvider);
-                            }
-                          },
-                    child: const Text('Uninstall Selected'),
+                            },
+                      child: const Text('Delete Selected'),
+                    ),
                   ),
-                  OutlinedButton(
-                    onPressed: isBusy
-                        ? null
-                        : () async {
-                            await _runJob('delete_vars', args: {
-                              'var_names': selected.toList(),
-                              'include_implicated': true,
-                            });
-                            ref.invalidate(varsListProvider);
-                          },
-                    child: const Text('Delete Selected'),
+                  _withTooltip(
+                    'Move selected symlink entries to a target folder.',
+                    OutlinedButton(
+                      onPressed: isBusy
+                          ? null
+                          : () async {
+                              final target =
+                                  await _askText(context, 'Target dir');
+                              if (target == null || target.trim().isEmpty) {
+                                return;
+                              }
+                              await _runJob('links_move', args: {
+                                'var_names': selected.toList(),
+                                'target_dir': target.trim(),
+                              });
+                            },
+                      child: const Text('Move Links'),
+                    ),
                   ),
-                  OutlinedButton(
-                    onPressed: isBusy
-                        ? null
-                        : () async {
-                            final target = await _askText(context, 'Target dir');
-                            if (target == null || target.trim().isEmpty) return;
-                            await _runJob('links_move', args: {
-                              'var_names': selected.toList(),
-                              'target_dir': target.trim(),
-                            });
-                          },
-                    child: const Text('Move Links'),
+                  _withTooltip(
+                    'Export installed vars to a text file.',
+                    OutlinedButton(
+                      onPressed: isBusy
+                          ? null
+                          : () async {
+                              final path = await _askText(
+                                context,
+                                'Export path',
+                                hint: 'installed_vars.txt',
+                              );
+                              if (path == null || path.trim().isEmpty) return;
+                              await _runJob('vars_export_installed', args: {
+                                'path': path.trim(),
+                              });
+                            },
+                      child: const Text('Export Installed'),
+                    ),
                   ),
-                  OutlinedButton(
-                    onPressed: isBusy
-                        ? null
-                        : () async {
-                            final path = await _askText(context, 'Export path',
-                                hint: 'installed_vars.txt');
-                            if (path == null || path.trim().isEmpty) return;
-                            await _runJob('vars_export_installed', args: {
-                              'path': path.trim(),
-                            });
-                          },
-                    child: const Text('Export Installed'),
-                  ),
-                  OutlinedButton(
-                    onPressed: isBusy
-                        ? null
-                        : () async {
-                            final path = await _askText(context, 'Install list path',
-                                hint: 'install_list.txt');
-                            if (path == null || path.trim().isEmpty) return;
-                            await _runJob('vars_install_batch', args: {
-                              'path': path.trim(),
-                            });
-                            ref.invalidate(varsListProvider);
-                          },
-                    child: const Text('Install from List'),
+                  _withTooltip(
+                    'Install vars from a text list.',
+                    OutlinedButton(
+                      onPressed: isBusy
+                          ? null
+                          : () async {
+                              final path = await _askText(
+                                context,
+                                'Install list path',
+                                hint: 'install_list.txt',
+                              );
+                              if (path == null || path.trim().isEmpty) return;
+                              await _runJob('vars_install_batch', args: {
+                                'path': path.trim(),
+                              });
+                              ref.invalidate(varsListProvider);
+                            },
+                      child: const Text('Install from List'),
+                    ),
                   ),
                 ],
               ),

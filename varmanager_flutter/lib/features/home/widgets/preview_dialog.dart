@@ -53,6 +53,8 @@ class PreviewDialog extends StatelessWidget {
       items: previewItems,
       initialIndex: initialIndex,
       onIndexChanged: onIndexChanged,
+      showFooter: false,
+      wrapNavigation: true,
     );
   }
 }
