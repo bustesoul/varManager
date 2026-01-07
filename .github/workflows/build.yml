@@ -37,7 +37,7 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Build release (Flutter + Backend + vam_downloader)
+      - name: Build release (Flutter + Backend)
         run: .\build.ps1 -Action release
 
       - name: Upload build artifacts

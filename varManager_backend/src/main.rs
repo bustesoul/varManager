@@ -69,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/stats", get(api::get_stats))
         .route("/preview", get(api::get_preview))
         .route("/packswitch", get(api::list_packswitch))
+        .route("/hub/options", get(api::list_hub_options))
         .route("/dependents", get(api::list_dependents))
         .route("/analysis/atoms", get(api::list_analysis_atoms))
         .route("/saves/tree", get(api::list_saves_tree))

@@ -5,7 +5,7 @@
 - Windows only; no cross-OS support.
 - New Rust backend runs as a local HTTP service.
 - Frontend remains .NET WinForms, with minimal changes.
-- Downloader stays as external .exe, called by backend.
+- Downloader is embedded in backend (no external exe).
 
 ## Key Conventions and Paths
 - varspath: user-configured var repository (Settings.Default.varspath).
@@ -20,7 +20,7 @@
 - Cache: `./Cache/<varName>/<entryName>/`
 - DB: `varManager.db` next to the exe (current behavior).
 - Logs: `varManager.log` in exe working directory (SimpleLogger).
-- Downloader: `.\plugin\vam_downloader.exe`
+- Downloader: embedded in backend
 
 ## Database Schema (SQLite)
 - dependencies(varName, dependency)
@@ -48,7 +48,7 @@
 ## Backend Scaffold (Current)
 - Implemented endpoints: GET /health, GET /config, POST /shutdown.
 - Config file: config.json next to backend exe, auto-created if missing.
-- Config fields: listen_host, listen_port, log_level, job_concurrency, varspath, vampath, vam_exec, downloader_path, downloader_save_path.
+- Config fields: listen_host, listen_port, log_level, job_concurrency, varspath, vampath, vam_exec, downloader_save_path.
 - Job framework: POST /jobs, GET /jobs/{id}, GET /jobs/{id}/logs, GET /jobs/{id}/result (in-memory, capped logs).
 - Job kinds: "noop", "update_db", "missing_deps", "rebuild_links", "install_vars"/"uninstall_vars"/"delete_vars", "saves_deps"/"log_deps", "fix_previews", "stale_vars"/"old_version_vars", "links_move"/"links_missing_create", "vars_export_installed"/"vars_install_batch"/"vars_toggle_install"/"vars_locate"/"refresh_install_status", "packswitch_add"/"packswitch_delete"/"packswitch_rename"/"packswitch_set", "scene_load"/"scene_analyze"/"scene_preset_*"/"scene_add_*"/"scene_hide/fav/unhide/unfav"/"cache_clear", "hub_*" (info/resources/resource_detail/find_packages/missing_scan/updates_scan/download_all), "vam_start"/"rescan_packages"/"open_url".
 - Windows native file ops module implemented (symlink create/read, set file time).

@@ -4,7 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
-import '../home/home_page.dart';
+import '../../core/utils/debounce.dart';
+import '../../widgets/lazy_dropdown_field.dart';
+import '../../widgets/preview_placeholder.dart';
+import '../../widgets/image_preview_dialog.dart';
+import '../home/providers.dart';
+
+Map<String, String>? _hubImageHeaders(String? url) {
+  if (url == null || url.isEmpty) {
+    return null;
+  }
+  final lower = url.toLowerCase();
+  if (lower.startsWith('https://hub.virtamate.com/attachments/') ||
+      lower.startsWith('http://hub.virtamate.com/attachments/')) {
+    return const {'Cookie': 'vamhubconsent=yes'};
+  }
+  return null;
+}
 
 class HubInfo {
   HubInfo({
@@ -61,6 +77,22 @@ class HubPackageInfo {
   final String displayVarName;
 }
 
+class HubResourcesCacheEntry {
+  HubResourcesCacheEntry({
+    required this.resources,
+    required this.totalFound,
+    required this.totalPages,
+    required this.page,
+    required this.timestamp,
+  });
+
+  final List<Map<String, dynamic>> resources;
+  final int totalFound;
+  final int totalPages;
+  final int page;
+  final DateTime timestamp;
+}
+
 class HubPage extends ConsumerStatefulWidget {
   const HubPage({super.key});
 
@@ -70,12 +102,16 @@ class HubPage extends ConsumerStatefulWidget {
 
 class _HubPageState extends ConsumerState<HubPage> {
   final TextEditingController _searchController = TextEditingController();
+  final _searchDebounce = Debouncer(const Duration(milliseconds: 300));
   HubInfo? _info;
   bool _loadingInfo = false;
   bool _loadingResources = false;
+  int _resourceRequestId = 0;
+  bool _pendingRefresh = false;
+  bool _pendingForce = false;
 
   int _page = 1;
-  int _perPage = 48;
+  int _perPage = 12;
   int _totalPages = 1;
   int _totalFound = 0;
 
@@ -88,12 +124,16 @@ class _HubPageState extends ConsumerState<HubPage> {
   String _sortSecondary = '';
 
   List<Map<String, dynamic>> _resources = [];
+  final Map<String, HubResourcesCacheEntry> _resourcesCache = {};
   final Map<String, String> _repoStatusById = {};
   final Map<String, String> _repoPackageById = {};
   final Map<String, String> _downloadUrlById = {};
 
   final Map<String, String> _downloadByVar = {};
   final Map<String, String> _downloadByUrl = {};
+
+  static const int _tagChipLimit = 4;
+  static const Duration _resourcesCacheTtl = Duration(seconds: 30);
 
   @override
   void initState() {
@@ -103,6 +143,7 @@ class _HubPageState extends ConsumerState<HubPage> {
 
   @override
   void dispose() {
+    _searchDebounce.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -111,6 +152,39 @@ class _HubPageState extends ConsumerState<HubPage> {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
     await runner.runJob(kind, args: args, onLog: log.addLine);
+  }
+
+  Future<void> _openImagePreview(
+    BuildContext context,
+    List<String> imageUrls,
+    int initialIndex,
+  ) async {
+    if (imageUrls.isEmpty) {
+      return;
+    }
+    final previewItems = imageUrls
+        .map(
+          (url) => ImagePreviewItem(
+            title: '',
+            imageUrl: url,
+            headers: _hubImageHeaders(url),
+          ),
+        )
+        .toList();
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return ImagePreviewDialog(
+          items: previewItems,
+          initialIndex: initialIndex.clamp(0, previewItems.length - 1),
+          onIndexChanged: (_) {},
+          showHeaderText: false,
+          showFooter: false,
+          wrapNavigation: true,
+        );
+      },
+    );
   }
 
   Future<void> _loadInfo() async {
@@ -146,64 +220,121 @@ class _HubPageState extends ConsumerState<HubPage> {
     }
   }
 
+  Map<String, dynamic> _buildResourcesQuery() {
+    final sort = _sortSecondary.trim().isEmpty
+        ? _sortPrimary.trim()
+        : '${_sortPrimary.trim()},${_sortSecondary.trim()}';
+    return {
+      'perpage': _perPage,
+      'location': _location,
+      'paytype': _payType,
+      'category': _category,
+      'username': _creator,
+      'tags': _tags,
+      'search': _searchController.text.trim(),
+      'sort': sort,
+      'page': _page,
+    };
+  }
+
+  String _buildCacheKey(Map<String, dynamic> query) {
+    final keys = query.keys.toList()..sort();
+    return keys.map((key) => '$key=${query[key]}').join('|');
+  }
+
+  bool _isCacheExpired(HubResourcesCacheEntry entry) {
+    return DateTime.now().difference(entry.timestamp) > _resourcesCacheTtl;
+  }
+
   Future<void> _refreshResources({bool force = false}) async {
-    if (_loadingResources && !force) return;
+    final requestId = ++_resourceRequestId;
+    if (_loadingResources) {
+      _pendingRefresh = true;
+      _pendingForce = _pendingForce || force;
+      return;
+    }
     setState(() {
       _loadingResources = true;
     });
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    final sort = _sortSecondary.trim().isEmpty
-        ? _sortPrimary.trim()
-        : '${_sortPrimary.trim()},${_sortSecondary.trim()}';
-    final result = await runner.runJob(
-      'hub_resources',
-      args: {
-        'perpage': _perPage,
-        'location': _location,
-        'paytype': _payType,
-        'category': _category,
-        'username': _creator,
-        'tags': _tags,
-        'search': _searchController.text.trim(),
-        'sort': sort,
-        'page': _page,
-      },
-      onLog: log.addLine,
-    );
-    final payload = result.result as Map<String, dynamic>?;
-    if (payload == null) {
-      if (!mounted) return;
+    final query = _buildResourcesQuery();
+    final cacheKey = _buildCacheKey(query);
+    bool isCurrent() => requestId == _resourceRequestId;
+    try {
+      if (!force) {
+        final cached = _resourcesCache[cacheKey];
+        if (cached != null && !_isCacheExpired(cached)) {
+          if (mounted && isCurrent()) {
+            setState(() {
+              _resources = cached.resources;
+              _totalFound = cached.totalFound;
+              _totalPages = cached.totalPages;
+              _page = cached.page;
+              _repoStatusById.clear();
+              _repoPackageById.clear();
+              _downloadUrlById.clear();
+            });
+          }
+          if (mounted && isCurrent()) {
+            await _updateRepositoryStatus();
+          }
+          return;
+        }
+      }
+      final result = await runner.runJob(
+        'hub_resources',
+        args: query,
+        onLog: log.addLine,
+      );
+      final payload = result.result as Map<String, dynamic>?;
+      if (payload == null || !mounted || !isCurrent()) {
+        return;
+      }
+      final resources = (payload['resources'] as List<dynamic>? ?? [])
+          .map((item) => (item as Map).cast<String, dynamic>())
+          .toList();
+      final pagination = payload['pagination'] as Map<String, dynamic>? ?? {};
+      final total = int.tryParse(pagination['total_found']?.toString() ?? '') ??
+          resources.length;
+      final totalPages =
+          int.tryParse(pagination['total_pages']?.toString() ?? '') ?? 1;
+      final currentPage =
+          int.tryParse(pagination['page']?.toString() ?? '') ?? _page;
+      if (!mounted || !isCurrent()) return;
       setState(() {
-        _loadingResources = false;
+        _resources = resources;
+        _totalFound = total;
+        _totalPages = totalPages == 0 ? 1 : totalPages;
+        _page = currentPage;
+        _repoStatusById.clear();
+        _repoPackageById.clear();
+        _downloadUrlById.clear();
       });
-      return;
+      _resourcesCache[cacheKey] = HubResourcesCacheEntry(
+        resources: resources,
+        totalFound: total,
+        totalPages: totalPages == 0 ? 1 : totalPages,
+        page: currentPage,
+        timestamp: DateTime.now(),
+      );
+      await _updateRepositoryStatus();
+    } finally {
+      await _completeRefresh();
     }
-    final resources = (payload['resources'] as List<dynamic>? ?? [])
-        .map((item) => (item as Map).cast<String, dynamic>())
-        .toList();
-    final pagination = payload['pagination'] as Map<String, dynamic>? ?? {};
-    final total = int.tryParse(pagination['total_found']?.toString() ?? '') ??
-        resources.length;
-    final totalPages =
-        int.tryParse(pagination['total_pages']?.toString() ?? '') ?? 1;
-    final currentPage =
-        int.tryParse(pagination['page']?.toString() ?? '') ?? _page;
-    if (!mounted) return;
-    setState(() {
-      _resources = resources;
-      _totalFound = total;
-      _totalPages = totalPages == 0 ? 1 : totalPages;
-      _page = currentPage;
-      _repoStatusById.clear();
-      _repoPackageById.clear();
-      _downloadUrlById.clear();
-    });
-    await _updateRepositoryStatus();
+  }
+
+  Future<void> _completeRefresh() async {
     if (!mounted) return;
     setState(() {
       _loadingResources = false;
     });
+    if (_pendingRefresh) {
+      final pendingForce = _pendingForce;
+      _pendingRefresh = false;
+      _pendingForce = false;
+      await _refreshResources(force: pendingForce);
+    }
   }
 
   Future<void> _updateRepositoryStatus() async {
@@ -348,6 +479,123 @@ class _HubPageState extends ConsumerState<HubPage> {
     return resource['resource_id']?.toString() ?? resource['id']?.toString() ?? '';
   }
 
+  List<String> _parseResourceTags(Map<String, dynamic> resource) {
+    final raw = resource['tags'];
+    if (raw is String) {
+      return raw
+          .split(',')
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty && item != 'null')
+          .toList();
+    }
+    if (raw is List) {
+      return raw
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty && item != 'null')
+          .toList();
+    }
+    if (raw is Map) {
+      return raw.keys
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty && item != 'null')
+          .toList();
+    }
+    return [];
+  }
+
+  Map<String, dynamic>? _selectLatestHubFile(Map<String, dynamic> resource) {
+    final hubFiles = resource['hubFiles'];
+    if (hubFiles is! List) return null;
+    Map<String, dynamic>? best;
+    int bestVersion = -1;
+    for (final entry in hubFiles) {
+      if (entry is! Map) continue;
+      final entryMap = entry.cast<String, dynamic>();
+      final filename = entryMap['filename']?.toString() ?? '';
+      if (!filename.toLowerCase().endsWith('.var')) continue;
+      final baseName = filename.substring(0, filename.length - 4);
+      final parts = baseName.split('.');
+      if (parts.length < 3) continue;
+      final version = int.tryParse(parts[2]) ?? 0;
+      if (best == null || version > bestVersion) {
+        best = entryMap;
+        bestVersion = version;
+      }
+    }
+    return best;
+  }
+
+  String _formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    double size = bytes.toDouble();
+    int unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+    final precision = size >= 10 || unitIndex == 0 ? 0 : 1;
+    return '${size.toStringAsFixed(precision)} ${units[unitIndex]}';
+  }
+
+  Future<void> _openResourceDetails(Map<String, dynamic> resource) async {
+    final resourceId = _resourceId(resource);
+    final title = resource['title']?.toString() ?? 'Untitled';
+
+    final details = <MapEntry<String, String>>[];
+    void addDetail(String label, String? value) {
+      final clean = value?.trim();
+      if (clean == null || clean.isEmpty || clean == 'null') return;
+      details.add(MapEntry(label, clean));
+    }
+
+    final version = resource['version_string']?.toString();
+    addDetail('Version', version);
+
+    final dependencyCount =
+        int.tryParse(resource['dependency_count']?.toString() ?? '');
+    if (dependencyCount != null) {
+      addDetail('Dependencies', dependencyCount.toString());
+    }
+
+    final viewCount = int.tryParse(resource['view_count']?.toString() ?? '');
+    if (viewCount != null) {
+      addDetail('Views', viewCount.toString());
+    }
+    final reviewCount = int.tryParse(resource['review_count']?.toString() ?? '');
+    if (reviewCount != null) {
+      addDetail('Reviews', reviewCount.toString());
+    }
+    final ratingWeighted =
+        double.tryParse(resource['rating_weighted']?.toString() ?? '');
+    if (ratingWeighted != null) {
+      addDetail('Rating (weighted)', ratingWeighted.toStringAsFixed(2));
+    }
+
+    final hubFile = _selectLatestHubFile(resource);
+    if (hubFile != null) {
+      addDetail('License', hubFile['licenseType']?.toString());
+      final fileSize =
+          int.tryParse(hubFile['file_size']?.toString() ?? '');
+      if (fileSize != null) {
+        addDetail('File Size', _formatBytes(fileSize));
+      }
+      addDetail('Program Version', hubFile['programVersion']?.toString());
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return _EnhancedResourceDetailDialog(
+          title: title,
+          resourceId: resourceId,
+          basicDetails: details,
+          runner: ref.read(jobRunnerProvider),
+          log: ref.read(jobLogProvider.notifier),
+        );
+      },
+    );
+  }
+
   List<String> _optionsWithAll(List<String> values) {
     final options = <String>['All', ...values];
     return options;
@@ -365,6 +613,22 @@ class _HubPageState extends ConsumerState<HubPage> {
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null) return;
     _mergeDownloads(payload);
+  }
+
+  void _addResourceFiles(Map<String, dynamic> resource) {
+    final hubFiles = resource['hubFiles'];
+    if (hubFiles is! List) return;
+    for (final entry in hubFiles) {
+      if (entry is! Map) continue;
+      final filename = entry['filename']?.toString() ?? '';
+      final url = entry['urlHosted']?.toString() ?? '';
+      if (filename.isEmpty || url.isEmpty || url == 'null') continue;
+      if (!filename.toLowerCase().endsWith('.var')) continue;
+      final baseName = filename.substring(0, filename.length - 4);
+      _addDownloadUrl(baseName, url);
+    }
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _handleRepositoryAction(Map<String, dynamic> resource) async {
@@ -407,6 +671,22 @@ class _HubPageState extends ConsumerState<HubPage> {
     _refreshResources();
   }
 
+  void _resetFilters() {
+    final info = _info;
+    setState(() {
+      _location = 'All';
+      _payType = info != null && info.payTypes.contains('Free') ? 'Free' : 'All';
+      _category = 'All';
+      _creator = 'All';
+      _tags = 'All';
+      _sortPrimary = info != null && info.sorts.isNotEmpty ? info.sorts.first : '';
+      _sortSecondary = '';
+      _page = 1;
+      _searchController.clear();
+    });
+    _refreshResources(force: true);
+  }
+
   void _updateAndRefresh(VoidCallback update) {
     setState(update);
     _refreshResources();
@@ -441,176 +721,250 @@ class _HubPageState extends ConsumerState<HubPage> {
                     const Text('Filters & Actions',
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 12),
+
+                    // Search - 始终显示
                     TextField(
                       controller: _searchController,
                       decoration: const InputDecoration(
                         labelText: 'Search',
                         border: OutlineInputBorder(),
                       ),
-                      onSubmitted: (_) => _refreshResources(),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(_location),
-                      initialValue: _location,
-                      items: _optionsWithAll(options?.locations ?? [])
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value == 'All' ? 'All locations' : value),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        _updateAndRefresh(() {
-                          _location = value;
-                          _page = 1;
+                      onChanged: (_) {
+                        _searchDebounce.run(() {
+                          if (!mounted) return;
+                          setState(() {
+                            _page = 1;
+                          });
+                          _refreshResources();
                         });
                       },
-                      decoration: const InputDecoration(
-                        labelText: 'Location',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(_payType),
-                      initialValue: _payType,
-                      items: _optionsWithAll(options?.payTypes ?? [])
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value == 'All' ? 'All pay types' : value),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        _updateAndRefresh(() {
-                          _payType = value;
+                      onSubmitted: (_) {
+                        setState(() {
                           _page = 1;
                         });
+                        _refreshResources();
                       },
-                      decoration: const InputDecoration(
-                        labelText: 'Pay Type',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(_category),
-                      initialValue: _category,
-                      items: _optionsWithAll(options?.categories ?? [])
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value == 'All' ? 'All types' : value),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        _updateAndRefresh(() {
-                          _category = value;
-                          _page = 1;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(_creator),
-                      initialValue: _creator,
-                      items: _optionsWithAll(options?.creators ?? [])
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value == 'All' ? 'All creators' : value),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        _updateAndRefresh(() {
-                          _creator = value;
-                          _page = 1;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Creator',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(_tags),
-                      initialValue: _tags,
-                      items: _optionsWithAll(options?.tags ?? [])
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value == 'All' ? 'All tags' : value),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        _updateAndRefresh(() {
-                          _tags = value;
-                          _page = 1;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Tag',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(sortPrimaryValue ?? ''),
-                      initialValue: sortPrimaryValue,
-                      items: (options?.sorts ?? [])
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        _updateAndRefresh(() {
-                          _sortPrimary = value;
-                          _page = 1;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Primary Sort',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey(_sortSecondary),
-                      initialValue: _sortSecondary,
-                      items: ['']
-                          .followedBy(options?.sorts ?? [])
-                          .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value.isEmpty ? 'No secondary sort' : value),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        _updateAndRefresh(() {
-                          _sortSecondary = value;
-                          _page = 1;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Secondary Sort',
-                        border: OutlineInputBorder(),
-                      ),
                     ),
                     const SizedBox(height: 12),
+
+                    // 基础筛选 - 可折叠
+                    ExpansionTile(
+                      title: const Text('Basic Filters'),
+                      initiallyExpanded: true,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Column(
+                            children: [
+                              DropdownButtonFormField<String>(
+                                key: ValueKey(_location),
+                                initialValue: _location,
+                                items: _optionsWithAll(options?.locations ?? [])
+                                    .map((value) => DropdownMenuItem(
+                                          value: value,
+                                          child: Text(value == 'All' ? 'All locations' : value),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  _updateAndRefresh(() {
+                                    _location = value;
+                                    _page = 1;
+                                  });
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'Location',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                key: ValueKey(_payType),
+                                initialValue: _payType,
+                                items: _optionsWithAll(options?.payTypes ?? [])
+                                    .map((value) => DropdownMenuItem(
+                                          value: value,
+                                          child: Text(value == 'All' ? 'All pay types' : value),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  _updateAndRefresh(() {
+                                    _payType = value;
+                                    _page = 1;
+                                  });
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'Pay Type',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // 高级筛选 - 可折叠
+                    ExpansionTile(
+                      title: const Text('Advanced Filters'),
+                      initiallyExpanded: false,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Column(
+                            children: [
+                              DropdownButtonFormField<String>(
+                                key: ValueKey(_category),
+                                initialValue: _category,
+                                items: _optionsWithAll(options?.categories ?? [])
+                                    .map((value) => DropdownMenuItem(
+                                          value: value,
+                                          child: Text(value == 'All' ? 'All types' : value),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  _updateAndRefresh(() {
+                                    _category = value;
+                                    _page = 1;
+                                  });
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'Category',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              LazyDropdownField(
+                                label: 'Creator',
+                                value: _creator.isEmpty ? 'All' : _creator,
+                                allValue: 'All',
+                                allLabel: 'All creators',
+                                optionsLoader: (queryText, offset, limit) async {
+                                  final client = ref.read(backendClientProvider);
+                                  return client.listHubOptions(
+                                    kind: 'creator',
+                                    query: queryText,
+                                    offset: offset,
+                                    limit: limit,
+                                  );
+                                },
+                                onChanged: (value) {
+                                  _updateAndRefresh(() {
+                                    _creator = value;
+                                    _page = 1;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              LazyDropdownField(
+                                label: 'Tag',
+                                value: _tags.isEmpty ? 'All' : _tags,
+                                allValue: 'All',
+                                allLabel: 'All tags',
+                                optionsLoader: (queryText, offset, limit) async {
+                                  final client = ref.read(backendClientProvider);
+                                  return client.listHubOptions(
+                                    kind: 'tag',
+                                    query: queryText,
+                                    offset: offset,
+                                    limit: limit,
+                                  );
+                                },
+                                onChanged: (value) {
+                                  _updateAndRefresh(() {
+                                    _tags = value;
+                                    _page = 1;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // 排序选项 - 可折叠，修复空列表问题
+                    ExpansionTile(
+                      title: const Text('Sort Options'),
+                      initiallyExpanded: false,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Column(
+                            children: [
+                              if (options?.sorts != null && options!.sorts.isNotEmpty)
+                                DropdownButtonFormField<String>(
+                                  key: ValueKey(sortPrimaryValue ?? ''),
+                                  initialValue: sortPrimaryValue,
+                                  items: options.sorts
+                                      .map((value) => DropdownMenuItem(
+                                            value: value,
+                                            child: Text(value),
+                                          ))
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    _updateAndRefresh(() {
+                                      _sortPrimary = value;
+                                      _page = 1;
+                                    });
+                                  },
+                                  decoration: const InputDecoration(
+                                    labelText: 'Primary Sort',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                )
+                              else
+                                const ListTile(
+                                  title: Text('No sort options available'),
+                                  subtitle: Text('Loading...'),
+                                ),
+                              const SizedBox(height: 8),
+                              if (options?.sorts != null && options!.sorts.isNotEmpty)
+                                DropdownButtonFormField<String>(
+                                  key: ValueKey(_sortSecondary),
+                                  initialValue: _sortSecondary,
+                                  items: ['']
+                                      .followedBy(options.sorts)
+                                      .map((value) => DropdownMenuItem(
+                                            value: value,
+                                            child: Text(value.isEmpty ? 'No secondary sort' : value),
+                                          ))
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    _updateAndRefresh(() {
+                                      _sortSecondary = value;
+                                      _page = 1;
+                                    });
+                                  },
+                                  decoration: const InputDecoration(
+                                    labelText: 'Secondary Sort',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _resetFilters,
+                      child: const Text('Reset Filters'),
+                    ),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Expanded(
                           child: DropdownButton<int>(
                             value: _perPage,
-                            items: const [20, 48]
+                            items: const [12, 24, 48]
                                 .map((value) => DropdownMenuItem(
                                       value: value,
                                       child: Text('Per page $value'),
@@ -678,7 +1032,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 8),
                     FilledButton(
-                      onPressed: _loadingResources ? null : _refreshResources,
+                      onPressed: _loadingResources
+                          ? null
+                          : () => _refreshResources(force: true),
                       child: const Text('Refresh'),
                     ),
                     OutlinedButton(
@@ -748,7 +1104,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                           ),
                         const SizedBox(width: 8),
                         TextButton(
-                          onPressed: _refreshResources,
+                          onPressed: () => _refreshResources(force: true),
                           child: const Text('Refresh'),
                         ),
                       ],
@@ -802,7 +1158,39 @@ class _HubPageState extends ConsumerState<HubPage> {
     final ratingCount = int.tryParse(resource['rating_count']?.toString() ?? '') ?? 0;
     final downloads = int.tryParse(resource['download_count']?.toString() ?? '') ?? 0;
     final lastUpdated = _formatDate(resource['last_update']);
+    final version = resource['version_string']?.toString() ?? '';
+    final dependencyCount =
+        int.tryParse(resource['dependency_count']?.toString() ?? '');
+    final tags = _parseResourceTags(resource);
+    final displayTags = tags.take(_tagChipLimit).toList();
+    final extraTagCount =
+        tags.length > _tagChipLimit ? tags.length - _tagChipLimit : 0;
+    final hasHubFiles =
+        resource['hubFiles'] is List && (resource['hubFiles'] as List).isNotEmpty;
     final repoStatus = _repoStatusById[resourceId] ?? 'Unknown Status';
+    final cacheSize =
+        (96 * MediaQuery.of(context).devicePixelRatio).round();
+
+    final canPreview = imageUrl != null && imageUrl.isNotEmpty;
+    final previewImage = ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: imageUrl == null || imageUrl.isEmpty
+          ? const PreviewPlaceholder(width: 96, height: 96)
+          : Image.network(
+              imageUrl,
+              headers: _hubImageHeaders(imageUrl),
+              width: 96,
+              height: 96,
+              fit: BoxFit.cover,
+              cacheWidth: cacheSize,
+              cacheHeight: cacheSize,
+              errorBuilder: (_, _, _) => const PreviewPlaceholder(
+                width: 96,
+                height: 96,
+                icon: Icons.broken_image,
+              ),
+            ),
+    );
 
     return Card(
       elevation: 1,
@@ -814,29 +1202,11 @@ class _HubPageState extends ConsumerState<HubPage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: imageUrl == null || imageUrl.isEmpty
-                      ? Container(
-                          width: 96,
-                          height: 96,
-                          color: Colors.grey.shade200,
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.image_not_supported),
-                        )
-                      : Image.network(
-                          imageUrl,
-                          width: 96,
-                          height: 96,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
-                            width: 96,
-                            height: 96,
-                            color: Colors.grey.shade200,
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.broken_image),
-                          ),
-                        ),
+                GestureDetector(
+                  onDoubleTap: canPreview
+                      ? () => _openImagePreview(context, [imageUrl], 0)
+                      : null,
+                  child: previewImage,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -859,32 +1229,67 @@ class _HubPageState extends ConsumerState<HubPage> {
                         ),
                       ],
                       const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          ActionChip(
+                            label: Text(payType, style: const TextStyle(fontSize: 12)),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: payType == '-' ? null : () => _applyQuickFilter(payType: payType),
+                          ),
+                          ActionChip(
+                            label: Text(type, style: const TextStyle(fontSize: 12)),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: type == '-' ? null : () => _applyQuickFilter(category: type),
+                          ),
+                          ActionChip(
+                            label: Text(username, style: const TextStyle(fontSize: 12)),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _applyQuickFilter(creator: username),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
                       Text('Rating $ratingAvg ($ratingCount) | $downloads downloads'),
                       Text('Updated $lastUpdated'),
+                      if (version.isNotEmpty && version != 'null' ||
+                          dependencyCount != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          [
+                            if (version.isNotEmpty && version != 'null')
+                              'Version $version',
+                            if (dependencyCount != null)
+                              'Deps $dependencyCount',
+                          ].join(' | '),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                ActionChip(
-                  label: Text(payType),
-                  onPressed: payType == '-' ? null : () => _applyQuickFilter(payType: payType),
-                ),
-                ActionChip(
-                  label: Text(type),
-                  onPressed: type == '-' ? null : () => _applyQuickFilter(category: type),
-                ),
-                ActionChip(
-                  label: Text(username),
-                  onPressed: () => _applyQuickFilter(creator: username),
-                ),
-              ],
-            ),
+            if (displayTags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final tag in displayTags)
+                    ActionChip(
+                      label: Text(tag),
+                      onPressed: () {
+                        _updateAndRefresh(() {
+                          _tags = tag;
+                          _page = 1;
+                        });
+                      },
+                    ),
+                  if (extraTagCount > 0) Chip(label: Text('+$extraTagCount')),
+                ],
+              ),
+            ],
             const Spacer(),
             Row(
               children: [
@@ -896,8 +1301,31 @@ class _HubPageState extends ConsumerState<HubPage> {
                 ),
                 const SizedBox(width: 8),
                 TextButton(
-                  onPressed: resourceId.isEmpty ? null : () => _addResourceDownloads(resourceId),
-                  child: const Text('Add Downloads'),
+                  onPressed: () => _openResourceDetails(resource),
+                  child: const Text('Detail'),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'files') {
+                      _addResourceFiles(resource);
+                    }
+                    if (value == 'deps') {
+                      _addResourceDownloads(resourceId);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'files',
+                      enabled: hasHubFiles,
+                      child: const Text('Add Files Only'),
+                    ),
+                    PopupMenuItem(
+                      value: 'deps',
+                      enabled: resourceId.isNotEmpty,
+                      child: const Text('Add With Dependencies'),
+                    ),
+                  ],
+                  child: const Text('Add'),
                 ),
                 TextButton(
                   onPressed: resourceId.isEmpty
@@ -910,6 +1338,297 @@ class _HubPageState extends ConsumerState<HubPage> {
                   child: const Text('Open Page'),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EnhancedResourceDetailDialog extends StatefulWidget {
+  const _EnhancedResourceDetailDialog({
+    required this.title,
+    required this.resourceId,
+    required this.basicDetails,
+    required this.runner,
+    required this.log,
+  });
+
+  final String title;
+  final String resourceId;
+  final List<MapEntry<String, String>> basicDetails;
+  final dynamic runner;
+  final dynamic log;
+
+  @override
+  State<_EnhancedResourceDetailDialog> createState() =>
+      _EnhancedResourceDetailDialogState();
+}
+
+class _EnhancedResourceDetailDialogState
+    extends State<_EnhancedResourceDetailDialog> {
+  bool _loading = false;
+  String _description = '';
+  List<String> _images = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.resourceId.isNotEmpty) {
+      _loadOverviewPanel();
+    }
+  }
+
+  Future<void> _loadOverviewPanel() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final result = await widget.runner.runJob(
+        'hub_overview_panel',
+        args: {'resource_id': widget.resourceId},
+        onLog: widget.log.addLine,
+      );
+
+      final payload = result.result as Map<String, dynamic>?;
+      if (payload != null && mounted) {
+        setState(() {
+          _description = payload['description']?.toString() ?? '';
+          _images = (payload['images'] as List?)
+                  ?.map((e) => e.toString())
+                  .where((url) => url.isNotEmpty)
+                  .toList() ??
+              [];
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openImagePreview(
+    BuildContext context,
+    List<String> imageUrls,
+    int initialIndex,
+  ) async {
+    if (imageUrls.isEmpty) {
+      return;
+    }
+    final previewItems = imageUrls
+        .map(
+          (url) => ImagePreviewItem(
+            title: '',
+            imageUrl: url,
+            headers: _hubImageHeaders(url),
+          ),
+        )
+        .toList();
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return ImagePreviewDialog(
+          items: previewItems,
+          initialIndex: initialIndex.clamp(0, previewItems.length - 1),
+          onIndexChanged: (_) {},
+          showHeaderText: false,
+          showFooter: false,
+          wrapNavigation: true,
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 800,
+          maxHeight: 600,
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 基本信息
+                      if (widget.basicDetails.isNotEmpty) ...[
+                        const Text(
+                          'Basic Information',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        for (final entry in widget.basicDetails)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 150,
+                                  child: Text(
+                                    entry.key,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Text(entry.value)),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // 加载状态
+                      if (_loading) ...[
+                        const Center(
+                          child: Column(
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 12),
+                              Text('Loading detailed information...'),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // 错误信息
+                      if (_error != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.red.shade700),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Failed to load details: $_error',
+                                  style: TextStyle(color: Colors.red.shade700),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // 描述
+                      if (!_loading && _error == null && _description.isNotEmpty) ...[
+                        const Text(
+                          'Description',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+      child: SelectableText(
+                            _description,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // 图片
+                      if (!_loading && _error == null && _images.isNotEmpty) ...[
+                        const Text(
+                          'Images',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: _images.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final imageUrl = entry.value;
+                            return GestureDetector(
+                              onTap: () => _openImagePreview(context, _images, index),
+                              child: Container(
+                                width: 200,
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    imageUrl,
+                                    headers: _hubImageHeaders(imageUrl),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(
+                                        Icons.broken_image,
+                                        size: 48,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),

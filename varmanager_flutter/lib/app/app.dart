@@ -66,7 +66,6 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final logs = ref.watch(jobLogProvider);
     final index = ref.watch(navIndexProvider);
     final isCompact = MediaQuery.of(context).size.width < 900;
 
@@ -129,7 +128,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                               : _pages[index].page,
                     ),
                   ),
-                  if (logs.isNotEmpty) const JobLogPanel(),
+                  const JobLogPanel(),
                   NavigationBar(
                     selectedIndex: index,
                     onDestinationSelected: (value) {
@@ -176,7 +175,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     : _pages[index].page,
                           ),
                         ),
-                        if (logs.isNotEmpty) const JobLogPanel(),
+                        const JobLogPanel(),
                       ],
                     ),
                   ),

@@ -72,6 +72,13 @@ pub(crate) struct VarsQuery {
 }
 
 #[derive(Deserialize)]
+pub(crate) struct CreatorsQuery {
+    q: Option<String>,
+    offset: Option<u32>,
+    limit: Option<u32>,
+}
+
+#[derive(Deserialize)]
 pub(crate) struct ScenesQuery {
     page: Option<u32>,
     per_page: Option<u32>,
@@ -164,6 +171,7 @@ pub(crate) struct VarPreviewItem {
     scene_path: String,
     is_preset: bool,
     is_loadable: bool,
+    installed: bool,
 }
 
 #[derive(Serialize)]
@@ -178,6 +186,21 @@ pub(crate) struct PreviewQuery {
 }
 
 #[derive(Deserialize)]
+pub(crate) struct HubOptionsQuery {
+    kind: String,
+    q: Option<String>,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    refresh: Option<bool>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct HubOptionsResponse {
+    items: Vec<String>,
+    total: usize,
+}
+
+#[derive(Deserialize)]
 pub(crate) struct UpdateConfigRequest {
     listen_host: Option<String>,
     listen_port: Option<u16>,
@@ -186,7 +209,6 @@ pub(crate) struct UpdateConfigRequest {
     varspath: Option<String>,
     vampath: Option<String>,
     vam_exec: Option<String>,
-    downloader_path: Option<String>,
     downloader_save_path: Option<String>,
 }
 
@@ -557,9 +579,6 @@ fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Con
     }
     if req.vam_exec.is_some() {
         next.vam_exec = normalize_optional(req.vam_exec);
-    }
-    if req.downloader_path.is_some() {
-        next.downloader_path = normalize_optional(req.downloader_path);
     }
     if req.downloader_save_path.is_some() {
         next.downloader_save_path = normalize_optional(req.downloader_save_path);
@@ -1550,18 +1569,47 @@ fn format_system_time(time: std::time::SystemTime) -> String {
 
 pub async fn list_creators(
     State(state): State<AppState>,
+    Query(query): Query<CreatorsQuery>,
 ) -> ApiResult<Json<CreatorsResponse>> {
     let _cfg = read_config(&state).map_err(internal_error)?;
     let db = db::open_default().map_err(internal_error)?;
 
+    let q = query.q.unwrap_or_default().trim().to_string();
+    let limit = query
+        .limit
+        .unwrap_or(if q.is_empty() { 0 } else { 10 })
+        .clamp(0, 100);
+    let offset = query.offset.unwrap_or(0) as i64;
+
+    let mut sql = "SELECT DISTINCT creatorName FROM vars WHERE creatorName IS NOT NULL AND creatorName <> ''"
+        .to_string();
+    let mut params: Vec<SqlValue> = Vec::new();
+    if !q.is_empty() {
+        sql.push_str(" AND creatorName LIKE ? COLLATE NOCASE");
+        params.push(SqlValue::from(format!("%{}%", q)));
+    }
+    if !q.is_empty() {
+        sql.push_str(
+            " ORDER BY CASE WHEN creatorName LIKE ? COLLATE NOCASE THEN 0 ELSE 1 END, creatorName COLLATE NOCASE",
+        );
+        params.push(SqlValue::from(format!("{}%", q)));
+    } else {
+        sql.push_str(" ORDER BY creatorName");
+    }
+    if limit > 0 || offset > 0 {
+        sql.push_str(" LIMIT ? OFFSET ?");
+        params.push(SqlValue::from(limit as i64));
+        params.push(SqlValue::from(offset));
+    }
+
     let mut stmt = db
         .connection()
-        .prepare(
-            "SELECT DISTINCT creatorName FROM vars WHERE creatorName IS NOT NULL AND creatorName <> '' ORDER BY creatorName",
-        )
+        .prepare(&sql)
         .map_err(|err| ApiError::internal(err.to_string()))?;
     let rows = stmt
-        .query_map([], |row| row.get::<_, String>(0))
+        .query_map(params_from_iter(params.iter()), |row| {
+            row.get::<_, String>(0)
+        })
         .map_err(|err| ApiError::internal(err.to_string()))?;
     let mut creators = Vec::new();
     for row in rows {
@@ -1569,6 +1617,28 @@ pub async fn list_creators(
     }
 
     Ok(Json(CreatorsResponse { creators }))
+}
+
+pub async fn list_hub_options(
+    Query(query): Query<HubOptionsQuery>,
+) -> ApiResult<Json<HubOptionsResponse>> {
+    let kind = query.kind.trim().to_lowercase();
+    if kind.is_empty() {
+        return Err(ApiError::bad_request("kind is required"));
+    }
+    let q = query.q.unwrap_or_default();
+    let offset = query.offset.unwrap_or(0) as usize;
+    let limit = query.limit.unwrap_or(10).clamp(1, 50) as usize;
+    let refresh = query.refresh.unwrap_or(false);
+
+    let (items, total) = tokio::task::spawn_blocking(move || {
+        crate::jobs::hub::search_hub_options(&kind, &q, offset, limit, refresh)
+    })
+    .await
+    .map_err(|err| ApiError::internal(err.to_string()))?
+    .map_err(ApiError::bad_request)?;
+
+    Ok(Json(HubOptionsResponse { items, total }))
 }
 
 pub async fn list_packswitch(
@@ -1676,9 +1746,12 @@ pub async fn list_var_previews(
         .collect::<Vec<_>>()
         .join(",");
     let sql = format!(
-        "SELECT varName, atomType, previewPic, scenePath, isPreset, isLoadable \
-         FROM scenes WHERE varName IN ({}) AND previewPic IS NOT NULL AND previewPic != '' \
-         ORDER BY varName, atomType, scenePath",
+        "SELECT s.varName, s.atomType, s.previewPic, s.scenePath, s.isPreset, s.isLoadable, \
+                COALESCE(i.installed, 0) \
+         FROM scenes s \
+         LEFT JOIN installStatus i ON s.varName = i.varName \
+         WHERE s.varName IN ({}) \
+         ORDER BY s.varName, s.atomType, s.scenePath",
         placeholders
     );
     let mut stmt = db
@@ -1694,6 +1767,7 @@ pub async fn list_var_previews(
                 scene_path: row.get(3)?,
                 is_preset: row.get::<_, i64>(4)? != 0,
                 is_loadable: row.get::<_, i64>(5)? != 0,
+                installed: row.get::<_, i64>(6)? != 0,
             })
         })
         .map_err(|err| ApiError::internal(err.to_string()))?;
@@ -1911,7 +1985,7 @@ pub async fn get_preview(
 
     let joined = safe_join(&base, &query.path).map_err(bad_request_error)?;
 
-    let bytes = std::fs::read(&joined).map_err(not_found_error)?;
+    let bytes = tokio::fs::read(&joined).await.map_err(not_found_error)?;
     let content_type = match joined.extension().and_then(|s| s.to_str()) {
         Some(ext) if ext.eq_ignore_ascii_case("png") => "image/png",
         Some(ext) if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") => "image/jpeg",
@@ -1921,6 +1995,7 @@ pub async fn get_preview(
     let resp = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=3600")
         .body(Body::from(bytes))
         .map_err(internal_error)?;
     Ok(resp)

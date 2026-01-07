@@ -7,7 +7,6 @@ class AppConfig {
     this.varspath,
     this.vampath,
     this.vamExec,
-    this.downloaderPath,
     this.downloaderSavePath,
   });
 
@@ -18,7 +17,6 @@ class AppConfig {
   final String? varspath;
   final String? vampath;
   final String? vamExec;
-  final String? downloaderPath;
   final String? downloaderSavePath;
 
   String get baseUrl => 'http://$listenHost:$listenPort';
@@ -28,11 +26,10 @@ class AppConfig {
       listenHost: (json['listen_host'] as String?) ?? '127.0.0.1',
       listenPort: (json['listen_port'] as num?)?.toInt() ?? 57123,
       logLevel: (json['log_level'] as String?) ?? 'info',
-      jobConcurrency: (json['job_concurrency'] as num?)?.toInt() ?? 2,
+      jobConcurrency: (json['job_concurrency'] as num?)?.toInt() ?? 10,
       varspath: json['varspath'] as String?,
       vampath: json['vampath'] as String?,
       vamExec: json['vam_exec'] as String?,
-      downloaderPath: json['downloader_path'] as String?,
       downloaderSavePath: json['downloader_save_path'] as String?,
     );
   }
@@ -46,7 +43,6 @@ class AppConfig {
       'varspath': varspath,
       'vampath': vampath,
       'vam_exec': vamExec,
-      'downloader_path': downloaderPath,
       'downloader_save_path': downloaderSavePath,
     };
   }
@@ -59,7 +55,6 @@ class AppConfig {
     String? varspath,
     String? vampath,
     String? vamExec,
-    String? downloaderPath,
     String? downloaderSavePath,
   }) {
     return AppConfig(
@@ -70,7 +65,6 @@ class AppConfig {
       varspath: varspath ?? this.varspath,
       vampath: vampath ?? this.vampath,
       vamExec: vamExec ?? this.vamExec,
-      downloaderPath: downloaderPath ?? this.downloaderPath,
       downloaderSavePath: downloaderSavePath ?? this.downloaderSavePath,
     );
   }

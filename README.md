@@ -56,8 +56,6 @@ varManager_v2.0.0/
 ├── varmanager_flutter.exe      # Main application (Flutter)
 ├── varManager_backend.exe      # Backend service (Rust)
 ├── data/                        # Flutter runtime data
-├── plugin/                      # External tools
-│   └── vam_downloader.exe      # Hub downloader (Rust)
 ├── VaM_Plugins/                 # VaM game plugins (optional)
 │   ├── loadscene.cs            # MMD scene loader
 │   ├── MorphMerger.cs          # Morph merge utility
@@ -87,16 +85,14 @@ To use these plugins:
 
 ⚠️ **Note:** These scripts run inside VaM's Unity engine and are separate from the varManager application.
 
-**Hub Downloader:**
+**Hub Download Support:**
 
-The `plugin/vam_downloader.exe` is a Rust-based tool that enables downloading var packages directly from VaM Hub:
+The varManager backend has built-in support for downloading var packages directly from VaM Hub:
 
-- Automatically integrated in the Hub browsing feature
+- Integrated into the Hub browsing feature
 - Supports batch downloads
-- Handles authentication with VaM Hub
-- Source: [vam_downloader GitHub](https://github.com/bustesoul/vam_downloader)
-
-The downloader is configured automatically when you first use the Hub download feature.
+- Handles authentication with VaM Hub automatically
+- Configure your VaM Hub credentials in Settings when first using the download feature
 
 **No Additional Runtime Required:**
 - ❌ No .NET Runtime installation needed
@@ -132,20 +128,11 @@ If you want to build varManager from source:
 ### Prerequisites
 - **Flutter SDK** 3.10+ (for frontend)
 - **Rust toolchain** (for backend)
-- **Git** with submodule support
-
-### Clone with Submodules
-```powershell
-# Clone the repository with all submodules
-git clone --recursive https://github.com/yourusername/varManager.git
-
-# Or if you already cloned without --recursive:
-git submodule update --init --recursive
-```
+- **Git**
 
 ### Build Everything
 ```powershell
-# Build debug version (Flutter + Rust Backend + vam_downloader)
+# Build debug version (Flutter + Rust Backend)
 .\build.ps1 -Action build
 
 # Build release package
@@ -155,17 +142,8 @@ git submodule update --init --recursive
 The build script automatically:
 1. Builds the Flutter frontend
 2. Compiles the Rust backend
-3. Builds vam_downloader from the Git submodule at `external/vam_downloader/`
-4. Copies VaM plugin scripts
-5. Packages everything into `release/varManager_<version>/`
-
-### Git Submodules
-
-This project uses Git submodules for external dependencies:
-
-- **external/vam_downloader/** - Hub downloader tool ([source](https://github.com/bustesoul/vam_downloader))
-
-The submodule is automatically built during the build process and the resulting `vam_downloader.exe` is placed in the `plugin/` directory.
+3. Copies VaM plugin scripts
+4. Packages everything into `release/varManager_<version>/`
 
 ---
 

@@ -115,6 +115,18 @@ impl Db {
                     dependencyCnt INTEGER,
                     fsize REAL
                 );
+
+                CREATE INDEX IF NOT EXISTS idx_vars_creatorName ON vars(creatorName);
+                CREATE INDEX IF NOT EXISTS idx_vars_packageName ON vars(packageName);
+                CREATE INDEX IF NOT EXISTS idx_vars_metaDate ON vars(metaDate);
+                CREATE INDEX IF NOT EXISTS idx_vars_varDate ON vars(varDate);
+                CREATE INDEX IF NOT EXISTS idx_vars_fsize ON vars(fsize);
+                CREATE INDEX IF NOT EXISTS idx_vars_dependencyCnt ON vars(dependencyCnt);
+                CREATE INDEX IF NOT EXISTS idx_scenes_varName ON scenes(varName);
+                CREATE INDEX IF NOT EXISTS idx_scenes_atomType ON scenes(atomType);
+                CREATE INDEX IF NOT EXISTS idx_dependencies_varName ON dependencies(varName);
+                CREATE INDEX IF NOT EXISTS idx_dependencies_dependency ON dependencies(dependency);
+                CREATE INDEX IF NOT EXISTS idx_savedepens_dependency ON savedepens(dependency);
                 "#,
             )
             .map_err(|err| err.to_string())?;

@@ -234,113 +234,6 @@ function Stage-BackendRelease {
     }
 }
 
-function Build-VamDownloader {
-    param([ValidateSet("debug", "release")] [string]$Mode)
-
-    $downloaderDir = Join-Path $root "external\vam_downloader"
-
-    # Check if submodule exists
-    if (-not (Test-Path -LiteralPath $downloaderDir)) {
-        Write-Warning "vam_downloader submodule not found at: $downloaderDir"
-        Write-Host "To initialize submodule, run:"
-        Write-Host "  git submodule update --init --recursive"
-        return
-    }
-
-    # Check if submodule is initialized
-    $cargoToml = Join-Path $downloaderDir "Cargo.toml"
-    if (-not (Test-Path -LiteralPath $cargoToml)) {
-        Write-Warning "vam_downloader submodule not initialized."
-        Write-Host "Run: git submodule update --init --recursive"
-        return
-    }
-
-    Ensure-Tool "cargo"
-
-    Write-Host "Building vam_downloader ($Mode)..."
-
-    $cargoArgs = @("build")
-    if ($Mode -eq "release") {
-        $cargoArgs += "--release"
-    }
-
-    Push-Location $downloaderDir
-    try {
-        & cargo @cargoArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "vam_downloader build failed"
-        }
-
-        # Copy to plugin directory
-        $exeName = "vam_downloader.exe"
-        $targetSubdir = if ($Mode -eq "release") { "release" } else { "debug" }
-        $srcExe = Join-Path $downloaderDir "target\$targetSubdir\$exeName"
-
-        if (Test-Path -LiteralPath $srcExe) {
-            $pluginDir = Join-Path $root "plugin"
-            New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
-            Copy-Item -LiteralPath $srcExe -Destination $pluginDir -Force
-            Write-Host "vam_downloader.exe copied to plugin/"
-        }
-        else {
-            Write-Warning "vam_downloader.exe not found at: $srcExe"
-        }
-    }
-    finally {
-        Pop-Location
-    }
-}
-
-function Clean-VamDownloader {
-    Write-Host "Cleaning vam_downloader..."
-
-    $downloaderDir = Join-Path $root "external\vam_downloader"
-    $targetDir = Join-Path $downloaderDir "target"
-
-    # Clean Rust build artifacts
-    if (Test-Path -LiteralPath $targetDir) {
-        Write-Host "Removing $targetDir..."
-        Remove-Item -LiteralPath $targetDir -Recurse -Force
-    }
-
-    # Clean plugin directory
-    $pluginDir = Join-Path $root "plugin"
-    $downloaderExe = Join-Path $pluginDir "vam_downloader.exe"
-
-    if (Test-Path -LiteralPath $downloaderExe) {
-        Write-Host "Removing vam_downloader.exe from plugin/..."
-        Remove-Item -LiteralPath $downloaderExe -Force
-    }
-
-    Write-Host "vam_downloader cleaned."
-}
-
-function Stage-PluginFiles {
-    # Copy vam_downloader.exe if available
-    $pluginDir = Join-Path $root "plugin"
-    $dest = Join-Path $releaseRoot "plugin"
-
-    if (Test-Path -LiteralPath $pluginDir) {
-        Ensure-EmptyDir $dest
-        $downloader = Join-Path $pluginDir "vam_downloader.exe"
-        if (Test-Path -LiteralPath $downloader) {
-            Copy-Item -LiteralPath $downloader -Destination $dest -Force
-            Write-Host "Copied vam_downloader.exe to release/plugin/"
-        }
-        else {
-            Write-Warning "vam_downloader.exe not found in plugin/ directory."
-            Write-Warning "Hub download functionality will not be available."
-            Write-Host "To build vam_downloader:"
-            Write-Host "  1. Clone: git clone https://github.com/bustesoul/vam_downloader.git ../vam_downloader"
-            Write-Host "  2. Build: cd ../vam_downloader && cargo build --release"
-            Write-Host "  3. Copy:  cp target/release/vam_downloader.exe <project>/plugin/"
-        }
-    }
-    else {
-        Write-Warning "plugin/ directory not found. Skipping vam_downloader."
-    }
-}
-
 function Stage-VaMPlugins {
     # Copy VaM plugin scripts (user needs to manually copy these to VaM/Custom/Scripts/)
     $pluginScripts = @(
@@ -430,18 +323,6 @@ function Assemble-ReleasePackage {
         Write-Warning "VaM plugins folder not found: $vamPluginsSrc"
     }
 
-    # Copy plugin files (vam_downloader.exe)
-    $pluginSrc = Join-Path $releaseRoot "plugin"
-    if (Test-Path -LiteralPath $pluginSrc) {
-        $pluginDest = Join-Path $target "plugin"
-        New-Item -ItemType Directory -Path $pluginDest -Force | Out-Null
-        Copy-Item -Path (Join-Path $pluginSrc "*") -Destination $pluginDest -Recurse -Force
-        Write-Host "Plugin files staged to: plugin\"
-    }
-    else {
-        Write-Warning "Plugin folder not found (vam_downloader not included)"
-    }
-
     # Copy documentation files
     $docFiles = @("VERSION", "README.md", "README_CN.md")
     foreach ($doc in $docFiles) {
@@ -498,7 +379,6 @@ switch ($Action) {
     "clean" {
         if ($doFlutter) { Clean-Flutter }
         if ($doBackend) { Clean-Backend }
-        Clean-VamDownloader
         if (Test-Path -LiteralPath $releaseRoot) {
             Write-Host "Cleaning release directory..."
             Remove-Item -LiteralPath $releaseRoot -Recurse -Force
@@ -507,15 +387,12 @@ switch ($Action) {
     "build" {
         if ($doFlutter) { Build-Flutter "debug" }
         if ($doBackend) { Build-Backend "debug" }
-        Build-VamDownloader "debug"
     }
     "release" {
         if ($doFlutter) { Build-Flutter "release" }
         if ($doBackend) { Build-Backend "release" }
-        Build-VamDownloader "release"
         if ($doFlutter) { Stage-FlutterRelease }
         if ($doBackend) { Stage-BackendRelease }
-        Stage-PluginFiles
         Stage-VaMPlugins
         Assemble-ReleasePackage
         Write-Host "`nRelease package created at: release\varManager_$script:ProjectVersion"
@@ -523,12 +400,6 @@ switch ($Action) {
         Write-Host "  - Flutter frontend (varmanager_flutter.exe)"
         Write-Host "  - Rust backend (varManager_backend.exe)"
         Write-Host "  - VaM plugins (VaM_Plugins\*.cs)"
-        $pluginCheck = Join-Path $releaseRoot "plugin\vam_downloader.exe"
-        if (Test-Path -LiteralPath $pluginCheck) {
-            Write-Host "  - Hub downloader (plugin\vam_downloader.exe)"
-        } else {
-            Write-Host "  - Hub downloader: NOT INCLUDED (see warnings above)"
-        }
         Write-Host "  - Documentation (README.md, README_CN.md, INSTALL.txt)"
     }
 }

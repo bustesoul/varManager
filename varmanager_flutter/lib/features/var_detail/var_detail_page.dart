@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/models/var_models.dart';
-import '../home/home_page.dart';
+import '../../widgets/preview_placeholder.dart';
+import '../home/providers.dart';
 
 final varDetailProvider = FutureProvider.family<VarDetailResponse, String>((ref, name) async {
   final client = ref.watch(backendClientProvider);
@@ -181,33 +183,10 @@ class VarDetailPage extends ConsumerWidget {
                 const SizedBox(height: 12),
                 _buildSection(
                   title: 'Previews',
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: detail.scenes
-                        .where((scene) =>
-                            scene.previewPic != null &&
-                            scene.previewPic!.isNotEmpty)
-                        .map((scene) {
-                      final path =
-                          '___PreviewPics___/${scene.atomType}/${detail.varInfo.varName}/${scene.previewPic}';
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          client.previewUrl(root: 'varspath', path: path),
-                          width: 120,
-                          height: 120,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
-                            width: 120,
-                            height: 120,
-                            color: Colors.grey.shade200,
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.broken_image),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                  child: _VarPreviewGrid(
+                    client: client,
+                    varName: detail.varInfo.varName,
+                    scenes: detail.scenes,
                   ),
                 ),
               ],
@@ -231,6 +210,158 @@ class VarDetailPage extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _VarPreviewGrid extends StatefulWidget {
+  const _VarPreviewGrid({
+    required this.client,
+    required this.varName,
+    required this.scenes,
+  });
+
+  final BackendClient client;
+  final String varName;
+  final List<ScenePreviewItem> scenes;
+
+  @override
+  State<_VarPreviewGrid> createState() => _VarPreviewGridState();
+}
+
+class _VarPreviewGridState extends State<_VarPreviewGrid> {
+  static const int _perPage = 60;
+  int _page = 1;
+
+  @override
+  void didUpdateWidget(covariant _VarPreviewGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scenes != widget.scenes) {
+      _page = 1;
+    }
+  }
+
+  String? _previewPath(ScenePreviewItem scene) {
+    final pic = scene.previewPic;
+    if (pic == null || pic.isEmpty) return null;
+    return '___PreviewPics___/${scene.atomType}/${widget.varName}/$pic';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = widget.scenes
+        .where((scene) => scene.previewPic != null && scene.previewPic!.isNotEmpty)
+        .toList();
+    if (items.isEmpty) {
+      return const Text('No previews');
+    }
+    final totalPages = (items.length + _perPage - 1) ~/ _perPage;
+    final currentPage = _page.clamp(1, totalPages);
+    if (currentPage != _page) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _page = currentPage;
+        });
+      });
+    }
+    final startIndex = (currentPage - 1) * _perPage;
+    final pageItems = items.skip(startIndex).take(_perPage).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Total ${items.length}'),
+            const Spacer(),
+            Text('Page $currentPage/$totalPages'),
+            IconButton(
+              onPressed: currentPage > 1
+                  ? () {
+                      setState(() {
+                        _page = 1;
+                      });
+                    }
+                  : null,
+              icon: const Icon(Icons.first_page),
+            ),
+            IconButton(
+              onPressed: currentPage > 1
+                  ? () {
+                      setState(() {
+                        _page -= 1;
+                      });
+                    }
+                  : null,
+              icon: const Icon(Icons.chevron_left),
+            ),
+            IconButton(
+              onPressed: currentPage < totalPages
+                  ? () {
+                      setState(() {
+                        _page += 1;
+                      });
+                    }
+                  : null,
+              icon: const Icon(Icons.chevron_right),
+            ),
+            IconButton(
+              onPressed: currentPage < totalPages
+                  ? () {
+                      setState(() {
+                        _page = totalPages;
+                      });
+                    }
+                  : null,
+              icon: const Icon(Icons.last_page),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount =
+                (constraints.maxWidth / 140).floor().clamp(2, 6).toInt();
+            const spacing = 8.0;
+            final tileSize = (constraints.maxWidth -
+                    (crossAxisCount - 1) * spacing) /
+                crossAxisCount;
+            final cacheSize =
+                (tileSize * MediaQuery.of(context).devicePixelRatio).round();
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+                childAspectRatio: 1,
+              ),
+              itemCount: pageItems.length,
+              itemBuilder: (context, index) {
+                final scene = pageItems[index];
+                final previewPath = _previewPath(scene);
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: previewPath == null
+                      ? const PreviewPlaceholder()
+                      : Image.network(
+                          widget.client
+                              .previewUrl(root: 'varspath', path: previewPath),
+                          fit: BoxFit.cover,
+                          cacheWidth: cacheSize,
+                          cacheHeight: cacheSize,
+                          errorBuilder: (_, _, _) => const PreviewPlaceholder(
+                            icon: Icons.broken_image,
+                          ),
+                        ),
+                );
+              },
+            );
+          },
+        ),
+      ],
     );
   }
 }

@@ -34,8 +34,6 @@ pub struct Config {
     #[serde(default)]
     pub(crate) vam_exec: Option<String>,
     #[serde(default)]
-    pub(crate) downloader_path: Option<String>,
-    #[serde(default)]
     pub(crate) downloader_save_path: Option<String>,
 }
 
@@ -45,11 +43,10 @@ impl Default for Config {
             listen_host: "127.0.0.1".to_string(),
             listen_port: 57123,
             log_level: "info".to_string(),
-            job_concurrency: 2,
+            job_concurrency: 10,
             varspath: None,
             vampath: None,
             vam_exec: Some("VaM (Desktop Mode).bat".to_string()),
-            downloader_path: Some("plugin\\vam_downloader.exe".to_string()),
             downloader_save_path: None,
         }
     }

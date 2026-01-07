@@ -1,6 +1,5 @@
-use crate::infra::paths::{addon_packages_dir, loadscene_path};
-use crate::app::{exe_dir, AppState};
-use crate::util;
+use crate::infra::paths::loadscene_path;
+use crate::app::AppState;
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,46 +7,6 @@ use std::process::Command;
 use sysinfo::{ProcessesToUpdate, System};
 
 const DEFAULT_VAM_EXEC: &str = "VaM (Desktop Mode).bat";
-const DEFAULT_DOWNLOADER_REL: &str = "plugin\\vam_downloader.exe";
-
-pub fn run_downloader(state: &AppState, urls: &[String]) -> Result<(), String> {
-    let urls: Vec<String> = urls
-        .iter()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .collect();
-    if urls.is_empty() {
-        return Err("no download urls provided".to_string());
-    }
-
-    let exec_path = resolve_downloader_path(state);
-    if !exec_path.exists() {
-        return Err(format!("downloader not found: {}", exec_path.display()));
-    }
-    let save_path = resolve_downloader_save_path(state)?;
-    if !save_path.exists() {
-        fs::create_dir_all(&save_path).map_err(|err| err.to_string())?;
-    }
-
-    let temp_file = util::temp_dir_file("vam_download")?;
-    fs::write(&temp_file, urls.join("\r\n")).map_err(|err| err.to_string())?;
-
-    let status = Command::new(&exec_path)
-        .current_dir(exe_dir())
-        .arg(&temp_file)
-        .arg(&save_path)
-        .status()
-        .map_err(|err| err.to_string())?;
-
-    let _ = fs::remove_file(&temp_file);
-
-    if !status.success() {
-        let code = status.code().unwrap_or(-1);
-        return Err(format!("downloader exit code {}", code));
-    }
-    Ok(())
-}
 
 pub fn start_vam(state: &AppState) -> Result<(), String> {
     let cfg = state
@@ -132,57 +91,6 @@ pub fn open_folder(path: &Path) -> Result<(), String> {
         .spawn()
         .map_err(|err| err.to_string())?;
     Ok(())
-}
-
-fn resolve_downloader_path(state: &AppState) -> PathBuf {
-    let cfg = match state.config.read() {
-        Ok(cfg) => cfg,
-        Err(err) => err.into_inner(),
-    };
-    if let Some(path) = cfg
-        .downloader_path
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-    {
-        let candidate = PathBuf::from(path);
-        if candidate.is_absolute() {
-            return candidate;
-        }
-        return exe_dir().join(candidate);
-    }
-    exe_dir().join(DEFAULT_DOWNLOADER_REL)
-}
-
-fn resolve_downloader_save_path(state: &AppState) -> Result<PathBuf, String> {
-    let cfg = state
-        .config
-        .read()
-        .map_err(|_| "config lock poisoned".to_string())?;
-    if let Some(path) = cfg
-        .downloader_save_path
-        .as_ref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-    {
-        let candidate = PathBuf::from(path);
-        if candidate.is_absolute() {
-            return Ok(candidate);
-        }
-        if let Some(vampath) = cfg.vampath.as_ref() {
-            return Ok(PathBuf::from(vampath).join(candidate));
-        }
-        return Ok(exe_dir().join(candidate));
-    }
-
-    let vampath = cfg
-        .vampath
-        .as_ref()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| "vampath is required in config.json".to_string())?;
-    Ok(addon_packages_dir(&vampath))
 }
 
 fn resolve_relative(root: &Path, path: &str) -> PathBuf {

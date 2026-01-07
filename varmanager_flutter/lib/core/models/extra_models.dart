@@ -233,6 +233,7 @@ class VarPreviewItem {
     required this.scenePath,
     required this.isPreset,
     required this.isLoadable,
+    required this.installed,
   });
 
   final String varName;
@@ -241,6 +242,7 @@ class VarPreviewItem {
   final String scenePath;
   final bool isPreset;
   final bool isLoadable;
+  final bool installed;
 
   factory VarPreviewItem.fromJson(Map<String, dynamic> json) {
     return VarPreviewItem(
@@ -250,6 +252,7 @@ class VarPreviewItem {
       scenePath: json['scene_path'] as String? ?? '',
       isPreset: json['is_preset'] as bool? ?? false,
       isLoadable: json['is_loadable'] as bool? ?? false,
+      installed: json['installed'] as bool? ?? false,
     );
   }
 }

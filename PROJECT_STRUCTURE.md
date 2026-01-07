@@ -31,16 +31,7 @@ varManager/
 ├── MMDLoader/                   # Standalone WPF tool (optional)
 │   └── *.xaml, *.cs             # WPF application
 │
-├── external/                    # Git submodules (external dependencies)
-│   └── vam_downloader/          # Hub downloader (Git submodule)
-│       ├── src/                 # Rust source code
-│       ├── Cargo.toml           # Rust manifest
-│       └── target/              # Build artifacts (gitignored)
-│
-└── plugin/                      # Built binaries (gitignored)
-    └── vam_downloader.exe       # Built from submodule
-
-_archived/                       # Legacy C# WinForms code (v1.0.4.x)
+└── _archived/                   # Legacy C# WinForms code (v1.0.4.x)
     ├── varManager/              # Old main program
     ├── DragNDrop/               # Old custom controls
     ├── StarRatingControl/
@@ -53,10 +44,9 @@ _archived/                       # Legacy C# WinForms code (v1.0.4.x)
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
 | **Frontend** | Flutter 3.10+ (Dart) | Cross-platform UI (Windows/macOS/Linux) |
-| **Backend** | Rust + Axum | HTTP service, async job system |
+| **Backend** | Rust + Axum | HTTP service, async job system, Hub downloads |
 | **Database** | SQLite (rusqlite) | Lightweight data storage |
 | **VaM Plugins** | C# (Unity scripting) | In-game scripts for VaM |
-| **Hub Downloader** | Rust (Git submodule) | Download vars from VaM Hub |
 
 ## Build Artifacts
 
@@ -66,8 +56,6 @@ varManager_v2.0.0/
 ├── varmanager_flutter.exe      # Main application
 ├── varManager_backend.exe      # Backend service
 ├── data/                        # Flutter runtime
-├── plugin/
-│   └── vam_downloader.exe      # Hub downloader
 ├── VaM_Plugins/
 │   ├── loadscene.cs
 │   ├── MorphMerger.cs
@@ -95,8 +83,7 @@ varManager_v2.0.0/
 
 ### 2. CI/CD (GitHub Actions)
 - Automatic build on push to master
-- Checks out repository with submodules (`submodules: 'recursive'`)
-- Builds vam_downloader from Git submodule
+- Builds Flutter frontend and Rust backend
 - Creates release artifacts
 - Uploads to GitHub Artifacts
 
@@ -116,8 +103,6 @@ varManager_v2.0.0/
 | `Custom/Scripts/` | ✅ Active | Yes | VaM plugins |
 | `LoadScene/` | ✅ Active | Yes | Plugin library source |
 | `MMDLoader/` | ⚠️ Optional | Yes | Standalone tool |
-| `external/vam_downloader/` | 🔗 Submodule | Yes (submodule) | Hub downloader source |
-| `plugin/` | 🔨 Build Output | **No** | Built binaries |
 | `_archived/` | 📦 Legacy | **No** | Old C# code |
 
 ## Documentation
@@ -128,43 +113,10 @@ varManager_v2.0.0/
 - **arch_flutter.md** - Flutter architecture (25KB)
 - **PROJECT_STRUCTURE.md** - This file
 - **Custom/Scripts/README.md** - VaM plugin guide
-- **plugin/README.md** - External tools guide
 - **_archived/README.md** - Legacy code reference
-
-## Git Submodules
-
-This project uses Git submodules to manage external dependencies:
-
-### vam_downloader (external/vam_downloader/)
-- **Source:** https://github.com/bustesoul/vam_downloader
-- **Branch:** master (tracks latest)
-- **Purpose:** Download var packages from VaM Hub
-- **Build:** Automatically built by `build.ps1` during local builds
-- **CI/CD:** Built during GitHub Actions workflow
-
-### Initialize Submodules
-```powershell
-# First-time clone with submodules
-git clone --recursive https://github.com/yourusername/varManager.git
-
-# Or if already cloned without submodules
-git submodule update --init --recursive
-```
-
-### Update Submodules
-```powershell
-# Update submodule to latest commit on master branch
-git submodule update --remote external/vam_downloader
-
-# Or update all submodules
-git submodule update --remote
-```
 
 ## Notes
 
 1. **VaM Plugins:** Source files committed to Git, no compilation needed
-2. **plugin/:** Binaries built from submodule, not committed to Git
-3. **external/vam_downloader/:** Git submodule, tracked by Git (source only)
-4. **external/vam_downloader/target/:** Build artifacts, gitignored
-5. **_archived/:** Historical reference, not part of active development
-6. **LoadScene/MMDLoader:** Source available for manual building if needed
+2. **_archived/:** Historical reference, not part of active development
+3. **LoadScene/MMDLoader:** Source available for manual building if needed

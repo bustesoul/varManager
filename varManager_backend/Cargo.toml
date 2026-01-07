@@ -17,7 +17,7 @@ zip = "7"
 walkdir = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 reqwest = { version = "0.13", features = ["blocking", "json"] }
-sysinfo = "0.36"
+sysinfo = "0.37"
 uuid = { version = "1", features = ["v4"] }
 windows = { version = "0.62", features = [
     "Win32_Foundation",
@@ -26,3 +26,17 @@ windows = { version = "0.62", features = [
     "Win32_System_SystemServices",
     "Win32_System_IO",
 ] }
+http-downloader = { version = "0.3", features = ["status-tracker", "speed-limiter", "speed-tracker", "breakpoint-resume", "tracing", "bson-file-archiver"] }
+percent-encoding = "2"
+url = "2"
+scraper = "0.25"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = 1
+overflow-checks = false
+debug-assertions = false

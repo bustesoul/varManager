@@ -7,6 +7,9 @@ import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/backend/query_params.dart';
 import '../../core/models/scene_models.dart';
+import '../../core/utils/debounce.dart';
+import '../../widgets/preview_placeholder.dart';
+import '../../widgets/lazy_dropdown_field.dart';
 import '../analysis/analysis_page.dart';
 
 class ScenesQueryNotifier extends Notifier<ScenesQueryParams> {
@@ -30,11 +33,6 @@ final scenesListProvider = FutureProvider<ScenesListResponse>((ref) async {
   return client.listScenes(query);
 });
 
-final sceneCreatorsProvider = FutureProvider<List<String>>((ref) async {
-  final client = ref.watch(backendClientProvider);
-  return client.listCreators();
-});
-
 class ScenesPage extends ConsumerStatefulWidget {
   const ScenesPage({super.key});
 
@@ -43,6 +41,7 @@ class ScenesPage extends ConsumerStatefulWidget {
 }
 
 class _ScenesPageState extends ConsumerState<ScenesPage> {
+  final _searchDebounce = Debouncer(const Duration(milliseconds: 300));
   bool _merge = false;
   bool _ignoreGender = false;
   bool _forMale = false;
@@ -53,6 +52,12 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     'save',
   };
   final Set<int> _hideFavFilter = {-1, 0, 1};
+
+  @override
+  void dispose() {
+    _searchDebounce.dispose();
+    super.dispose();
+  }
 
   Future<void> _runJob(String kind, Map<String, dynamic> args) async {
     final runner = ref.read(jobRunnerProvider);
@@ -122,7 +127,6 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   @override
   Widget build(BuildContext context) {
     final scenesAsync = ref.watch(scenesListProvider);
-    final creatorsAsync = ref.watch(sceneCreatorsProvider);
     final query = ref.watch(scenesQueryProvider);
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -169,41 +173,35 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                         border: OutlineInputBorder(),
                       ),
                       onChanged: (value) {
-                        _updateQuery(
-                          (state) => state.copyWith(page: 1, search: value),
-                        );
+                        _searchDebounce.run(() {
+                          _updateQuery(
+                            (state) => state.copyWith(page: 1, search: value),
+                          );
+                        });
                       },
                     ),
                   ),
-                  creatorsAsync.when(
-                    data: (creators) {
-                      final options = ['ALL', ...creators];
-                      return DropdownButton<String>(
-                        value: options.contains(query.creator)
-                            ? query.creator
-                            : 'ALL',
-                        items: options
-                            .map(
-                              (item) => DropdownMenuItem(
-                                value: item,
-                                child:
-                                    Text(item == 'ALL' ? 'All creators' : item),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          _updateQuery(
-                            (state) => state.copyWith(page: 1, creator: value),
-                          );
-                        },
-                      );
-                    },
-                    loading: () => const SizedBox(
-                      width: 120,
-                      child: LinearProgressIndicator(),
+                  SizedBox(
+                    width: 220,
+                    child: LazyDropdownField(
+                      label: 'Creator',
+                      value: query.creator.isEmpty ? 'ALL' : query.creator,
+                      allValue: 'ALL',
+                      allLabel: 'All creators',
+                      optionsLoader: (queryText, offset, limit) async {
+                        final client = ref.read(backendClientProvider);
+                        return client.listCreators(
+                          query: queryText,
+                          offset: offset,
+                          limit: limit,
+                        );
+                      },
+                      onChanged: (value) {
+                        _updateQuery(
+                          (state) => state.copyWith(page: 1, creator: value),
+                        );
+                      },
                     ),
-                    error: (_, _) => const Text('Creators load failed'),
                   ),
                   DropdownButton<String>(
                     value: query.sort,
@@ -494,6 +492,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     final client = ref.read(backendClientProvider);
     final previewUrl = _previewUrl(client, item);
     final title = p.basenameWithoutExtension(item.scenePath);
+    final cacheSize =
+        (72 * MediaQuery.of(context).devicePixelRatio).round();
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Padding(
@@ -506,24 +506,18 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: previewUrl == null
-                      ? Container(
-                          width: 72,
-                          height: 72,
-                          color: Colors.grey.shade200,
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.image_not_supported),
-                        )
+                      ? const PreviewPlaceholder(width: 72, height: 72)
                       : Image.network(
                           previewUrl,
                           width: 72,
                           height: 72,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
+                          cacheWidth: cacheSize,
+                          cacheHeight: cacheSize,
+                          errorBuilder: (_, _, _) => const PreviewPlaceholder(
                             width: 72,
                             height: 72,
-                            color: Colors.grey.shade200,
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.broken_image),
+                            icon: Icons.broken_image,
                           ),
                         ),
                 ),
@@ -552,11 +546,6 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                             label: Text(item.location),
                             visualDensity: VisualDensity.compact,
                           ),
-                          if (!item.installed)
-                            const Chip(
-                              label: Text('Not installed'),
-                              visualDensity: VisualDensity.compact,
-                            ),
                         ],
                       ),
                     ],

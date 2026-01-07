@@ -116,6 +116,9 @@ pub async fn dispatch(
         "hub_resource_detail" => {
             hub::run_hub_resource_detail_job(state.clone(), reporter.clone(), args).await
         }
+        "hub_overview_panel" => {
+            hub::run_hub_overview_panel_job(state.clone(), reporter.clone(), args).await
+        }
         "hub_find_packages" => {
             hub::run_hub_find_packages_job(state.clone(), reporter.clone(), args).await
         }

@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/models/extra_models.dart';
-import '../home/home_page.dart';
+import '../home/providers.dart';
+import '../../widgets/lazy_dropdown_field.dart';
 
 class MissingEntry {
   MissingEntry({
@@ -358,23 +359,42 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          DropdownButton<String>(
-                            value: _creatorFilter,
-                            items: ['ALL', ...creators]
-                                .map(
-                                  (item) => DropdownMenuItem(
-                                    value: item,
-                                    child: Text(item == 'ALL' ? 'All creators' : item),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() {
-                                _creatorFilter = value;
-                              });
-                              _ensureSelection();
-                            },
+                          SizedBox(
+                            width: 220,
+                            child: LazyDropdownField(
+                              label: 'Creator',
+                              value: _creatorFilter.isEmpty ? 'ALL' : _creatorFilter,
+                              allValue: 'ALL',
+                              allLabel: 'All creators',
+                              optionsLoader: (queryText, offset, limit) async {
+                                final needle = queryText.trim().toLowerCase();
+                                final matches = creators
+                                    .where((item) =>
+                                        item.toLowerCase().contains(needle))
+                                    .toList();
+                                matches.sort((a, b) {
+                                  final aLower = a.toLowerCase();
+                                  final bLower = b.toLowerCase();
+                                  if (needle.isNotEmpty) {
+                                    final aPrefix = aLower.startsWith(needle);
+                                    final bPrefix = bLower.startsWith(needle);
+                                    if (aPrefix != bPrefix) {
+                                      return aPrefix ? -1 : 1;
+                                    }
+                                  }
+                                  return aLower.compareTo(bLower);
+                                });
+                                final start = offset.clamp(0, matches.length);
+                                final end = (start + limit).clamp(0, matches.length);
+                                return matches.sublist(start, end);
+                              },
+                              onChanged: (value) {
+                                setState(() {
+                                  _creatorFilter = value;
+                                });
+                                _ensureSelection();
+                              },
+                            ),
                           ),
                           const SizedBox(width: 12),
                           DropdownButton<String>(

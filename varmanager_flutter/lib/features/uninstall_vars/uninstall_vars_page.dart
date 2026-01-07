@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/models/extra_models.dart';
+import '../../core/utils/debounce.dart';
+import '../../widgets/preview_placeholder.dart';
 
 class UninstallVarsPage extends ConsumerStatefulWidget {
   const UninstallVarsPage({super.key, required this.payload});
@@ -18,6 +20,8 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
   late final Set<String> _requested;
   late final Set<String> _implicated;
 
+  final _detailsDebounce = Debouncer(const Duration(milliseconds: 300));
+  int _detailsRequestId = 0;
   final Set<String> _selectedVars = {};
   List<VarPreviewItem> _previews = [];
   List<VarDependencyItem> _dependencies = [];
@@ -40,11 +44,24 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
         .map((item) => item.toString())
         .toSet();
     _selectedVars.addAll(_varList);
-    Future.microtask(_loadDetails);
+    final requestId = ++_detailsRequestId;
+    Future.microtask(() => _loadDetails(requestId));
   }
 
-  Future<void> _loadDetails() async {
+  @override
+  void dispose() {
+    _detailsDebounce.dispose();
+    super.dispose();
+  }
+
+  void _scheduleLoadDetails() {
+    final requestId = ++_detailsRequestId;
+    _detailsDebounce.run(() => _loadDetails(requestId));
+  }
+
+  Future<void> _loadDetails(int requestId) async {
     if (_selectedVars.isEmpty) {
+      if (!mounted || requestId != _detailsRequestId) return;
       setState(() {
         _previews = [];
         _dependencies = [];
@@ -60,7 +77,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
     final names = _selectedVars.toList();
     final previews = await client.listVarPreviews(names);
     final deps = await client.listVarDependencies(names);
-    if (!mounted) return;
+    if (!mounted || requestId != _detailsRequestId) return;
     setState(() {
       _previews = previews.items;
       _dependencies = deps.items;
@@ -98,7 +115,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
         _selectedVars.remove(name);
       }
     });
-    _loadDetails();
+    _scheduleLoadDetails();
   }
 
   void _selectAll() {
@@ -107,37 +124,45 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
         ..clear()
         ..addAll(_varList);
     });
-    _loadDetails();
+    _scheduleLoadDetails();
   }
 
   void _clearSelection() {
     setState(() {
       _selectedVars.clear();
     });
-    _loadDetails();
+    _scheduleLoadDetails();
+  }
+
+  String? _previewPath(VarPreviewItem item) {
+    final pic = item.previewPic;
+    if (pic == null || pic.isEmpty) {
+      return null;
+    }
+    return '___PreviewPics___/${item.atomType}/${item.varName}/$pic';
   }
 
   Future<void> _showPreview(VarPreviewItem item) async {
     final client = ref.read(backendClientProvider);
-    final path =
-        '___PreviewPics___/${item.atomType}/${item.varName}/${item.previewPic}';
-    final url = client.previewUrl(root: 'varspath', path: path);
+    final path = _previewPath(item);
     await showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: Text(item.varName),
-          content: Image.network(
-            url,
-            width: 480,
-            height: 480,
-            fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => const SizedBox(
-              width: 240,
-              height: 240,
-              child: Center(child: Icon(Icons.broken_image)),
-            ),
-          ),
+          content: path == null
+              ? const PreviewPlaceholder(width: 240, height: 240)
+              : Image.network(
+                  client.previewUrl(root: 'varspath', path: path),
+                  width: 480,
+                  height: 480,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const PreviewPlaceholder(
+                    width: 240,
+                    height: 240,
+                    icon: Icons.broken_image,
+                  ),
+                ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -319,6 +344,14 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                       : constraints.maxWidth > 700
                                                           ? 4
                                                           : 3;
+                                              final spacing = 8.0;
+                                              final tileSize = (constraints.maxWidth -
+                                                      (columns - 1) * spacing) /
+                                                  columns;
+                                              final cacheSize = (tileSize *
+                                                      MediaQuery.of(context)
+                                                          .devicePixelRatio)
+                                                  .round();
                                               return GridView.builder(
                                                 gridDelegate:
                                                     SliverGridDelegateWithFixedCrossAxisCount(
@@ -331,22 +364,24 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                 itemBuilder: (context, index) {
                                                   final item = _pagedPreviews[index];
                                                   final client = ref.read(backendClientProvider);
-                                                  final path =
-                                                      '___PreviewPics___/${item.atomType}/${item.varName}/${item.previewPic}';
-                                                  final url = client.previewUrl(
-                                                      root: 'varspath', path: path);
+                                                  final path = _previewPath(item);
                                                   return InkWell(
                                                     onTap: () => _showPreview(item),
                                                     child: ClipRRect(
                                                       borderRadius: BorderRadius.circular(8),
-                                                      child: Image.network(
-                                                        url,
-                                                        fit: BoxFit.cover,
-                                                        errorBuilder: (_, _, _) => Container(
-                                                          color: Colors.grey.shade200,
-                                                          child: const Icon(Icons.broken_image),
-                                                        ),
-                                                      ),
+                                                      child: path == null
+                                                          ? const PreviewPlaceholder()
+                                                          : Image.network(
+                                                              client.previewUrl(
+                                                                  root: 'varspath', path: path),
+                                                              fit: BoxFit.cover,
+                                                              cacheWidth: cacheSize,
+                                                              cacheHeight: cacheSize,
+                                                              errorBuilder: (_, _, _) =>
+                                                                  const PreviewPlaceholder(
+                                                                icon: Icons.broken_image,
+                                                              ),
+                                                            ),
                                                     ),
                                                   );
                                                 },

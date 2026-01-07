@@ -1,5 +1,7 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/providers.dart';
 import '../../core/app_version.dart';
@@ -21,7 +23,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _varspath = TextEditingController();
   final _vampath = TextEditingController();
   final _vamExec = TextEditingController();
-  final _downloaderPath = TextEditingController();
   final _downloaderSavePath = TextEditingController();
 
   AppConfig? _config;
@@ -57,7 +58,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _varspath.text = cfg.varspath ?? '';
       _vampath.text = cfg.vampath ?? '';
       _vamExec.text = cfg.vamExec ?? '';
-      _downloaderPath.text = cfg.downloaderPath ?? '';
       _downloaderSavePath.text = cfg.downloaderSavePath ?? '';
     });
   }
@@ -71,23 +71,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _varspath.dispose();
     _vampath.dispose();
     _vamExec.dispose();
-    _downloaderPath.dispose();
     _downloaderSavePath.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_downloaderSavePath.text.trim().isEmpty) {
+      final next = _addonPackagesPath(_varspath.text);
+      if (next.isNotEmpty) {
+        _downloaderSavePath.text = next;
+      }
+    }
     final client = ref.read(backendClientProvider);
     final update = <String, dynamic>{
       'listen_host': _listenHost.text.trim(),
       'listen_port': int.tryParse(_listenPort.text.trim()) ?? 57123,
       'log_level': _logLevel.text.trim(),
-      'job_concurrency': int.tryParse(_jobConcurrency.text.trim()) ?? 2,
+      'job_concurrency': int.tryParse(_jobConcurrency.text.trim()) ?? 10,
       'varspath': _varspath.text.trim(),
       'vampath': _vampath.text.trim(),
       'vam_exec': _vamExec.text.trim(),
-      'downloader_path': _downloaderPath.text.trim(),
       'downloader_save_path': _downloaderSavePath.text.trim(),
     };
     final cfg = await client.updateConfig(update);
@@ -98,6 +102,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Config saved; listen_host/port applies after restart.')),
     );
+  }
+
+  Future<void> _pickDirectory(TextEditingController controller) async {
+    final path = await getDirectoryPath();
+    if (path == null) return;
+    setState(() {
+      controller.text = path;
+    });
+  }
+
+  Future<void> _pickVarspathDirectory() async {
+    final path = await getDirectoryPath();
+    if (path == null) return;
+    setState(() {
+      _varspath.text = path;
+      if (_downloaderSavePath.text.trim().isEmpty) {
+        _downloaderSavePath.text = _addonPackagesPath(path);
+      }
+    });
+  }
+
+  Future<void> _pickFile(TextEditingController controller) async {
+    final file = await openFile();
+    if (file == null) return;
+    setState(() {
+      controller.text = file.path;
+    });
+  }
+
+  String _addonPackagesPath(String base) {
+    final trimmed = base.trim();
+    if (trimmed.isEmpty) return '';
+    return p.join(trimmed, 'AddonPackages');
   }
 
   @override
@@ -128,11 +165,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               title: 'Paths',
               child: Column(
                 children: [
-                  _field(_varspath, 'varspath'),
-                  _field(_vampath, 'vampath'),
-                  _field(_vamExec, 'vam_exec'),
-                  _field(_downloaderPath, 'downloader_path'),
-                  _field(_downloaderSavePath, 'downloader_save_path'),
+                  _pathField(
+                    _varspath,
+                    'varspath',
+                    hintText: 'choose virt_a_mate',
+                    onBrowse: _pickVarspathDirectory,
+                  ),
+                  _pathField(
+                    _vampath,
+                    'vampath',
+                    hintText: 'choose virt_a_mate',
+                    onBrowse: () => _pickDirectory(_vampath),
+                  ),
+                  _pathField(
+                    _vamExec,
+                    'vam_exec',
+                    onBrowse: () => _pickFile(_vamExec),
+                  ),
+                  _pathField(
+                    _downloaderSavePath,
+                    'downloader_save_path',
+                    hintText: 'choose AddonPackages',
+                    onBrowse: () => _pickDirectory(_downloaderSavePath),
+                  ),
                 ],
               ),
             ),
@@ -187,6 +242,43 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           labelText: label,
           border: const OutlineInputBorder(),
         ),
+      ),
+    );
+  }
+
+  Widget _pathField(
+    TextEditingController controller,
+    String label, {
+    String? hintText,
+    TextInputType keyboard = TextInputType.text,
+    VoidCallback? onBrowse,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              keyboardType: keyboard,
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: hintText,
+                floatingLabelBehavior: hintText == null
+                    ? FloatingLabelBehavior.auto
+                    : FloatingLabelBehavior.always,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+          if (onBrowse != null) ...[
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: onBrowse,
+              child: const Text('Browse'),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -81,10 +81,48 @@ class BackendClient {
     return ScenesListResponse.fromJson(json);
   }
 
-  Future<List<String>> listCreators() async {
-    final json = await _getJson('/creators');
+  Future<List<String>> listCreators({
+    String? query,
+    int? offset,
+    int? limit,
+  }) async {
+    final params = <String, String>{};
+    if (query != null) {
+      params['q'] = query;
+    }
+    if (offset != null) {
+      params['offset'] = offset.toString();
+    }
+    if (limit != null) {
+      params['limit'] = limit.toString();
+    }
+    final json =
+        await _getJson('/creators', params.isEmpty ? null : params);
     final creators = json['creators'] as List<dynamic>? ?? [];
     return creators.map((item) => item.toString()).toList();
+  }
+
+  Future<List<String>> listHubOptions({
+    required String kind,
+    String? query,
+    int? offset,
+    int? limit,
+  }) async {
+    final params = <String, String>{
+      'kind': kind,
+    };
+    if (query != null) {
+      params['q'] = query;
+    }
+    if (offset != null) {
+      params['offset'] = offset.toString();
+    }
+    if (limit != null) {
+      params['limit'] = limit.toString();
+    }
+    final json = await _getJson('/hub/options', params);
+    final items = json['items'] as List<dynamic>? ?? [];
+    return items.map((item) => item.toString()).toList();
   }
 
   Future<StatsResponse> getStats() async {

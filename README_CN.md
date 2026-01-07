@@ -56,8 +56,6 @@ varManager_v2.0.0/
 ├── varmanager_flutter.exe      # 主程序（Flutter）
 ├── varManager_backend.exe      # 后端服务（Rust）
 ├── data/                        # Flutter 运行时数据
-├── plugin/                      # 外部工具
-│   └── vam_downloader.exe      # Hub 下载器（Rust）
 ├── VaM_Plugins/                 # VaM 游戏插件（可选）
 │   ├── loadscene.cs            # MMD 场景加载器
 │   ├── MorphMerger.cs          # 形态合并工具
@@ -87,16 +85,14 @@ varManager_v2.0.0/
 
 ⚠️ **注意：** 这些脚本运行在 VaM 的 Unity 引擎中，与 varManager 应用程序是分离的。
 
-**Hub 下载器：**
+**Hub 下载支持：**
 
-`plugin/vam_downloader.exe` 是一个基于 Rust 的工具，用于直接从 VaM Hub 下载 var 包：
+varManager 后端内置了从 VaM Hub 下载 var 包的支持：
 
-- 自动集成在 Hub 浏览功能中
+- 集成在 Hub 浏览功能中
 - 支持批量下载
-- 处理 VaM Hub 身份验证
-- 源码：[vam_downloader GitHub](https://github.com/bustesoul/vam_downloader)
-
-首次使用 Hub 下载功能时会自动配置下载器。
+- 自动处理 VaM Hub 身份验证
+- 首次使用下载功能时在设置中配置 VaM Hub 凭据
 
 **无需额外运行时：**
 - ❌ 无需安装 .NET Runtime
@@ -132,20 +128,11 @@ varManager_v2.0.0/
 ### 前置要求
 - **Flutter SDK** 3.10+ (用于前端)
 - **Rust toolchain** (用于后端)
-- **Git** 支持子模块
-
-### 克隆包含子模块
-```powershell
-# 克隆仓库及所有子模块
-git clone --recursive https://github.com/yourusername/varManager.git
-
-# 或者如果你已经克隆了但没有使用 --recursive：
-git submodule update --init --recursive
-```
+- **Git**
 
 ### 构建所有组件
 ```powershell
-# 构建 debug 版本 (Flutter + Rust 后端 + vam_downloader)
+# 构建 debug 版本 (Flutter + Rust 后端)
 .\build.ps1 -Action build
 
 # 构建 release 发布包
@@ -155,17 +142,8 @@ git submodule update --init --recursive
 构建脚本会自动：
 1. 构建 Flutter 前端
 2. 编译 Rust 后端
-3. 从 Git 子模块 `external/vam_downloader/` 构建 vam_downloader
-4. 复制 VaM 插件脚本
-5. 打包所有文件到 `release/varManager_<version>/`
-
-### Git 子模块
-
-本项目使用 Git 子模块管理外部依赖：
-
-- **external/vam_downloader/** - Hub 下载器工具 ([源码](https://github.com/bustesoul/vam_downloader))
-
-子模块会在构建过程中自动编译，生成的 `vam_downloader.exe` 会被放置在 `plugin/` 目录。
+3. 复制 VaM 插件脚本
+4. 打包所有文件到 `release/varManager_<version>/`
 
 ---
 
