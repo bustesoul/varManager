@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using varManager.Models;
 using varManager.Properties;
@@ -38,7 +39,37 @@ namespace varManager.Data
 
                 using var context = new VarManagerContext();
                 context.Database.EnsureCreated();
+                EnsureVarPathColumn();
                 s_initialized = true;
+            }
+        }
+
+        private static void EnsureVarPathColumn()
+        {
+            var dbPath = GetDatabasePath();
+            using var connection = new SqliteConnection($"Data Source={dbPath}");
+            connection.Open();
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA table_info(vars);";
+            using var reader = cmd.ExecuteReader();
+
+            var hasVarPath = false;
+            while (reader.Read())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "varPath", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasVarPath = true;
+                    break;
+                }
+            }
+
+            if (!hasVarPath)
+            {
+                using var alter = connection.CreateCommand();
+                alter.CommandText = "ALTER TABLE vars ADD COLUMN varPath TEXT NOT NULL DEFAULT ''";
+                alter.ExecuteNonQuery();
             }
         }
 
@@ -123,6 +154,7 @@ namespace varManager.Data
                 entity.Property(e => e.VarDate).HasColumnName("varDate");
                 entity.Property(e => e.Version).HasColumnName("version");
                 entity.Property(e => e.Description).HasColumnName("description");
+                entity.Property(e => e.VarPath).HasColumnName("varPath");
                 entity.Property(e => e.Morph).HasColumnName("morph");
                 entity.Property(e => e.Cloth).HasColumnName("cloth");
                 entity.Property(e => e.Hair).HasColumnName("hair");
@@ -156,7 +188,7 @@ namespace varManager.Data
                 VarDate = v.VarDate,
                 Version = v.Version,
                 Description = v.Description,
-                VarPath = "", // No varPath in existing schema
+                VarPath = v.VarPath,
                 Fsize = 0.0, // No file size in existing schema  
                 Scenes = v.Scene ?? 0,
                 Looks = v.Look ?? 0,
