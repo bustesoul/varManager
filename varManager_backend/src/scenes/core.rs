@@ -1,4 +1,4 @@
-use crate::infra::db::{self, var_exists_conn};
+use crate::infra::db::var_exists_conn;
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR};
@@ -1296,9 +1296,9 @@ fn install_temp(state: &AppState, reporter: &JobReporter, deps: &[String]) -> Re
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db = db::open_default()?;
-
-    let mut varnames = vars_dependencies(db.connection(), deps.to_vec())?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
+    let mut varnames = handle.block_on(vars_dependencies(pool, deps.to_vec()))?;
     varnames = distinct(varnames);
     let installed_links = fs_util::collect_installed_links_ci(&vampath);
     varnames.retain(|v| !installed_links.contains_key(&v.to_ascii_lowercase()));
@@ -1309,11 +1309,11 @@ fn install_temp(state: &AppState, reporter: &JobReporter, deps: &[String]) -> Re
     let mut installed = Vec::new();
     let mut rescan = false;
     for var_name in varnames {
-        if !var_exists_conn(db.connection(), &var_name)? {
+        if !handle.block_on(var_exists_conn(pool, &var_name))? {
             reporter.log(format!("missing var: {}", var_name));
             continue;
         }
-        match install_temp_var(db.connection(), &varspath, &temp_dir, &var_name) {
+        match install_temp_var(&varspath, &temp_dir, &var_name) {
             Ok(InstallOutcome::Installed) => {
                 installed.push(var_name);
                 rescan = true;
@@ -1326,7 +1326,6 @@ fn install_temp(state: &AppState, reporter: &JobReporter, deps: &[String]) -> Re
 }
 
 fn install_temp_var(
-    _conn: &rusqlite::Connection,
     varspath: &Path,
     temp_dir: &Path,
     var_name: &str,

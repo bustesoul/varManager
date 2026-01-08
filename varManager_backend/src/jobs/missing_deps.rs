@@ -1,5 +1,5 @@
 use crate::infra::db::{
-    self, list_dependencies_all, list_dependencies_for_installed, list_dependencies_for_vars,
+    list_dependencies_all, list_dependencies_for_installed, list_dependencies_for_vars,
     list_var_versions, upsert_install_status, var_exists_conn,
 };
 use crate::jobs::job_channel::JobReporter;
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use sqlx::SqlitePool;
 
 #[derive(Deserialize)]
 struct MissingDepsArgs {
@@ -46,12 +47,13 @@ fn missing_deps_blocking(state: &AppState, reporter: &JobReporter, args: Missing
     reporter.log(format!("MissingDeps start: scope={}", args.scope));
     reporter.progress(1);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let deps = match args.scope.as_str() {
-        "installed" => list_dependencies_for_installed(db.connection())?,
-        "all" => list_dependencies_all(db.connection())?,
-        "filtered" => list_dependencies_for_vars(db.connection(), &args.var_names)?,
+        "installed" => handle.block_on(list_dependencies_for_installed(pool))?,
+        "all" => handle.block_on(list_dependencies_all(pool))?,
+        "filtered" => handle.block_on(list_dependencies_for_vars(pool, &args.var_names))?,
         _ => return Err(format!("unsupported scope: {}", args.scope)),
     };
 
@@ -78,17 +80,17 @@ fn missing_deps_blocking(state: &AppState, reporter: &JobReporter, args: Missing
 
     let total = dependencies.len();
     for (idx, dep) in dependencies.iter().enumerate() {
-        let resolved = resolve_dependency(db.connection(), dep)?;
+        let resolved = handle.block_on(resolve_dependency(pool, dep))?;
         match resolved {
             ResolvedDep::Found(var_name) => {
                 if auto_install {
-                    match install_var(
+                    match handle.block_on(install_var(
                         reporter,
-                        db.connection(),
+                        pool,
                         varspath.as_ref().unwrap(),
                         vampath.as_ref().unwrap(),
                         &var_name,
-                    ) {
+                    )) {
                         Ok(InstallOutcome::Installed) => installed.push(var_name),
                         Ok(InstallOutcome::AlreadyInstalled) => {}
                         Err(err) => {
@@ -101,13 +103,13 @@ fn missing_deps_blocking(state: &AppState, reporter: &JobReporter, args: Missing
             ResolvedDep::MissingVersion { resolved } => {
                 missing.push(format!("{}$", dep));
                 if auto_install {
-                    match install_var(
+                    match handle.block_on(install_var(
                         reporter,
-                        db.connection(),
+                        pool,
                         varspath.as_ref().unwrap(),
                         vampath.as_ref().unwrap(),
                         &resolved,
-                    ) {
+                    )) {
                         Ok(InstallOutcome::Installed) => installed.push(resolved),
                         Ok(InstallOutcome::AlreadyInstalled) => {}
                         Err(err) => {
@@ -157,7 +159,7 @@ enum ResolvedDep {
     Missing,
 }
 
-fn resolve_dependency(conn: &rusqlite::Connection, dep: &str) -> Result<ResolvedDep, String> {
+async fn resolve_dependency(pool: &SqlitePool, dep: &str) -> Result<ResolvedDep, String> {
     let parts: Vec<&str> = dep.split('.').collect();
     if parts.len() != 3 {
         return Ok(ResolvedDep::Missing);
@@ -167,19 +169,19 @@ fn resolve_dependency(conn: &rusqlite::Connection, dep: &str) -> Result<Resolved
     let version = parts[2];
 
     if version.eq_ignore_ascii_case("latest") {
-        let latest = find_latest_version(conn, creator, package)?;
+        let latest = find_latest_version(pool, creator, package).await?;
         return Ok(match latest {
             Some(name) => ResolvedDep::Found(name),
             None => ResolvedDep::Missing,
         });
     }
 
-    if var_exists_conn(conn, dep)? {
+    if var_exists_conn(pool, dep).await? {
         return Ok(ResolvedDep::Found(dep.to_string()));
     }
 
     if let Ok(requested) = version.parse::<i64>() {
-        if let Some(closest) = find_closest_version(conn, creator, package, requested)? {
+        if let Some(closest) = find_closest_version(pool, creator, package, requested).await? {
             return Ok(ResolvedDep::MissingVersion { resolved: closest });
         }
     }
@@ -187,12 +189,12 @@ fn resolve_dependency(conn: &rusqlite::Connection, dep: &str) -> Result<Resolved
     Ok(ResolvedDep::Missing)
 }
 
-fn find_latest_version(
-    conn: &rusqlite::Connection,
+async fn find_latest_version(
+    pool: &SqlitePool,
     creator: &str,
     package: &str,
 ) -> Result<Option<String>, String> {
-    let rows = list_var_versions(conn, creator, package)?;
+    let rows = list_var_versions(pool, creator, package).await?;
     let mut best: Option<(i64, String)> = None;
     for (name, version) in rows {
         if let Ok(ver) = version.parse::<i64>() {
@@ -205,13 +207,13 @@ fn find_latest_version(
     Ok(best.map(|(_, name)| name))
 }
 
-fn find_closest_version(
-    conn: &rusqlite::Connection,
+async fn find_closest_version(
+    pool: &SqlitePool,
     creator: &str,
     package: &str,
     requested: i64,
 ) -> Result<Option<String>, String> {
-    let rows = list_var_versions(conn, creator, package)?;
+    let rows = list_var_versions(pool, creator, package).await?;
     let mut versions: Vec<(i64, String)> = rows
         .into_iter()
         .filter_map(|(name, version)| version.parse::<i64>().ok().map(|ver| (ver, name)))
@@ -233,9 +235,9 @@ enum InstallOutcome {
     AlreadyInstalled,
 }
 
-fn install_var(
+async fn install_var(
     reporter: &JobReporter,
-    conn: &rusqlite::Connection,
+    pool: &SqlitePool,
     varspath: &Path,
     vampath: &Path,
     var_name: &str,
@@ -257,7 +259,7 @@ fn install_var(
     winfs::create_symlink_file(&link_path, &dest)?;
     set_link_times(&link_path, &dest)?;
 
-    upsert_install_status(conn, var_name, true, false)?;
+    upsert_install_status(pool, var_name, true, false).await?;
     reporter.log(format!("{} installed", var_name));
     Ok(InstallOutcome::Installed)
 }

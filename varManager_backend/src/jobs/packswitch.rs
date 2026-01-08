@@ -1,4 +1,4 @@
-use crate::infra::db::{self, upsert_install_status, var_exists_conn};
+use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{addon_packages_dir, addon_switch_root, config_paths};
@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use sqlx::SqlitePool;
 
 #[derive(Deserialize)]
 struct PackSwitchArgs {
@@ -197,26 +198,28 @@ fn set_switch_blocking(state: &AppState, reporter: &JobReporter, name: &str) -> 
     }
 
     winfs::create_symlink_dir(&addon_path, &target)?;
-    let _ = refresh_install_status(&vampath);
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
+    let _ = handle.block_on(refresh_install_status(pool, &vampath));
     let _ = system_ops::rescan_packages(state);
     reporter.log(format!("switch to {}", name));
     Ok(())
 }
 
-fn refresh_install_status(vampath: &Path) -> Result<usize, String> {
-    let db = db::open_default()?;
-    db.connection()
-        .execute("DELETE FROM installStatus", [])
+async fn refresh_install_status(pool: &SqlitePool, vampath: &Path) -> Result<usize, String> {
+    sqlx::query("DELETE FROM installStatus")
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
 
     let installed_links = fs_util::collect_installed_links(vampath);
     let mut installed = 0;
     for (var_name, link_path) in installed_links {
-        if !var_exists_conn(db.connection(), &var_name)? {
+        if !var_exists_conn(pool, &var_name).await? {
             continue;
         }
         let disabled = link_path.with_extension("var.disabled").exists();
-        upsert_install_status(db.connection(), &var_name, true, disabled)?;
+        upsert_install_status(pool, &var_name, true, disabled).await?;
         installed += 1;
     }
     Ok(installed)

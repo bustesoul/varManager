@@ -1,5 +1,5 @@
 use crate::infra::db::{
-    self, delete_var_related, list_vars, replace_dependencies, replace_scenes,
+    delete_var_related, list_vars, replace_dependencies, replace_scenes,
     upsert_install_status, upsert_var, var_exists_conn, SceneRecord, VarRecord,
 };
 use crate::infra::fs_util;
@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use walkdir::WalkDir;
 use zip::ZipArchive;
+use sqlx::{Sqlite, SqlitePool, Transaction};
 
 const TIDIED_DIR: &str = "___VarTidied___";
 const REDUNDANT_DIR: &str = "___VarRedundant___";
@@ -70,8 +71,10 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     )?;
     reporter.progress(10);
 
-    let mut db = db::open_default()?;
-    reporter.log(format!("DB ready: {}", db.path().display()));
+    let pool = state.db_pool.clone();
+    let handle = tokio::runtime::Handle::current();
+    let db_path = crate::infra::db::default_path();
+    reporter.log(format!("DB ready: {}", db_path.display()));
 
     let tidied_dir = varspath.join(TIDIED_DIR);
     let var_files = collect_var_files(
@@ -96,43 +99,57 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     )
     .map_err(|err| err.to_string())?;
 
-    let mut exist_vars: HashSet<String> = HashSet::new();
-    let tx = db.transaction()?;
-    for (idx, var_file) in var_files.iter().enumerate() {
-        let basename = match var_file.file_stem() {
-            Some(stem) => stem.to_string_lossy().to_string(),
-            None => continue,
-        };
-        exist_vars.insert(basename.clone());
+    let pool_for_tx = pool.clone();
+    let varspath_async = varspath.clone();
+    let reporter_async = reporter.clone();
+    let dependency_regex = dependency_regex.clone();
+    let var_files = var_files.clone();
+    handle.block_on(async move {
+        let mut exist_vars: HashSet<String> = HashSet::new();
+        let mut tx = pool_for_tx.begin().await.map_err(|err| err.to_string())?;
+        for (idx, var_file) in var_files.iter().enumerate() {
+            let basename = match var_file.file_stem() {
+                Some(stem) => stem.to_string_lossy().to_string(),
+                None => continue,
+            };
+            exist_vars.insert(basename.clone());
 
-        let result = process_var_file(&dependency_regex, &varspath, var_file);
-        match result {
-            Ok(processed) => {
-                upsert_var(&tx, &processed.var_record)?;
-                replace_dependencies(&tx, &processed.var_record.var_name, &processed.dependencies)?;
-                replace_scenes(&tx, &processed.var_record.var_name, &processed.scenes)?;
+            let result = process_var_file(&dependency_regex, &varspath_async, var_file);
+            match result {
+                Ok(processed) => {
+                    upsert_var(&mut tx, &processed.var_record).await?;
+                    replace_dependencies(
+                        &mut tx,
+                        &processed.var_record.var_name,
+                        &processed.dependencies,
+                    )
+                    .await?;
+                    replace_scenes(&mut tx, &processed.var_record.var_name, &processed.scenes)
+                        .await?;
+                }
+                Err(ProcessError::NotComply(err)) => {
+                    reporter_async.log(err);
+                    move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                    continue;
+                }
+                Err(ProcessError::InvalidPackage(err)) => {
+                    reporter_async.log(err);
+                    move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                    continue;
+                }
+                Err(ProcessError::Io(err)) => return Err(err),
             }
-            Err(ProcessError::NotComply(err)) => {
-                reporter.log(err);
-                move_to_not_comply(&varspath, var_file, reporter)?;
-                continue;
+
+            let progress = 10 + ((idx + 1) * 80 / var_files.len()) as u8;
+            if idx % 200 == 0 || idx + 1 == var_files.len() {
+                reporter_async.progress(progress.min(90));
             }
-            Err(ProcessError::InvalidPackage(err)) => {
-                reporter.log(err);
-                move_to_not_comply(&varspath, var_file, reporter)?;
-                continue;
-            }
-            Err(ProcessError::Io(err)) => return Err(err),
         }
 
-        let progress = 10 + ((idx + 1) * 80 / var_files.len()) as u8;
-        if idx % 200 == 0 || idx + 1 == var_files.len() {
-            reporter.progress(progress.min(90));
-        }
-    }
-
-    cleanup_missing_vars(&tx, &exist_vars, &varspath, reporter)?;
-    tx.commit().map_err(|err| err.to_string())?;
+        cleanup_missing_vars(&mut tx, &exist_vars, &varspath_async, &reporter_async).await?;
+        tx.commit().await.map_err(|err| err.to_string())?;
+        Ok::<(), String>(())
+    })?;
 
     reporter.progress(90);
 
@@ -142,10 +159,10 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                 "Install pending vars (varsForInstall): {}",
                 vars_for_install.len()
             ));
-            let pending = vars_dependencies(db.connection(), vars_for_install)?;
+            let pending = handle.block_on(vars_dependencies(&pool, vars_for_install))?;
             let total = pending.len();
             for (idx, var_name) in pending.iter().enumerate() {
-                match install_var(db.connection(), &varspath, vampath, var_name) {
+                match handle.block_on(install_var(&pool, &varspath, vampath, var_name)) {
                     Ok(InstallOutcome::Installed) => {
                         reporter.log(format!("{} installed", var_name));
                     }
@@ -168,7 +185,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     reporter.progress(95);
 
     if let Some(vampath) = vampath.as_ref() {
-        refresh_install_status(db.connection(), vampath, reporter)?;
+        handle.block_on(refresh_install_status(&pool, vampath, reporter))?;
         reporter.progress(97);
         match system_ops::rescan_packages(state) {
             Ok(true) => reporter.log("RescanPackages triggered".to_string()),
@@ -441,12 +458,14 @@ fn collect_addonpackages_vars(vampath: &Path) -> Vec<PathBuf> {
     )
 }
 
-fn refresh_install_status(
-    conn: &rusqlite::Connection,
+async fn refresh_install_status(
+    pool: &SqlitePool,
     vampath: &Path,
     reporter: &JobReporter,
 ) -> Result<(), String> {
-    conn.execute("DELETE FROM installStatus", [])
+    sqlx::query("DELETE FROM installStatus")
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
     let installed_links = fs_util::collect_installed_links(vampath);
     tracing::debug!(
@@ -456,11 +475,11 @@ fn refresh_install_status(
     );
     let mut installed = 0;
     for (var_name, link_path) in installed_links {
-        if !var_exists_conn(conn, &var_name)? {
+        if !var_exists_conn(pool, &var_name).await? {
             continue;
         }
         let disabled = link_path.with_extension("var.disabled").exists();
-        upsert_install_status(conn, &var_name, true, disabled)?;
+        upsert_install_status(pool, &var_name, true, disabled).await?;
         installed += 1;
     }
     reporter.log(format!("UpdateVarsInstalled completed: {}", installed));
@@ -472,8 +491,8 @@ enum InstallOutcome {
     AlreadyInstalled,
 }
 
-fn install_var(
-    conn: &rusqlite::Connection,
+async fn install_var(
+    pool: &SqlitePool,
     varspath: &Path,
     vampath: &Path,
     var_name: &str,
@@ -499,7 +518,7 @@ fn install_var(
     let dest = resolve_var_file_path(varspath, var_name)?;
     winfs::create_symlink_file(&link_path, &dest)?;
     set_link_times(&link_path, &dest)?;
-    upsert_install_status(conn, var_name, true, false)?;
+    upsert_install_status(pool, var_name, true, false).await?;
     tracing::debug!(
         var_name = %var_name,
         link_path = %link_path.display(),
@@ -656,17 +675,17 @@ fn process_var_file(
     })
 }
 
-fn cleanup_missing_vars(
-    tx: &rusqlite::Transaction<'_>,
+async fn cleanup_missing_vars(
+    tx: &mut Transaction<'_, Sqlite>,
     exist_vars: &HashSet<String>,
     varspath: &Path,
     reporter: &JobReporter,
 ) -> Result<(), String> {
-    let db_vars = list_vars(tx)?;
+    let db_vars = list_vars(tx).await?;
     let mut removed = 0;
     for var_name in db_vars {
         if !exist_vars.contains(&var_name) {
-            delete_var_related(tx, &var_name)?;
+            delete_var_related(tx, &var_name).await?;
             if let Err(err) = delete_preview_pics(varspath, &var_name) {
                 reporter.log(format!(
                     "delete preview pics failed {} ({})",

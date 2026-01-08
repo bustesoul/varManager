@@ -1,7 +1,6 @@
 use crate::jobs::job_channel::JobReporter;
 use crate::domain::var_logic::resolve_var_exist_name;
 use crate::app::AppState;
-use crate::infra::db;
 use reqwest::blocking::Client;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
@@ -11,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 use scraper::{Html, Selector};
+use sqlx::{Row, SqlitePool};
 
 const HUB_API: &str = "https://hub.virtamate.com/citizenx/api.php";
 const HUB_PACKAGES: &str = "https://s3cdn.virtamate.com/data/packages.json";
@@ -75,7 +75,7 @@ struct HubInfoCacheEntry {
 }
 
 pub async fn run_hub_missing_scan_job(
-    _state: AppState,
+    state: AppState,
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
@@ -83,19 +83,19 @@ pub async fn run_hub_missing_scan_job(
         let args: HubFindPackagesArgs =
             args.map_or_else(|| Ok(HubFindPackagesArgs { packages: Vec::new() }), serde_json::from_value)
                 .map_err(|err| err.to_string())?;
-        missing_scan_blocking(&reporter, args)
+        missing_scan_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
 pub async fn run_hub_updates_scan_job(
-    _state: AppState,
+    state: AppState,
     reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
-        updates_scan_blocking(&reporter)
+        updates_scan_blocking(&state, &reporter)
     })
     .await
     .map_err(|err| err.to_string())?
@@ -212,14 +212,19 @@ pub async fn run_hub_find_packages_job(
     .map_err(|err| err.to_string())?
 }
 
-fn missing_scan_blocking(reporter: &JobReporter, args: HubFindPackagesArgs) -> Result<(), String> {
+fn missing_scan_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: HubFindPackagesArgs,
+) -> Result<(), String> {
     reporter.log("Hub missing scan start".to_string());
     reporter.progress(1);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let missing = if args.packages.is_empty() {
-        collect_missing_dependencies(db.connection())?
+        handle.block_on(collect_missing_dependencies(pool))?
     } else {
         args.packages
     };
@@ -237,11 +242,12 @@ fn missing_scan_blocking(reporter: &JobReporter, args: HubFindPackagesArgs) -> R
     Ok(())
 }
 
-fn updates_scan_blocking(reporter: &JobReporter) -> Result<(), String> {
+fn updates_scan_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
     reporter.log("Hub updates scan start".to_string());
     reporter.progress(1);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let hub_packages = fetch_hub_packages()?;
     let mut newest_by_package: HashMap<String, (i64, String)> = HashMap::new();
@@ -260,7 +266,7 @@ fn updates_scan_blocking(reporter: &JobReporter) -> Result<(), String> {
     let mut to_update = Vec::new();
     for (base, (hub_ver, _)) in newest_by_package.iter() {
         let latest_name = format!("{}.latest", base);
-        let exist = resolve_var_exist_name(db.connection(), &latest_name)?;
+        let exist = handle.block_on(resolve_var_exist_name(pool, &latest_name))?;
         if exist != "missing" {
             if let Some((_, local_ver)) = split_var_version(&exist) {
                 if let Ok(local_ver) = local_ver.parse::<i64>() {
@@ -549,16 +555,17 @@ pub fn find_packages_maps(
     Ok((download_urls, download_urls_no_version))
 }
 
-fn collect_missing_dependencies(conn: &rusqlite::Connection) -> Result<Vec<String>, String> {
-    let mut stmt = conn
-        .prepare("SELECT dependency FROM dependencies")
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, Option<String>>(0))
+async fn collect_missing_dependencies(pool: &SqlitePool) -> Result<Vec<String>, String> {
+    let rows = sqlx::query("SELECT dependency FROM dependencies")
+        .fetch_all(pool)
+        .await
         .map_err(|err| err.to_string())?;
     let mut dependencies = Vec::new();
     for row in rows {
-        if let Some(dep) = row.map_err(|err| err.to_string())? {
+        if let Some(dep) = row
+            .try_get::<Option<String>, _>(0)
+            .map_err(|err| err.to_string())?
+        {
             if !dep.is_empty() {
                 dependencies.push(dep);
             }
@@ -569,7 +576,7 @@ fn collect_missing_dependencies(conn: &rusqlite::Connection) -> Result<Vec<Strin
 
     let mut missing = Vec::new();
     for dep in dependencies {
-        let exist = resolve_var_exist_name(conn, &dep)?;
+        let exist = resolve_var_exist_name(pool, &dep).await?;
         if let Some(stripped) = exist.strip_suffix('$') {
             missing.push(format!("{}$", dep));
             if stripped != "missing" {

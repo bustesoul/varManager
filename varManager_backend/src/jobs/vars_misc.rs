@@ -1,4 +1,4 @@
-use crate::infra::db::{self, upsert_install_status, var_exists_conn};
+use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
+use sqlx::{Row, SqlitePool};
 
 #[derive(Deserialize)]
 struct ExportInstalledArgs {
@@ -135,22 +136,21 @@ pub async fn run_refresh_install_status_job(
 }
 
 fn export_installed_blocking(
-    _state: &AppState,
+    state: &AppState,
     reporter: &JobReporter,
     args: ExportInstalledArgs,
 ) -> Result<(), String> {
-    let db = db::open_default()?;
-
-    let mut stmt = db
-        .connection()
-        .prepare("SELECT varName FROM installStatus WHERE installed = 1")
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(0))
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
+    let rows = handle
+        .block_on(
+            sqlx::query("SELECT varName FROM installStatus WHERE installed = 1")
+                .fetch_all(pool),
+        )
         .map_err(|err| err.to_string())?;
     let mut vars = Vec::new();
     for row in rows {
-        vars.push(row.map_err(|err| err.to_string())?);
+        vars.push(row.try_get::<String, _>(0).map_err(|err| err.to_string())?);
     }
 
     if let Some(parent) = Path::new(&args.path).parent() {
@@ -185,7 +185,8 @@ fn install_batch_blocking(
     targets.sort();
     targets.dedup();
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let total = targets.len();
@@ -198,7 +199,14 @@ fn install_batch_blocking(
             already_installed.push(var_name.clone());
             continue;
         }
-        match install_var(db.connection(), &varspath, &vampath, var_name, false, false) {
+        match handle.block_on(install_var(
+            pool,
+            &varspath,
+            &vampath,
+            var_name,
+            false,
+            false,
+        )) {
             Ok(InstallOutcome::Installed) => installed.push(var_name.clone()),
             Ok(InstallOutcome::AlreadyInstalled) => already_installed.push(var_name.clone()),
             Err(err) => {
@@ -232,13 +240,14 @@ fn toggle_install_blocking(
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let installed_links = fs_util::collect_installed_links_ci(&vampath);
     let key = args.var_name.to_ascii_lowercase();
     if installed_links.contains_key(&key) {
         let mut var_list = if args.include_implicated {
-            implicated_vars(db.connection(), vec![args.var_name.clone()])?
+            handle.block_on(implicated_vars(pool, vec![args.var_name.clone()]))?
         } else {
             vec![args.var_name.clone()]
         };
@@ -253,7 +262,7 @@ fn toggle_install_blocking(
                     reporter.log(format!("remove failed {} ({})", var_name, err));
                     failed.push(var_name.clone());
                 } else {
-                    let _ = remove_install_status(db.connection(), var_name);
+                    let _ = handle.block_on(remove_install_status(pool, var_name));
                     removed.push(var_name.clone());
                 }
             }
@@ -272,7 +281,7 @@ fn toggle_install_blocking(
     }
 
     let mut var_list = if args.include_dependencies {
-        vars_dependencies(db.connection(), vec![args.var_name.clone()])?
+        handle.block_on(vars_dependencies(pool, vec![args.var_name.clone()]))?
     } else {
         vec![args.var_name.clone()]
     };
@@ -283,7 +292,14 @@ fn toggle_install_blocking(
     let mut installed = Vec::new();
     let mut failed = Vec::new();
     for (idx, var_name) in var_list.iter().enumerate() {
-        match install_var(db.connection(), &varspath, &vampath, var_name, false, false) {
+        match handle.block_on(install_var(
+            pool,
+            &varspath,
+            &vampath,
+            var_name,
+            false,
+            false,
+        )) {
             Ok(InstallOutcome::Installed) => installed.push(var_name.clone()),
             Ok(InstallOutcome::AlreadyInstalled) => {}
             Err(err) => {
@@ -339,9 +355,10 @@ fn refresh_install_status_blocking(state: &AppState, reporter: &JobReporter) -> 
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db = db::open_default()?;
-    db.connection()
-        .execute("DELETE FROM installStatus", [])
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
+    handle
+        .block_on(sqlx::query("DELETE FROM installStatus").execute(pool))
         .map_err(|err| err.to_string())?;
 
     let installed_links = fs_util::collect_installed_links(&vampath);
@@ -352,11 +369,11 @@ fn refresh_install_status_blocking(state: &AppState, reporter: &JobReporter) -> 
     );
     let mut installed = 0;
     for (var_name, link_path) in installed_links {
-        if !var_exists_conn(db.connection(), &var_name)? {
+        if !handle.block_on(var_exists_conn(pool, &var_name))? {
             continue;
         }
         let disabled = link_path.with_extension("var.disabled").exists();
-        upsert_install_status(db.connection(), &var_name, true, disabled)?;
+        handle.block_on(upsert_install_status(pool, &var_name, true, disabled))?;
         installed += 1;
     }
 
@@ -367,8 +384,8 @@ fn refresh_install_status_blocking(state: &AppState, reporter: &JobReporter) -> 
     Ok(())
 }
 
-fn install_var(
-    conn: &rusqlite::Connection,
+async fn install_var(
+    pool: &SqlitePool,
     varspath: &Path,
     vampath: &Path,
     var_name: &str,
@@ -408,7 +425,7 @@ fn install_var(
         let _ = fs::File::create(&disabled_path);
     }
 
-    upsert_install_status(conn, var_name, true, disabled)?;
+    upsert_install_status(pool, var_name, true, disabled).await?;
     tracing::debug!(
         var_name = %var_name,
         link_path = %link_path.display(),
@@ -426,8 +443,11 @@ fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
     winfs::set_symlink_file_times(link, created, modified)
 }
 
-fn remove_install_status(conn: &rusqlite::Connection, var_name: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM installStatus WHERE varName = ?1", [var_name])
+async fn remove_install_status(pool: &SqlitePool, var_name: &str) -> Result<(), String> {
+    sqlx::query("DELETE FROM installStatus WHERE varName = ?1")
+        .bind(var_name)
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
     Ok(())
 }

@@ -219,11 +219,37 @@ class BackendClient {
     return _getJson('/health');
   }
 
-  String previewUrl({required String root, required String path}) {
-    final query = <String, String>{
-      'root': root,
-      'path': path,
-    };
+  String previewUrl({
+    String? root,
+    String? path,
+    String? source,
+    String? url,
+  }) {
+    final query = <String, String>{};
+    if (source != null) {
+      query['source'] = source;
+    }
+    if (url != null) {
+      query['url'] = url;
+    }
+    if (root != null) {
+      query['root'] = root;
+    }
+    if (path != null) {
+      query['path'] = path;
+    }
     return _uri('/preview', query).toString();
+  }
+
+  String hubImageUrl(String imageUrl) {
+    return previewUrl(source: 'hub', url: imageUrl);
+  }
+
+  Future<Map<String, dynamic>> getCacheStats() async {
+    return _getJson('/cache/stats');
+  }
+
+  Future<void> clearCache() async {
+    await _postJson('/cache/clear');
   }
 }

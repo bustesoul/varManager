@@ -17,19 +17,31 @@ mod domain;
 mod infra;
 mod jobs;
 mod scenes;
+mod services;
 mod util;
 
 use crate::app::{AppState, APP_VERSION};
+use crate::infra::db;
 use crate::jobs::job_channel::{create_job_channel, create_job_map, JobManager};
+use crate::services::image_cache::ImageCacheService;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = app::load_or_write_config()?;
     let (_file_guard, _stdout_guard) = app::init_logging(&config);
 
+    let db_pool = db::open_default_pool()
+        .await
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let (job_tx, job_rx) = create_job_channel();
     let jobs = create_job_map();
+    let image_cache = Arc::new(
+        ImageCacheService::new(config.image_cache.clone(), db_pool.clone())
+            .await
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?,
+    );
+    image_cache.clone().start_maintenance();
     let state = AppState {
         config: Arc::new(RwLock::new(config.clone())),
         shutdown_tx: Arc::new(tokio::sync::Mutex::new(Some(shutdown_tx))),
@@ -39,6 +51,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.job_concurrency,
         )))),
         job_tx,
+        db_pool,
+        image_cache,
     };
 
     // Start JobManager to consume job events and update state
@@ -68,6 +82,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/creators", get(api::list_creators))
         .route("/stats", get(api::get_stats))
         .route("/preview", get(api::get_preview))
+        .route("/cache/stats", get(api::get_cache_stats))
+        .route("/cache/clear", post(api::clear_cache))
+        .route("/cache/entry", axum::routing::delete(api::delete_cache_entry))
         .route("/packswitch", get(api::list_packswitch))
         .route("/hub/options", get(api::list_hub_options))
         .route("/dependents", get(api::list_dependents))

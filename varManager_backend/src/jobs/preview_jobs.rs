@@ -1,4 +1,3 @@
-use crate::infra::db;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, PREVIEW_DIR};
 use crate::app::AppState;
@@ -8,6 +7,7 @@ use std::fs::{self, File};
 use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 use zip::ZipArchive;
+use sqlx::{Row, SqlitePool};
 
 #[derive(Serialize)]
 struct FixPreviewResult {
@@ -32,9 +32,9 @@ fn fix_previews_blocking(state: &AppState, reporter: &JobReporter) -> Result<(),
     reporter.log("FixPreviews start".to_string());
     reporter.progress(1);
 
-    let db = db::open_default()?;
-
-    let scenes = list_scenes_with_preview(db.connection())?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
+    let scenes = handle.block_on(list_scenes_with_preview(pool))?;
     let total = scenes.len();
     let mut fixed = 0;
     let mut skipped = 0;
@@ -89,25 +89,21 @@ struct ScenePreview {
     scene_path: String,
 }
 
-fn list_scenes_with_preview(conn: &rusqlite::Connection) -> Result<Vec<ScenePreview>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT varName, atomType, previewPic, scenePath FROM scenes WHERE previewPic IS NOT NULL AND previewPic <> ''",
-        )
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(ScenePreview {
-                var_name: row.get::<_, String>(0)?,
-                atom_type: row.get::<_, String>(1)?,
-                preview_pic: row.get::<_, String>(2)?,
-                scene_path: row.get::<_, String>(3)?,
-            })
-        })
-        .map_err(|err| err.to_string())?;
+async fn list_scenes_with_preview(pool: &SqlitePool) -> Result<Vec<ScenePreview>, String> {
+    let rows = sqlx::query(
+        "SELECT varName, atomType, previewPic, scenePath FROM scenes WHERE previewPic IS NOT NULL AND previewPic <> ''",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|err| err.to_string())?;
     let mut scenes = Vec::new();
     for row in rows {
-        scenes.push(row.map_err(|err| err.to_string())?);
+        scenes.push(ScenePreview {
+            var_name: row.try_get::<String, _>(0).map_err(|err| err.to_string())?,
+            atom_type: row.try_get::<String, _>(1).map_err(|err| err.to_string())?,
+            preview_pic: row.try_get::<String, _>(2).map_err(|err| err.to_string())?,
+            scene_path: row.try_get::<String, _>(3).map_err(|err| err.to_string())?,
+        });
     }
     Ok(scenes)
 }

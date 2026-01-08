@@ -10,6 +10,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
+use sqlx::SqlitePool;
 
 #[derive(Deserialize)]
 struct InstallVarsArgs {
@@ -124,10 +125,11 @@ fn install_vars_blocking(state: &AppState, reporter: &JobReporter, args: Install
     reporter.log("InstallVars start".to_string());
     reporter.progress(1);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let var_list = if args.include_dependencies {
-        vars_dependencies(db.connection(), args.var_names)?
+        handle.block_on(vars_dependencies(pool, args.var_names))?
     } else {
         args.var_names
     };
@@ -138,15 +140,15 @@ fn install_vars_blocking(state: &AppState, reporter: &JobReporter, args: Install
     let mut failed = Vec::new();
 
     for (idx, var_name) in var_list.iter().enumerate() {
-        match install_var(
+        match handle.block_on(install_var(
             reporter,
-            db.connection(),
+            pool,
             &varspath,
             &vampath,
             var_name,
             args.temp,
             args.disabled,
-        ) {
+        )) {
             Ok(InstallOutcome::Installed) => installed.push(var_name.clone()),
             Ok(InstallOutcome::AlreadyInstalled) => already_installed.push(var_name.clone()),
             Err(err) => {
@@ -199,7 +201,8 @@ fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: Unins
     ));
     reporter.log(format!("UninstallVars db_path: {}", db_path.display()));
     let db_start = Instant::now();
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
     reporter.log(format!(
         "UninstallVars db ready in {}ms",
         db_start.elapsed().as_millis()
@@ -211,7 +214,7 @@ fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: Unins
     }
     let resolve_start = Instant::now();
     let var_list = if args.include_implicated {
-        implicated_vars(db.connection(), args.var_names)?
+        handle.block_on(implicated_vars(pool, args.var_names))?
     } else {
         args.var_names
     };
@@ -250,7 +253,7 @@ fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: Unins
                 skipped.push(var_name.clone());
             } else {
                 removed.push(var_name.clone());
-                let _ = remove_install_status(db.connection(), var_name);
+                let _ = handle.block_on(remove_install_status(pool, var_name));
             }
         } else {
             skipped.push(var_name.clone());
@@ -311,7 +314,8 @@ fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: Pr
     reporter.log(format!("PreviewUninstall db_path: {}", db_path.display()));
 
     let db_start = Instant::now();
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
     reporter.log(format!(
         "PreviewUninstall db ready in {}ms",
         db_start.elapsed().as_millis()
@@ -324,7 +328,7 @@ fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: Pr
     }
     let resolve_start = Instant::now();
     let var_list = if args.include_implicated {
-        implicated_vars(db.connection(), args.var_names)?
+        handle.block_on(implicated_vars(pool, args.var_names))?
     } else {
         args.var_names
     };
@@ -394,10 +398,11 @@ fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVa
     reporter.log("DeleteVars start".to_string());
     reporter.progress(1);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let var_list = if args.include_implicated {
-        implicated_vars(db.connection(), args.var_names)?
+        handle.block_on(implicated_vars(pool, args.var_names))?
     } else {
         args.var_names
     };
@@ -414,7 +419,7 @@ fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVa
         if let Some(link_path) = installed_links.get(var_name) {
             let _ = fs::remove_file(link_path);
         }
-        let _ = remove_install_status(db.connection(), var_name);
+        let _ = handle.block_on(remove_install_status(pool, var_name));
 
         let src = match resolve_var_file_path(&varspath, var_name) {
             Ok(path) => path,
@@ -427,7 +432,7 @@ fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVa
         let dest = deleted_dir.join(format!("{}.var", var_name));
         match fs::rename(&src, &dest) {
             Ok(_) => {
-                delete_var_related_conn(db.connection(), var_name)?;
+                handle.block_on(delete_var_related_conn(pool, var_name))?;
                 delete_preview_pics(&varspath, var_name)?;
                 deleted.push(var_name.clone());
             }
@@ -453,9 +458,9 @@ fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVa
     Ok(())
 }
 
-fn install_var(
+async fn install_var(
     reporter: &JobReporter,
-    conn: &rusqlite::Connection,
+    pool: &SqlitePool,
     varspath: &Path,
     vampath: &Path,
     var_name: &str,
@@ -495,7 +500,7 @@ fn install_var(
         let _ = fs::File::create(&disabled_path);
     }
 
-    upsert_install_status(conn, var_name, true, disabled)?;
+    upsert_install_status(pool, var_name, true, disabled).await?;
     tracing::debug!(
         var_name = %var_name,
         link_path = %link_path.display(),
@@ -514,8 +519,11 @@ fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
     winfs::set_symlink_file_times(link, created, modified)
 }
 
-fn remove_install_status(conn: &rusqlite::Connection, var_name: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM installStatus WHERE varName = ?1", [var_name])
+async fn remove_install_status(pool: &SqlitePool, var_name: &str) -> Result<(), String> {
+    sqlx::query("DELETE FROM installStatus WHERE varName = ?1")
+        .bind(var_name)
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
     Ok(())
 }

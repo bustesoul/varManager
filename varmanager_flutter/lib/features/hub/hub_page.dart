@@ -3,24 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/utils/debounce.dart';
 import '../../widgets/lazy_dropdown_field.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/image_preview_dialog.dart';
 import '../home/providers.dart';
-
-Map<String, String>? _hubImageHeaders(String? url) {
-  if (url == null || url.isEmpty) {
-    return null;
-  }
-  final lower = url.toLowerCase();
-  if (lower.startsWith('https://hub.virtamate.com/attachments/') ||
-      lower.startsWith('http://hub.virtamate.com/attachments/')) {
-    return const {'Cookie': 'vamhubconsent=yes'};
-  }
-  return null;
-}
 
 class HubInfo {
   HubInfo({
@@ -162,12 +151,12 @@ class _HubPageState extends ConsumerState<HubPage> {
     if (imageUrls.isEmpty) {
       return;
     }
+    final client = ref.read(backendClientProvider);
     final previewItems = imageUrls
         .map(
           (url) => ImagePreviewItem(
             title: '',
-            imageUrl: url,
-            headers: _hubImageHeaders(url),
+            imageUrl: client.hubImageUrl(url),
           ),
         )
         .toList();
@@ -589,6 +578,7 @@ class _HubPageState extends ConsumerState<HubPage> {
           title: title,
           resourceId: resourceId,
           basicDetails: details,
+          client: ref.read(backendClientProvider),
           runner: ref.read(jobRunnerProvider),
           log: ref.read(jobLogProvider.notifier),
         );
@@ -1147,6 +1137,7 @@ class _HubPageState extends ConsumerState<HubPage> {
   }
 
   Widget _buildResourceCard(Map<String, dynamic> resource) {
+    final client = ref.read(backendClientProvider);
     final resourceId = _resourceId(resource);
     final title = resource['title']?.toString() ?? 'Untitled';
     final username = resource['username']?.toString() ?? 'unknown';
@@ -1177,8 +1168,7 @@ class _HubPageState extends ConsumerState<HubPage> {
       child: imageUrl == null || imageUrl.isEmpty
           ? const PreviewPlaceholder(width: 96, height: 96)
           : Image.network(
-              imageUrl,
-              headers: _hubImageHeaders(imageUrl),
+              client.hubImageUrl(imageUrl),
               width: 96,
               height: 96,
               fit: BoxFit.cover,
@@ -1351,6 +1341,7 @@ class _EnhancedResourceDetailDialog extends StatefulWidget {
     required this.title,
     required this.resourceId,
     required this.basicDetails,
+    required this.client,
     required this.runner,
     required this.log,
   });
@@ -1358,6 +1349,7 @@ class _EnhancedResourceDetailDialog extends StatefulWidget {
   final String title;
   final String resourceId;
   final List<MapEntry<String, String>> basicDetails;
+  final BackendClient client;
   final dynamic runner;
   final dynamic log;
 
@@ -1424,12 +1416,12 @@ class _EnhancedResourceDetailDialogState
     if (imageUrls.isEmpty) {
       return;
     }
+    final client = widget.client;
     final previewItems = imageUrls
         .map(
           (url) => ImagePreviewItem(
             title: '',
-            imageUrl: url,
-            headers: _hubImageHeaders(url),
+            imageUrl: client.hubImageUrl(url),
           ),
         )
         .toList();
@@ -1607,8 +1599,7 @@ class _EnhancedResourceDetailDialogState
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: Image.network(
-                                    imageUrl,
-                                    headers: _hubImageHeaders(imageUrl),
+                                    widget.client.hubImageUrl(imageUrl),
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, _, _) => Container(
                                       color: Colors.grey.shade200,

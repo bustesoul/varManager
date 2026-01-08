@@ -1,4 +1,4 @@
-use crate::infra::db::{self, upsert_install_status, var_exists_conn};
+use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR};
@@ -110,7 +110,8 @@ fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: Rebuil
     reporter.log("RebuildLinks start".to_string());
     reporter.progress(1);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
     let mut links =
         fs_util::collect_symlink_vars(&vampath.join("AddonPackages").join(INSTALL_LINK_DIR), true);
@@ -163,7 +164,7 @@ fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: Rebuil
             }
         };
 
-        if !var_exists_conn(db.connection(), &var_name)? {
+        if !handle.block_on(var_exists_conn(pool, &var_name))? {
             reporter.log(format!("skip missing record {}", var_name));
             skipped += 1;
             continue;
@@ -196,7 +197,7 @@ fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: Rebuil
             reporter.log(format!("set time failed {} ({})", var_name, err));
         }
 
-        let _ = upsert_install_status(db.connection(), &var_name, true, false);
+        let _ = handle.block_on(upsert_install_status(pool, &var_name, true, false));
         rebuilt += 1;
 
         if total > 0 && (idx % 200 == 0 || idx + 1 == total) {

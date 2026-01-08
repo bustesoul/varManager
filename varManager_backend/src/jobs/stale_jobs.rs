@@ -1,4 +1,4 @@
-use crate::infra::db::{self, delete_var_related_conn, upsert_install_status};
+use crate::infra::db::{delete_var_related_conn, upsert_install_status};
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, OLD_VERSION_DIR, STALE_DIR};
@@ -9,6 +9,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use sqlx::{Row, SqlitePool};
 
 #[derive(Deserialize)]
 struct StaleVarsArgs {
@@ -94,9 +95,10 @@ fn stale_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<Stale
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
-    let vars = load_vars(db.connection(), false)?;
+    let vars = handle.block_on(load_vars(pool, false))?;
     let (old_vars, _latest) = find_old_versions(&vars);
 
     let stale_dir = varspath.join(STALE_DIR);
@@ -109,7 +111,7 @@ fn stale_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<Stale
     let total = old_vars.len();
 
     for (idx, oldvar) in old_vars.iter().enumerate() {
-        if has_dependents(db.connection(), oldvar)? {
+        if handle.block_on(has_dependents(pool, oldvar))? {
             skipped += 1;
             continue;
         }
@@ -127,7 +129,7 @@ fn stale_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<Stale
         let dest = stale_dir.join(format!("{}.var", oldvar));
         match fs::rename(&src, &dest) {
             Ok(_) => {
-                cleanup_var(db.connection(), &varspath, oldvar)?;
+                handle.block_on(cleanup_var(pool, &varspath, oldvar))?;
                 moved += 1;
             }
             Err(err) => {
@@ -157,9 +159,10 @@ fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
-    let vars = load_vars(db.connection(), true)?;
+    let vars = handle.block_on(load_vars(pool, true))?;
     let (old_vars, latest_by_base) = find_old_versions(&vars);
 
     let old_dir = varspath.join(OLD_VERSION_DIR);
@@ -177,7 +180,7 @@ fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result
             if let Some(base) = base_without_version(oldvar) {
                 if let Some(latest_ver) = latest_by_base.get(&base) {
                     let latest_name = format!("{}.{}", base, latest_ver);
-                    let _ = install_var(db.connection(), &varspath, &vampath, &latest_name);
+                    let _ = handle.block_on(install_var(pool, &varspath, &vampath, &latest_name));
                 }
             }
         }
@@ -193,7 +196,7 @@ fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result
         let dest = old_dir.join(format!("{}.var", oldvar));
         match fs::rename(&src, &dest) {
             Ok(_) => {
-                cleanup_var(db.connection(), &varspath, oldvar)?;
+                handle.block_on(cleanup_var(pool, &varspath, oldvar))?;
                 moved += 1;
             }
             Err(err) => {
@@ -218,29 +221,40 @@ fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result
     })
 }
 
-fn load_vars(conn: &rusqlite::Connection, filter_old: bool) -> Result<Vec<VarInfo>, String> {
+async fn load_vars(pool: &SqlitePool, filter_old: bool) -> Result<Vec<VarInfo>, String> {
     let mut vars = Vec::new();
-    let mut stmt = conn
-        .prepare(
-            "SELECT varName, creatorName, packageName, version, plugin, scene, look FROM vars",
-        )
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            let var_name = row.get::<_, String>(0)?;
-            let creator = row.get::<_, Option<String>>(1)?.unwrap_or_default();
-            let package = row.get::<_, Option<String>>(2)?.unwrap_or_default();
-            let version = row.get::<_, Option<String>>(3)?.unwrap_or_default();
-            let plugin = row.get::<_, Option<i64>>(4)?.unwrap_or(0);
-            let scene = row.get::<_, Option<i64>>(5)?.unwrap_or(0);
-            let look = row.get::<_, Option<i64>>(6)?.unwrap_or(0);
-            Ok((var_name, creator, package, version, plugin, scene, look))
-        })
-        .map_err(|err| err.to_string())?;
-
+    let rows = sqlx::query(
+        "SELECT varName, creatorName, packageName, version, plugin, scene, look FROM vars",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|err| err.to_string())?;
     for row in rows {
-        let (var_name, creator, package, version, plugin, scene, look) =
-            row.map_err(|err| err.to_string())?;
+        let var_name = row.try_get::<String, _>(0).map_err(|err| err.to_string())?;
+        let creator = row
+            .try_get::<Option<String>, _>(1)
+            .map_err(|err| err.to_string())?
+            .unwrap_or_default();
+        let package = row
+            .try_get::<Option<String>, _>(2)
+            .map_err(|err| err.to_string())?
+            .unwrap_or_default();
+        let version = row
+            .try_get::<Option<String>, _>(3)
+            .map_err(|err| err.to_string())?
+            .unwrap_or_default();
+        let plugin = row
+            .try_get::<Option<i64>, _>(4)
+            .map_err(|err| err.to_string())?
+            .unwrap_or(0);
+        let scene = row
+            .try_get::<Option<i64>, _>(5)
+            .map_err(|err| err.to_string())?
+            .unwrap_or(0);
+        let look = row
+            .try_get::<Option<i64>, _>(6)
+            .map_err(|err| err.to_string())?
+            .unwrap_or(0);
         if creator.is_empty() || package.is_empty() {
             continue;
         }
@@ -290,23 +304,27 @@ fn find_old_versions(
     (old_vars, latest_map)
 }
 
-fn has_dependents(conn: &rusqlite::Connection, var_name: &str) -> Result<bool, String> {
-    let mut stmt = conn
-        .prepare("SELECT COUNT(1) FROM dependencies WHERE dependency = ?1")
-        .map_err(|err| err.to_string())?;
-    let count: i64 = stmt
-        .query_row([var_name], |row| row.get(0))
-        .map_err(|err| err.to_string())?;
+async fn has_dependents(pool: &SqlitePool, var_name: &str) -> Result<bool, String> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(1) FROM dependencies WHERE dependency = ?1",
+    )
+    .bind(var_name)
+    .fetch_one(pool)
+    .await
+    .map_err(|err| err.to_string())?;
     Ok(count > 0)
 }
 
-fn cleanup_var(
-    conn: &rusqlite::Connection,
+async fn cleanup_var(
+    pool: &SqlitePool,
     varspath: &Path,
     var_name: &str,
 ) -> Result<(), String> {
-    delete_var_related_conn(conn, var_name)?;
-    conn.execute("DELETE FROM installStatus WHERE varName = ?1", [var_name])
+    delete_var_related_conn(pool, var_name).await?;
+    sqlx::query("DELETE FROM installStatus WHERE varName = ?1")
+        .bind(var_name)
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
     delete_preview_pics(varspath, var_name)?;
     Ok(())
@@ -332,8 +350,8 @@ fn base_without_version(var_name: &str) -> Option<String> {
     var_name.rsplit_once('.').map(|(base, _)| base.to_string())
 }
 
-fn install_var(
-    conn: &rusqlite::Connection,
+async fn install_var(
+    pool: &SqlitePool,
     varspath: &Path,
     vampath: &Path,
     var_name: &str,
@@ -347,7 +365,7 @@ fn install_var(
     let dest = resolve_var_file_path(varspath, var_name)?;
     winfs::create_symlink_file(&link_path, &dest)?;
     set_link_times(&link_path, &dest)?;
-    upsert_install_status(conn, var_name, true, false)?;
+    upsert_install_status(pool, var_name, true, false).await?;
     Ok(())
 }
 

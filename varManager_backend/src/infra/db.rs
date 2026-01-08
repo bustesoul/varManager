@@ -1,11 +1,9 @@
 use crate::app::exe_dir;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Transaction};
-use std::path::{Path, PathBuf};
-
-pub struct Db {
-    conn: Connection,
-    path: PathBuf,
-}
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    Row, Sqlite, SqlitePool, Transaction,
+};
+use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct VarRecord {
@@ -43,22 +41,27 @@ pub struct SceneRecord {
     pub is_loadable: bool,
 }
 
-impl Db {
-    pub fn open(path: &Path) -> Result<Self, String> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-        }
-        let conn = Connection::open(path).map_err(|err| err.to_string())?;
-        Ok(Self {
-            conn,
-            path: path.to_path_buf(),
-        })
-    }
+pub fn default_path() -> PathBuf {
+    exe_dir().join("varManager.db")
+}
 
-    pub fn ensure_schema(&self) -> Result<(), String> {
-        self.conn
-            .execute_batch(
-                r#"
+pub async fn open_default_pool() -> Result<SqlitePool, String> {
+    let path = default_path();
+    let options = SqliteConnectOptions::new()
+        .filename(&path)
+        .create_if_missing(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(options)
+        .await
+        .map_err(|err| err.to_string())?;
+    ensure_schema(&pool).await?;
+    Ok(pool)
+}
+
+pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
+    sqlx::query(
+        r#"
                 CREATE TABLE IF NOT EXISTS dependencies (
                     ID INTEGER PRIMARY KEY AUTOINCREMENT,
                     varName TEXT,
@@ -115,6 +118,19 @@ impl Db {
                     dependencyCnt INTEGER,
                     fsize REAL
                 );
+                CREATE TABLE IF NOT EXISTS image_cache_entries (
+                    cache_key TEXT PRIMARY KEY,
+                    file_name TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_url TEXT,
+                    source_root TEXT,
+                    source_path TEXT,
+                    size_bytes INTEGER NOT NULL,
+                    content_type TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    last_accessed INTEGER NOT NULL,
+                    access_count INTEGER NOT NULL
+                );
 
                 CREATE INDEX IF NOT EXISTS idx_vars_creatorName ON vars(creatorName);
                 CREATE INDEX IF NOT EXISTS idx_vars_packageName ON vars(packageName);
@@ -127,159 +143,142 @@ impl Db {
                 CREATE INDEX IF NOT EXISTS idx_dependencies_varName ON dependencies(varName);
                 CREATE INDEX IF NOT EXISTS idx_dependencies_dependency ON dependencies(dependency);
                 CREATE INDEX IF NOT EXISTS idx_savedepens_dependency ON savedepens(dependency);
-                "#,
-            )
-            .map_err(|err| err.to_string())?;
+                CREATE INDEX IF NOT EXISTS idx_image_cache_last_accessed ON image_cache_entries(last_accessed);
+                "#
+    )
+    .execute(pool)
+    .await
+    .map_err(|err| err.to_string())?;
 
-        // Add fsize column if it doesn't exist (migration)
-        self.conn.execute(
-            "ALTER TABLE vars ADD COLUMN fsize REAL",
-            [],
-        ).ok(); // Ignore error if column already exists
+    let _ = sqlx::query("ALTER TABLE vars ADD COLUMN fsize REAL")
+        .execute(pool)
+        .await;
 
-        Ok(())
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    pub fn connection(&self) -> &Connection {
-        &self.conn
-    }
-
-    pub fn transaction(&mut self) -> Result<Transaction<'_>, String> {
-        self.conn.transaction().map_err(|err| err.to_string())
-    }
+    Ok(())
 }
 
-pub fn default_path() -> PathBuf {
-    exe_dir().join("varManager.db")
-}
-
-pub fn open_default() -> Result<Db, String> {
-    let path = default_path();
-    let db = Db::open(&path)?;
-    db.ensure_schema()?;
-    Ok(db)
-}
-
-pub fn var_exists_conn(conn: &Connection, var_name: &str) -> Result<bool, String> {
-    let exists: Option<i64> = conn
-        .query_row(
-            "SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1",
-            params![var_name],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|err| err.to_string())?;
+pub async fn var_exists_conn(pool: &SqlitePool, var_name: &str) -> Result<bool, String> {
+    let exists = sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1",
+    )
+    .bind(var_name)
+    .fetch_optional(pool)
+    .await
+    .map_err(|err| err.to_string())?;
     Ok(exists.is_some())
 }
 
-pub fn list_var_versions(
-    conn: &Connection,
+pub async fn list_var_versions(
+    pool: &SqlitePool,
     creator_name: &str,
     package_name: &str,
 ) -> Result<Vec<(String, String)>, String> {
-    let mut stmt = conn
-        .prepare("SELECT varName, version FROM vars WHERE creatorName = ?1 AND packageName = ?2")
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map(params![creator_name, package_name], |row| {
-            let name = row.get::<_, String>(0)?;
-            let version = row.get::<_, Option<String>>(1)?.unwrap_or_default();
-            Ok((name, version))
-        })
-        .map_err(|err| err.to_string())?;
+    let rows = sqlx::query(
+        "SELECT varName, version FROM vars WHERE creatorName = ?1 AND packageName = ?2",
+    )
+    .bind(creator_name)
+    .bind(package_name)
+    .fetch_all(pool)
+    .await
+    .map_err(|err| err.to_string())?;
     let mut vars = Vec::new();
     for row in rows {
-        vars.push(row.map_err(|err| err.to_string())?);
+        let name: String = row.try_get(0).map_err(|err| err.to_string())?;
+        let version: Option<String> = row.try_get(1).map_err(|err| err.to_string())?;
+        vars.push((name, version.unwrap_or_default()));
     }
     Ok(vars)
 }
 
-pub fn list_dependencies_all(conn: &Connection) -> Result<Vec<String>, String> {
-    let mut stmt = conn
-        .prepare("SELECT dependency FROM dependencies")
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, Option<String>>(0))
+pub async fn list_dependencies_all(pool: &SqlitePool) -> Result<Vec<String>, String> {
+    let rows = sqlx::query("SELECT dependency FROM dependencies")
+        .fetch_all(pool)
+        .await
         .map_err(|err| err.to_string())?;
     let mut deps = Vec::new();
     for row in rows {
-        if let Some(dep) = row.map_err(|err| err.to_string())? {
+        let dep: Option<String> = row.try_get(0).map_err(|err| err.to_string())?;
+        if let Some(dep) = dep {
             deps.push(dep);
         }
     }
     Ok(deps)
 }
 
-pub fn list_dependencies_for_installed(conn: &Connection) -> Result<Vec<String>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT d.dependency FROM dependencies d \
+pub async fn list_dependencies_for_installed(
+    pool: &SqlitePool,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT d.dependency FROM dependencies d \
              JOIN installStatus i ON d.varName = i.varName \
              WHERE i.installed = 1",
-        )
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, Option<String>>(0))
-        .map_err(|err| err.to_string())?;
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|err| err.to_string())?;
     let mut deps = Vec::new();
     for row in rows {
-        if let Some(dep) = row.map_err(|err| err.to_string())? {
+        let dep: Option<String> = row.try_get(0).map_err(|err| err.to_string())?;
+        if let Some(dep) = dep {
             deps.push(dep);
         }
     }
     Ok(deps)
 }
 
-pub fn list_dependencies_for_vars(
-    conn: &Connection,
+pub async fn list_dependencies_for_vars(
+    pool: &SqlitePool,
     var_names: &[String],
 ) -> Result<Vec<String>, String> {
     if var_names.is_empty() {
         return Ok(Vec::new());
     }
-    let placeholders = std::iter::repeat("?")
-        .take(var_names.len())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!(
-        "SELECT dependency FROM dependencies WHERE varName IN ({})",
-        placeholders
+    let mut builder = sqlx::QueryBuilder::new(
+        "SELECT dependency FROM dependencies WHERE varName IN (",
     );
-    let mut stmt = conn.prepare(&sql).map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map(params_from_iter(var_names.iter()), |row| {
-            row.get::<_, Option<String>>(0)
-        })
+    let mut separated = builder.separated(", ");
+    for name in var_names {
+        separated.push_bind(name);
+    }
+    separated.push_unseparated(")");
+    let rows = builder
+        .build()
+        .fetch_all(pool)
+        .await
         .map_err(|err| err.to_string())?;
     let mut deps = Vec::new();
     for row in rows {
-        if let Some(dep) = row.map_err(|err| err.to_string())? {
+        let dep: Option<String> = row.try_get(0).map_err(|err| err.to_string())?;
+        if let Some(dep) = dep {
             deps.push(dep);
         }
     }
     Ok(deps)
 }
 
-pub fn upsert_install_status(
-    conn: &Connection,
+pub async fn upsert_install_status(
+    pool: &SqlitePool,
     var_name: &str,
     installed: bool,
     disabled: bool,
 ) -> Result<(), String> {
-    conn.execute(
+    sqlx::query(
         "INSERT OR REPLACE INTO installStatus (varName, installed, disabled) VALUES (?1, ?2, ?3)",
-        params![var_name, installed as i64, disabled as i64],
     )
+    .bind(var_name)
+    .bind(installed as i64)
+    .bind(disabled as i64)
+    .execute(pool)
+    .await
     .map_err(|err| err.to_string())?;
     Ok(())
 }
 
-pub fn upsert_var(tx: &Transaction<'_>, record: &VarRecord) -> Result<(), String> {
-    tx.execute(
+pub async fn upsert_var(
+    tx: &mut Transaction<'_, Sqlite>,
+    record: &VarRecord,
+) -> Result<(), String> {
+    sqlx::query(
         r#"
         INSERT OR REPLACE INTO vars (
             varName, creatorName, packageName, metaDate, varDate, version, description,
@@ -291,115 +290,142 @@ pub fn upsert_var(tx: &Transaction<'_>, record: &VarRecord) -> Result<(), String
             ?18, ?19, ?20, ?21, ?22
         )
         "#,
-        params![
-            record.var_name,
-            record.creator_name,
-            record.package_name,
-            record.meta_date,
-            record.var_date,
-            record.version,
-            record.description,
-            record.morph,
-            record.cloth,
-            record.hair,
-            record.skin,
-            record.pose,
-            record.scene,
-            record.script,
-            record.plugin,
-            record.asset,
-            record.texture,
-            record.look,
-            record.sub_scene,
-            record.appearance,
-            record.dependency_cnt,
-            record.fsize
-        ],
     )
+    .bind(&record.var_name)
+    .bind(&record.creator_name)
+    .bind(&record.package_name)
+    .bind(&record.meta_date)
+    .bind(&record.var_date)
+    .bind(&record.version)
+    .bind(&record.description)
+    .bind(record.morph)
+    .bind(record.cloth)
+    .bind(record.hair)
+    .bind(record.skin)
+    .bind(record.pose)
+    .bind(record.scene)
+    .bind(record.script)
+    .bind(record.plugin)
+    .bind(record.asset)
+    .bind(record.texture)
+    .bind(record.look)
+    .bind(record.sub_scene)
+    .bind(record.appearance)
+    .bind(record.dependency_cnt)
+    .bind(record.fsize)
+    .execute(tx.as_mut())
+    .await
     .map_err(|err| err.to_string())?;
     Ok(())
 }
 
-pub fn replace_dependencies(
-    tx: &Transaction<'_>,
+pub async fn replace_dependencies(
+    tx: &mut Transaction<'_, Sqlite>,
     var_name: &str,
     deps: &[String],
 ) -> Result<(), String> {
-    tx.execute("DELETE FROM dependencies WHERE varName = ?1", params![var_name])
+    sqlx::query("DELETE FROM dependencies WHERE varName = ?1")
+        .bind(var_name)
+        .execute(tx.as_mut())
+        .await
         .map_err(|err| err.to_string())?;
     if deps.is_empty() {
         return Ok(());
     }
-    let mut stmt = tx
-        .prepare("INSERT INTO dependencies (varName, dependency) VALUES (?1, ?2)")
-        .map_err(|err| err.to_string())?;
     for dep in deps {
-        stmt.execute(params![var_name, dep])
+        sqlx::query("INSERT INTO dependencies (varName, dependency) VALUES (?1, ?2)")
+            .bind(var_name)
+            .bind(dep)
+            .execute(tx.as_mut())
+            .await
             .map_err(|err| err.to_string())?;
     }
     Ok(())
 }
 
-pub fn replace_scenes(
-    tx: &Transaction<'_>,
+pub async fn replace_scenes(
+    tx: &mut Transaction<'_, Sqlite>,
     var_name: &str,
     scenes: &[SceneRecord],
 ) -> Result<(), String> {
-    tx.execute("DELETE FROM scenes WHERE varName = ?1", params![var_name])
+    sqlx::query("DELETE FROM scenes WHERE varName = ?1")
+        .bind(var_name)
+        .execute(tx.as_mut())
+        .await
         .map_err(|err| err.to_string())?;
     if scenes.is_empty() {
         return Ok(());
     }
-    let mut stmt = tx
-        .prepare(
-            "INSERT INTO scenes (varName, atomType, previewPic, scenePath, isPreset, isLoadable)
+    for scene in scenes {
+        sqlx::query(
+            "INSERT INTO scenes (varName, atomType, previewPic, scenePath, isPreset, isLoadable)\
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
-        .map_err(|err| err.to_string())?;
-    for scene in scenes {
-        stmt.execute(params![
-            scene.var_name,
-            scene.atom_type,
-            scene.preview_pic,
-            scene.scene_path,
-            scene.is_preset as i64,
-            scene.is_loadable as i64
-        ])
+        .bind(&scene.var_name)
+        .bind(&scene.atom_type)
+        .bind(&scene.preview_pic)
+        .bind(&scene.scene_path)
+        .bind(scene.is_preset as i64)
+        .bind(scene.is_loadable as i64)
+        .execute(tx.as_mut())
+        .await
         .map_err(|err| err.to_string())?;
     }
     Ok(())
 }
 
-pub fn list_vars(tx: &Transaction<'_>) -> Result<Vec<String>, String> {
-    let mut stmt = tx
-        .prepare("SELECT varName FROM vars")
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(0))
+pub async fn list_vars(tx: &mut Transaction<'_, Sqlite>) -> Result<Vec<String>, String> {
+    let rows = sqlx::query("SELECT varName FROM vars")
+        .fetch_all(tx.as_mut())
+        .await
         .map_err(|err| err.to_string())?;
     let mut vars = Vec::new();
     for row in rows {
-        vars.push(row.map_err(|err| err.to_string())?);
+        vars.push(row.try_get::<String, _>(0).map_err(|err| err.to_string())?);
     }
     Ok(vars)
 }
 
-pub fn delete_var_related(tx: &Transaction<'_>, var_name: &str) -> Result<(), String> {
-    tx.execute("DELETE FROM dependencies WHERE varName = ?1", params![var_name])
+pub async fn delete_var_related(
+    tx: &mut Transaction<'_, Sqlite>,
+    var_name: &str,
+) -> Result<(), String> {
+    sqlx::query("DELETE FROM dependencies WHERE varName = ?1")
+        .bind(var_name)
+        .execute(tx.as_mut())
+        .await
         .map_err(|err| err.to_string())?;
-    tx.execute("DELETE FROM scenes WHERE varName = ?1", params![var_name])
+    sqlx::query("DELETE FROM scenes WHERE varName = ?1")
+        .bind(var_name)
+        .execute(tx.as_mut())
+        .await
         .map_err(|err| err.to_string())?;
-    tx.execute("DELETE FROM vars WHERE varName = ?1", params![var_name])
+    sqlx::query("DELETE FROM vars WHERE varName = ?1")
+        .bind(var_name)
+        .execute(tx.as_mut())
+        .await
         .map_err(|err| err.to_string())?;
     Ok(())
 }
 
-pub fn delete_var_related_conn(conn: &Connection, var_name: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM dependencies WHERE varName = ?1", params![var_name])
+pub async fn delete_var_related_conn(
+    pool: &SqlitePool,
+    var_name: &str,
+) -> Result<(), String> {
+    sqlx::query("DELETE FROM dependencies WHERE varName = ?1")
+        .bind(var_name)
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
-    conn.execute("DELETE FROM scenes WHERE varName = ?1", params![var_name])
+    sqlx::query("DELETE FROM scenes WHERE varName = ?1")
+        .bind(var_name)
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
-    conn.execute("DELETE FROM vars WHERE varName = ?1", params![var_name])
+    sqlx::query("DELETE FROM vars WHERE varName = ?1")
+        .bind(var_name)
+        .execute(pool)
+        .await
         .map_err(|err| err.to_string())?;
     Ok(())
 }

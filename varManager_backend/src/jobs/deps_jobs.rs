@@ -1,4 +1,4 @@
-use crate::infra::db::{self, upsert_install_status};
+use crate::infra::db::upsert_install_status;
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
@@ -14,6 +14,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use sqlx::{Row, SqlitePool};
 
 #[derive(Deserialize)]
 struct SavesDepsArgs {}
@@ -65,10 +66,11 @@ fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDep
     reporter.log("SavesDeps start".to_string());
     reporter.progress(1);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
-    db.connection()
-        .execute("DELETE FROM savedepens", [])
+    handle
+        .block_on(sqlx::query("DELETE FROM savedepens").execute(pool))
         .map_err(|err| err.to_string())?;
 
     let mut files = collect_files(&vampath.join("Saves"), "json");
@@ -86,10 +88,16 @@ fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDep
                 .unwrap_or_else(|_| std::time::SystemTime::now()),
         );
         for dep in deps {
-            db.connection()
-                .execute(
-                    "INSERT INTO savedepens (varName, dependency, SavePath, ModiDate) VALUES (?1, ?2, ?3, ?4)",
-                    rusqlite::params![Option::<String>::None, dep, &save_path, &mod_time],
+            handle
+                .block_on(
+                    sqlx::query(
+                        "INSERT INTO savedepens (varName, dependency, SavePath, ModiDate) VALUES (?1, ?2, ?3, ?4)",
+                    )
+                    .bind(Option::<String>::None)
+                    .bind(dep)
+                    .bind(&save_path)
+                    .bind(&mod_time)
+                    .execute(pool),
                 )
                 .map_err(|err| err.to_string())?;
         }
@@ -100,8 +108,8 @@ fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDep
         }
     }
 
-    let mut dependencies = list_saved_dependencies(db.connection())?;
-    let dependencies2 = vars_dependencies(db.connection(), dependencies.clone())?;
+    let mut dependencies = handle.block_on(list_saved_dependencies(pool))?;
+    let dependencies2 = handle.block_on(vars_dependencies(pool, dependencies.clone()))?;
     dependencies.extend(dependencies2);
     dependencies = distinct(dependencies);
 
@@ -109,7 +117,13 @@ fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDep
     dependencies.retain(|dep| !installed.contains(dep));
 
     let (missing, installed_now) =
-        install_missing_dependencies(reporter, db.connection(), &varspath, &vampath, &dependencies)?;
+        handle.block_on(install_missing_dependencies(
+            reporter,
+            pool,
+            &varspath,
+            &vampath,
+            &dependencies,
+        ))?;
 
     reporter.set_result(
         serde_json::to_value(DepsJobResult {
@@ -154,10 +168,16 @@ fn log_deps_blocking(state: &AppState, reporter: &JobReporter, _args: LogDepsArg
     }
     dependencies = distinct(dependencies);
 
-    let db = db::open_default()?;
+    let pool = &state.db_pool;
+    let handle = tokio::runtime::Handle::current();
 
-    let (missing, installed_now) =
-        install_missing_dependencies(reporter, db.connection(), &varspath, &vampath, &dependencies)?;
+    let (missing, installed_now) = handle.block_on(install_missing_dependencies(
+        reporter,
+        pool,
+        &varspath,
+        &vampath,
+        &dependencies,
+    ))?;
 
     reporter.set_result(
         serde_json::to_value(DepsJobResult {
@@ -225,25 +245,26 @@ fn format_system_time(time: std::time::SystemTime) -> String {
     dt.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
-fn list_saved_dependencies(conn: &rusqlite::Connection) -> Result<Vec<String>, String> {
-    let mut stmt = conn
-        .prepare("SELECT dependency FROM savedepens")
-        .map_err(|err| err.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, Option<String>>(0))
+async fn list_saved_dependencies(pool: &SqlitePool) -> Result<Vec<String>, String> {
+    let rows = sqlx::query("SELECT dependency FROM savedepens")
+        .fetch_all(pool)
+        .await
         .map_err(|err| err.to_string())?;
     let mut deps = Vec::new();
     for row in rows {
-        if let Some(dep) = row.map_err(|err| err.to_string())? {
+        if let Some(dep) = row
+            .try_get::<Option<String>, _>(0)
+            .map_err(|err| err.to_string())?
+        {
             deps.push(dep);
         }
     }
     Ok(distinct(deps))
 }
 
-fn install_missing_dependencies(
+async fn install_missing_dependencies(
     reporter: &JobReporter,
-    conn: &rusqlite::Connection,
+    pool: &SqlitePool,
     varspath: &Path,
     vampath: &Path,
     dependencies: &[String],
@@ -251,13 +272,13 @@ fn install_missing_dependencies(
     let mut missing = Vec::new();
     let mut installed = Vec::new();
     for dep in dependencies {
-        let mut exist = resolve_var_exist_name(conn, dep)?;
+        let mut exist = resolve_var_exist_name(pool, dep).await?;
         if let Some(stripped) = exist.strip_suffix('$') {
             exist = stripped.to_string();
             missing.push(format!("{}$", dep));
         }
         if exist != "missing" {
-            match install_var(reporter, conn, varspath, vampath, &exist) {
+            match install_var(reporter, pool, varspath, vampath, &exist).await {
                 Ok(InstallOutcome::Installed) => installed.push(exist),
                 Ok(InstallOutcome::AlreadyInstalled) => {}
                 Err(err) => reporter.log(format!("install failed {} ({})", dep, err)),
@@ -271,9 +292,9 @@ fn install_missing_dependencies(
     Ok((missing, installed))
 }
 
-fn install_var(
+async fn install_var(
     reporter: &JobReporter,
-    conn: &rusqlite::Connection,
+    pool: &SqlitePool,
     varspath: &Path,
     vampath: &Path,
     var_name: &str,
@@ -287,7 +308,7 @@ fn install_var(
     let dest = resolve_var_file_path(varspath, var_name)?;
     winfs::create_symlink_file(&link_path, &dest)?;
     set_link_times(&link_path, &dest)?;
-    upsert_install_status(conn, var_name, true, false)?;
+    upsert_install_status(pool, var_name, true, false).await?;
     reporter.log(format!("{} installed", var_name));
     Ok(InstallOutcome::Installed)
 }

@@ -1,5 +1,6 @@
 use crate::jobs::job_channel::{JobEventSender, JobMap};
 use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
 use std::{
     env,
     path::PathBuf,
@@ -22,6 +23,25 @@ pub const APP_VERSION: &str = match option_env!("APP_VERSION") {
 };
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ImageCacheConfig {
+    pub disk_cache_size_mb: u32,
+    pub memory_cache_size_mb: u32,
+    pub cache_ttl_hours: u32,
+    pub enabled: bool,
+}
+
+impl Default for ImageCacheConfig {
+    fn default() -> Self {
+        Self {
+            disk_cache_size_mb: 500,
+            memory_cache_size_mb: 100,
+            cache_ttl_hours: 24,
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     pub(crate) listen_host: String,
     pub(crate) listen_port: u16,
@@ -35,6 +55,8 @@ pub struct Config {
     pub(crate) vam_exec: Option<String>,
     #[serde(default)]
     pub(crate) downloader_save_path: Option<String>,
+    #[serde(default)]
+    pub(crate) image_cache: ImageCacheConfig,
 }
 
 impl Default for Config {
@@ -48,6 +70,7 @@ impl Default for Config {
             vampath: None,
             vam_exec: Some("VaM (Desktop Mode).bat".to_string()),
             downloader_save_path: None,
+            image_cache: ImageCacheConfig::default(),
         }
     }
 }
@@ -60,6 +83,8 @@ pub struct AppState {
     pub(crate) job_counter: Arc<AtomicU64>,
     pub(crate) job_semaphore: Arc<RwLock<Arc<Semaphore>>>,
     pub(crate) job_tx: JobEventSender,
+    pub(crate) db_pool: SqlitePool,
+    pub(crate) image_cache: Arc<crate::services::image_cache::ImageCacheService>,
 }
 
 pub fn init_logging(

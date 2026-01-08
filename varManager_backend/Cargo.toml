@@ -11,13 +11,19 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
-rusqlite = { version = "0.38", features = ["bundled"] }
 regex = "1"
 zip = "7"
 walkdir = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 reqwest = { version = "0.13", features = ["blocking", "json"] }
 sysinfo = "0.37"
+moka = { version = "0.12", features = ["future"] }
+bytes = "1"
+sha2 = "0.10"
+hex = "0.4"
+dashmap = "6"
+thiserror = "2"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
