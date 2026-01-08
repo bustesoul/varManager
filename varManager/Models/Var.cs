@@ -22,6 +22,9 @@ namespace varManager.Models
         public string? Version { get; set; }
         
         public string? Description { get; set; }
+
+        [StringLength(500)]
+        public string VarPath { get; set; } = string.Empty;
         
         // Map to existing database columns
         public int? Morph { get; set; }
@@ -40,9 +43,6 @@ namespace varManager.Models
         public int? DependencyCnt { get; set; }
         
         // Compatibility properties for existing code (not mapped to database)
-        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-        public string? VarPath { get => ""; set { } } // Not available in existing schema
-        
         [System.ComponentModel.DataAnnotations.Schema.NotMapped]  
         public long? Filesize { get => null; set { } } // Not available in existing schema
         
