@@ -51,19 +51,6 @@ pub struct HubOptionsCache {
 static HUB_OPTIONS_CACHE: OnceLock<Mutex<Option<HubOptionsCache>>> = OnceLock::new();
 static HUB_INFO_CACHE: OnceLock<Mutex<Option<HubInfoCacheEntry>>> = OnceLock::new();
 
-#[allow(dead_code)]
-#[derive(Serialize)]
-pub struct HubFindPackagesResult {
-    pub packages: Vec<HubPackage>,
-}
-
-#[allow(dead_code)]
-#[derive(Serialize)]
-pub struct HubPackage {
-    pub filename: String,
-    pub download_url: Option<String>,
-}
-
 #[derive(Serialize)]
 pub struct HubDownloadList {
     pub download_urls: HashMap<String, String>,

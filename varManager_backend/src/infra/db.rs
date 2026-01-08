@@ -164,19 +164,6 @@ pub fn open_default() -> Result<Db, String> {
     Ok(db)
 }
 
-#[allow(dead_code)]
-pub fn var_exists(tx: &Transaction<'_>, var_name: &str) -> Result<bool, String> {
-    let exists: Option<i64> = tx
-        .query_row(
-            "SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1",
-            params![var_name],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|err| err.to_string())?;
-    Ok(exists.is_some())
-}
-
 pub fn var_exists_conn(conn: &Connection, var_name: &str) -> Result<bool, String> {
     let exists: Option<i64> = conn
         .query_row(

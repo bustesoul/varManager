@@ -32,7 +32,7 @@ pub fn spawn_job(state: AppState, id: u64, kind: String, args: Option<Value>) {
         send_job_started(&job_tx, id, format!("job started: {}", kind)).await;
 
         // Create JobReporter for this job
-        let reporter = JobReporter::new(id, kind.clone(), job_tx.clone());
+        let reporter = JobReporter::new(id, job_tx.clone());
 
         if let Err(err) = dispatch(&state, &reporter, &kind, args).await {
             send_job_failed(&job_tx, id, err).await;

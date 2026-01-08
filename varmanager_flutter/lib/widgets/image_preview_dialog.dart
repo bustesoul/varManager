@@ -97,9 +97,9 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
     }
     final scaleFactor = targetScale / currentScale;
     final next = transformationController.value.clone()
-      ..translate(localFocal.dx, localFocal.dy)
-      ..scale(scaleFactor)
-      ..translate(-localFocal.dx, -localFocal.dy);
+      ..translateByDouble(localFocal.dx, localFocal.dy, 0, 1)
+      ..scaleByDouble(scaleFactor, scaleFactor, scaleFactor, 1)
+      ..translateByDouble(-localFocal.dx, -localFocal.dy, 0, 1);
     transformationController.value = next;
   }
 

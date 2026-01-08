@@ -586,7 +586,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildToolbar(
     BuildContext context,
-    AsyncValue<VarsListResponse> _vars,
+    AsyncValue<VarsListResponse> _,
     VarsQueryParams query,
   ) {
     final isBusy = ref.watch(jobBusyProvider);
@@ -749,7 +749,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: _withTooltip(
                 'Choose the source used to detect missing dependencies.',
                 DropdownButtonFormField<String>(
-                  value: _missingDepsScope,
+                  initialValue: _missingDepsScope,
                   decoration: const InputDecoration(
                     labelText: 'Missing deps source',
                     border: OutlineInputBorder(),

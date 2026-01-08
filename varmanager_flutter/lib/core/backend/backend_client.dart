@@ -6,7 +6,6 @@ import '../models/config.dart';
 import '../models/extra_models.dart';
 import '../models/job_models.dart';
 import '../models/scene_models.dart';
-import '../models/stats.dart';
 import '../models/var_models.dart';
 import 'query_params.dart';
 
@@ -123,11 +122,6 @@ class BackendClient {
     final json = await _getJson('/hub/options', params);
     final items = json['items'] as List<dynamic>? ?? [];
     return items.map((item) => item.toString()).toList();
-  }
-
-  Future<StatsResponse> getStats() async {
-    final json = await _getJson('/stats');
-    return StatsResponse.fromJson(json);
   }
 
   Future<PackSwitchListResponse> listPackSwitches() async {

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 pub fn valid_file_name(name: &str) -> String {
@@ -39,10 +39,3 @@ pub fn open_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[allow(dead_code)]
-pub fn temp_dir_file(prefix: &str) -> Result<PathBuf, String> {
-    let mut path = std::env::temp_dir();
-    let filename = format!("{}_{}.txt", prefix, uuid::Uuid::new_v4());
-    path.push(filename);
-    Ok(path)
-}

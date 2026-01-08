@@ -49,14 +49,12 @@ pub fn create_job_channel() -> (JobEventSender, JobEventReceiver) {
 #[derive(Clone)]
 pub struct JobReporter {
     id: u64,
-    #[allow(dead_code)]
-    kind: String,
     tx: JobEventSender,
 }
 
 impl JobReporter {
-    pub fn new(id: u64, kind: String, tx: JobEventSender) -> Self {
-        Self { id, kind, tx }
+    pub fn new(id: u64, tx: JobEventSender) -> Self {
+        Self { id, tx }
     }
 
     /// Send a log line. Uses try_send - drops if channel is full.
