@@ -189,11 +189,14 @@ namespace varManager.Data
                 CreatorName = var != null ? var.CreatorName : null,
                 PackageName = var != null ? var.PackageName : null,
                 MetaDate = var != null ? var.MetaDate : null,
+                VarDate = var != null ? var.VarDate : null,
                 Version = var != null ? var.Version : null,
                 Installed = install != null && install.Installed,
                 Disabled = install != null && install.Disabled,
                 Hide = hideFav != null && hideFav.Hide,
-                Fav = hideFav != null && hideFav.Fav
+                Fav = hideFav != null && hideFav.Fav,
+                HideFav = hideFav != null ? (hideFav.Hide ? -1 : (hideFav.Fav ? 1 : 0)) : 0,
+                Location = install != null && install.Installed ? "installed" : "not Installed"
             };
     }
 
