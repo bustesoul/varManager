@@ -28,6 +28,9 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
   int? _previewSelectedIndex;
   int _previewWheelLastMs = 0;
   static const int _previewWheelCooldownMs = 350;
+  int _previewTapLastMs = 0;
+  int? _previewTapLastIndex;
+  static const int _previewTapDoubleMs = 300;
 
   @override
   void initState() {
@@ -125,6 +128,26 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
       _setPreviewPage(currentPage - 1, totalItems);
     }
     return false;
+  }
+
+  void _handlePreviewTap(
+    int index,
+    int totalItems,
+    void Function(int index) onOpenPreview,
+  ) {
+    if (totalItems <= 0) return;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final isDoubleTap = _previewTapLastIndex == index &&
+        nowMs - _previewTapLastMs <= _previewTapDoubleMs;
+    if (isDoubleTap) {
+      _previewTapLastMs = 0;
+      _previewTapLastIndex = null;
+      onOpenPreview(index);
+      return;
+    }
+    _previewTapLastMs = nowMs;
+    _previewTapLastIndex = index;
+    _selectPreviewIndex(index, totalItems);
   }
 
   void _selectPreviewIndex(int index, int totalItems) {
@@ -504,8 +527,11 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
             final isSelected = selectedIndex == globalIndex;
             final previewPath = _previewPath(item);
             return InkWell(
-              onTap: () => _selectPreviewIndex(globalIndex, totalItems),
-              onDoubleTap: () => onOpenPreview(globalIndex),
+              onTap: () => _handlePreviewTap(
+                globalIndex,
+                totalItems,
+                onOpenPreview,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
