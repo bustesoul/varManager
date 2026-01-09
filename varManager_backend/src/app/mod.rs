@@ -111,13 +111,13 @@ pub fn init_logging(
     let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
     let stdout_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
-        .event_format(SimpleEventFormat::new("Backend"))
+        .event_format(SimpleEventFormat::new_static("Backend"))
         .with_writer(stdout_writer)
         .with_filter(build_env_filter(base_level));
 
     let file_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
-        .event_format(SimpleEventFormat::new("File"))
+        .event_format(SimpleEventFormat::new_target("varManager_backend::"))
         .with_writer(file_writer)
         .with_filter(build_env_filter(base_level));
 
@@ -129,13 +129,39 @@ pub fn init_logging(
     (file_guard, stdout_guard)
 }
 
+enum TagStyle {
+    Static(&'static str),
+    Target { strip_prefix: &'static str },
+}
+
 struct SimpleEventFormat {
-    tag: &'static str,
+    tag_style: TagStyle,
 }
 
 impl SimpleEventFormat {
-    const fn new(tag: &'static str) -> Self {
-        Self { tag }
+    const fn new_static(tag: &'static str) -> Self {
+        Self {
+            tag_style: TagStyle::Static(tag),
+        }
+    }
+
+    const fn new_target(strip_prefix: &'static str) -> Self {
+        Self {
+            tag_style: TagStyle::Target { strip_prefix },
+        }
+    }
+
+    fn tag_for_event(&self, event: &Event<'_>) -> &'static str {
+        match self.tag_style {
+            TagStyle::Static(tag) => tag,
+            TagStyle::Target { strip_prefix } => {
+                let target = event.metadata().target();
+                match target.strip_prefix(strip_prefix) {
+                    Some(stripped) if !stripped.is_empty() => stripped,
+                    _ => target,
+                }
+            }
+        }
     }
 }
 
@@ -154,7 +180,8 @@ where
         write!(writer, "{} ", now.format("%Y-%m-%d %H:%M:%S"))?;
 
         let level = event.metadata().level();
-        write!(writer, "[{}][{}] ", level.as_str(), self.tag)?;
+        let tag = self.tag_for_event(event);
+        write!(writer, "[{}][{}] ", level.as_str(), tag)?;
 
         let mut visitor = MessageVisitor::default();
         event.record(&mut visitor);
