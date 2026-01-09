@@ -281,7 +281,7 @@ impl ImageCacheService {
     }
 
     pub async fn stats(&self) -> Result<CacheStats, ImageCacheError> {
-        let memory_entries = self.memory_cache.entry_count() as u64;
+        let memory_entries = self.memory_cache.entry_count();
         let memory_size = self.memory_cache.weighted_size();
         let disk_stats = self.disk_cache.stats().await?;
         Ok(CacheStats {
@@ -808,6 +808,7 @@ impl DiskCache {
         Ok(entries)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn insert_entry(
         &self,
         key: &str,

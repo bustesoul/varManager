@@ -15,6 +15,8 @@ use sqlx::{Row, SqlitePool};
 const HUB_API: &str = "https://hub.virtamate.com/citizenx/api.php";
 const HUB_PACKAGES: &str = "https://s3cdn.virtamate.com/data/packages.json";
 
+type DownloadUrlMaps = (HashMap<String, String>, HashMap<String, String>);
+
 #[derive(Deserialize)]
 pub struct HubFindPackagesArgs {
     pub packages: Vec<String>,
@@ -520,7 +522,7 @@ pub fn get_resource_detail(resource_id: &str) -> Result<Value, String> {
 
 pub fn find_packages_maps(
     packages: &[String],
-) -> Result<(HashMap<String, String>, HashMap<String, String>), String> {
+) -> Result<DownloadUrlMaps, String> {
     if packages.is_empty() {
         return Ok((HashMap::new(), HashMap::new()));
     }
@@ -604,13 +606,10 @@ fn fetch_hub_packages() -> Result<HashMap<String, String>, String> {
 }
 
 fn split_var_version(name: &str) -> Option<(&str, &str)> {
-    let mut parts = name.rsplitn(2, '.');
-    let version = parts.next()?;
-    let base = parts.next()?;
-    Some((base, version))
+    name.rsplit_once('.')
 }
 
-fn extract_resource_downloads(detail: &Value) -> (HashMap<String, String>, HashMap<String, String>) {
+fn extract_resource_downloads(detail: &Value) -> DownloadUrlMaps {
     let mut download_urls = HashMap::new();
     let mut download_urls_no_version = HashMap::new();
 

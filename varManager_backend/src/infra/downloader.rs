@@ -189,7 +189,7 @@ fn spawn_progress_task(
     completed: Arc<AtomicUsize>,
     failed: Arc<AtomicUsize>,
 ) -> tokio::task::JoinHandle<()> {
-    let log_step = (total + LOG_STEP_DIVISOR - 1) / LOG_STEP_DIVISOR;
+    let log_step = total.div_ceil(LOG_STEP_DIVISOR);
     tokio::spawn(async move {
         let mut ticker = interval(Duration::from_secs(PROGRESS_TICK_SECS));
         let mut next_log_at = log_step.max(1);
@@ -368,7 +368,7 @@ async fn resolve_filename(url: &str, client: &Client) -> Result<String, String> 
 fn finalize_download(url: &Url, save_dir: &Path, filename: &str) -> Result<(), String> {
     let downloaded_file_path = save_dir.join(
         url.path_segments()
-            .and_then(|s| s.last())
+            .and_then(|mut s| s.next_back())
             .unwrap_or("unknown_temp_file"),
     );
     let new_file_path = save_dir.join(filename);

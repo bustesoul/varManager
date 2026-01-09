@@ -351,10 +351,10 @@ fn find_link_path(root: &Path, var_name: &str) -> Option<PathBuf> {
     let target = format!("{}.var", var_name);
     let walker = WalkDir::new(root).follow_links(false).into_iter();
     for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            if entry.file_name().to_string_lossy().eq_ignore_ascii_case(&target) {
-                return Some(entry.path().to_path_buf());
-            }
+        if entry.file_type().is_file()
+            && entry.file_name().to_string_lossy().eq_ignore_ascii_case(&target)
+        {
+            return Some(entry.path().to_path_buf());
         }
     }
     None

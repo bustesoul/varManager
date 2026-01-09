@@ -1238,15 +1238,14 @@ pub async fn list_scenes(
                 }
             }
             if let Some(creator) = creator_filter.as_ref() {
-                if !creator.is_empty() {
-                    if item
+                if !creator.is_empty()
+                    && item
                         .creator_name
                         .as_ref()
                         .map(|c| c != creator)
                         .unwrap_or(true)
-                    {
-                        return false;
-                    }
+                {
+                    return false;
                 }
             }
             if let Some(search) = search_filter.as_ref() {
@@ -1695,7 +1694,7 @@ pub async fn list_packswitch(
     if !switches.iter().any(|name| name.eq_ignore_ascii_case("default")) {
         switches.push("default".to_string());
     }
-    switches.sort_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
+    switches.sort_by_key(|a| a.to_ascii_lowercase());
 
     let addon_path = crate::infra::paths::addon_packages_dir(&vampath);
     let current = if let Ok(target) = crate::infra::winfs::read_link_target(&addon_path) {
@@ -2001,7 +2000,7 @@ pub async fn get_preview(
     Ok(resp)
 }
 
-fn safe_join(base: &PathBuf, relative: &str) -> Result<PathBuf, String> {
+fn safe_join(base: &StdPath, relative: &str) -> Result<PathBuf, String> {
     let rel = PathBuf::from(relative);
     for comp in rel.components() {
         match comp {

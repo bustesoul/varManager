@@ -587,7 +587,7 @@ fn process_var_file(
     let reader = BufReader::new(file);
     let mut zip = ZipArchive::new(reader).map_err(|err| ProcessError::Io(err.to_string()))?;
 
-    let meta_json = read_meta_json(&mut zip).map_err(|err| ProcessError::InvalidPackage(err))?;
+    let meta_json = read_meta_json(&mut zip).map_err(ProcessError::InvalidPackage)?;
     let meta_date = meta_json.meta_date;
     let dependencies = extract_dependencies(dependency_regex, &meta_json.contents);
 
@@ -628,12 +628,10 @@ fn process_var_file(
                     is_loadable: true,
                 });
             }
-        } else {
-            if is_plugin_cs(&name_lc) {
-                counts.plugin_cs += 1;
-            } else if is_plugin_cslist(&name_lc) {
-                counts.plugin_cslist += 1;
-            }
+        } else if is_plugin_cs(&name_lc) {
+            counts.plugin_cs += 1;
+        } else if is_plugin_cslist(&name_lc) {
+            counts.plugin_cslist += 1;
         }
     }
 

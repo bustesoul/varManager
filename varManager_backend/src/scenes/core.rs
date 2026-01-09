@@ -801,6 +801,7 @@ fn load_core_control(cache_root: &Path) -> Result<Value, String> {
     serde_json::from_str(&contents).map_err(|err| err.to_string())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn save_preset(
     state: &AppState,
     var_name: &str,
@@ -905,26 +906,20 @@ fn save_preset(
 
         for storable in storables {
             let id = storable.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            if clothing {
-                if starts_with_any(id, &clothing_ids) {
-                    push_storable(&mut json_preset, storable.clone());
-                }
+            if clothing && starts_with_any(id, &clothing_ids) {
+                push_storable(&mut json_preset, storable.clone());
             }
             if starts_with_any(id, &clothing_ids) {
                 push_storable(&mut json_clothing, storable.clone());
             }
-            if hair {
-                if starts_with_any(id, &hair_ids) {
-                    push_storable(&mut json_preset, storable.clone());
-                }
+            if hair && starts_with_any(id, &hair_ids) {
+                push_storable(&mut json_preset, storable.clone());
             }
             if starts_with_any(id, &hair_ids) {
                 push_storable(&mut json_hair, storable.clone());
             }
-            if skin {
-                if skin_ids.contains(&id) {
-                    push_storable(&mut json_preset, storable.clone());
-                }
+            if skin && skin_ids.contains(&id) {
+                push_storable(&mut json_preset, storable.clone());
             }
             if skin_ids.contains(&id) {
                 push_storable(&mut json_skin, storable.clone());
@@ -1034,6 +1029,7 @@ fn save_pose_preset(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn save_animation_preset(
     state: &AppState,
     _var_name: &str,
@@ -1218,6 +1214,7 @@ pub(crate) fn set_hide_fav(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_loadscene(
     state: &AppState,
     reporter: &JobReporter,
@@ -1235,22 +1232,22 @@ fn build_loadscene(
         .ok_or_else(|| "resources required".to_string())?;
     let mut delete_temp = Vec::new();
     for resource in resources.iter_mut() {
-        if !resource.get("merge").is_some() {
+        if resource.get("merge").is_none() {
             resource["merge"] = Value::String(merge.to_string().to_ascii_lowercase());
         }
-        if !resource.get("characterGender").is_some() {
+        if resource.get("characterGender").is_none() {
             resource["characterGender"] = Value::String(character_gender.to_string());
         }
-        if !resource.get("ignoreGender").is_some() {
+        if resource.get("ignoreGender").is_none() {
             resource["ignoreGender"] = Value::String(ignore_gender.to_string().to_ascii_lowercase());
         }
-        if !resource.get("personOrder").is_some() {
+        if resource.get("personOrder").is_none() {
             resource["personOrder"] = Value::String(person_order.to_string());
         }
-        if delete_temp.is_empty() {
-            if resource.get("type").and_then(|v| v.as_str()) == Some("scenes") {
-                delete_temp = collect_temp_links(vampath)?;
-            }
+        if delete_temp.is_empty()
+            && resource.get("type").and_then(|v| v.as_str()) == Some("scenes")
+        {
+            delete_temp = collect_temp_links(vampath)?;
         }
     }
 

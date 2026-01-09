@@ -16,7 +16,7 @@ fn is_valid_filename_char(c: char) -> bool {
 }
 
 pub fn normalize_entry_name(name: &str) -> String {
-    name.replace('\\', "_").replace('/', "_")
+    name.replace(['\\', '/'], "_")
 }
 
 pub fn open_explorer_select(path: &Path) -> Result<(), String> {

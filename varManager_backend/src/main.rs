@@ -33,14 +33,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let db_pool = db::open_default_pool()
         .await
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        .map_err(std::io::Error::other)?;
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let (job_tx, job_rx) = create_job_channel();
     let jobs = create_job_map();
     let image_cache = Arc::new(
         ImageCacheService::new(config.image_cache.clone(), db_pool.clone())
             .await
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?,
+            .map_err(std::io::Error::other)?,
     );
     image_cache.clone().start_maintenance();
     let state = AppState {
