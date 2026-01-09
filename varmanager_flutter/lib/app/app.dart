@@ -10,14 +10,15 @@ import '../widgets/job_log_panel.dart';
 import 'providers.dart';
 import 'theme.dart';
 
-class VarManagerApp extends StatelessWidget {
+class VarManagerApp extends ConsumerWidget {
   const VarManagerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeType = ref.watch(themeProvider);
     return MaterialApp(
       title: 'varManager',
-      theme: AppTheme.build(),
+      theme: AppTheme.build(themeType),
       debugShowCheckedModeBanner: false,
       home: const AppShell(),
     );
@@ -52,6 +53,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     try {
       // baseUrl is already resolved and injected in main.dart via overrideWithValue
       await ref.read(backendProcessManagerProvider).start();
+      if (!mounted) return;
+      // Load theme from config after backend is ready
+      await ref.read(themeProvider.notifier).loadFromConfig();
       if (!mounted) return;
       setState(() {
         _ready = true;
@@ -107,15 +111,26 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF2EEE9), Color(0xFFE9E2D9)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: isCompact
+      body: Builder(
+        builder: (context) {
+          final colorScheme = Theme.of(context).colorScheme;
+          final isDark = colorScheme.brightness == Brightness.dark;
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [colorScheme.surface, colorScheme.surface.withValues(alpha: 0.95)]
+                    : [
+                        Theme.of(context).scaffoldBackgroundColor,
+                        HSLColor.fromColor(Theme.of(context).scaffoldBackgroundColor)
+                            .withLightness(0.88)
+                            .toColor(),
+                      ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: isCompact
             ? Column(
                 children: [
                   Expanded(
@@ -181,6 +196,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                 ],
               ),
+          );
+        },
       ),
     );
   }

@@ -218,6 +218,7 @@ pub(crate) struct UpdateConfigRequest {
     vam_exec: Option<String>,
     downloader_save_path: Option<String>,
     image_cache: Option<crate::app::ImageCacheConfig>,
+    ui_theme: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -603,6 +604,9 @@ fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Con
     }
     if let Some(image_cache) = req.image_cache {
         next.image_cache = image_cache;
+    }
+    if req.ui_theme.is_some() {
+        next.ui_theme = normalize_optional(req.ui_theme);
     }
     Ok(next)
 }

@@ -549,6 +549,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 1200;
+                    final tall = constraints.maxHeight >= 600;
                     final list = _buildList(context, data, selected, query, focusedVar);
                     const preview = PreviewPanel();
                     final packSwitch = _buildPackSwitchPanel(context);
@@ -560,6 +561,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                           Expanded(flex: 2, child: list),
                           const SizedBox(width: 12),
                           Expanded(flex: 3, child: preview),
+                        ],
+                      );
+                    }
+                    // 小屏布局：高度不足时隐藏Preview，只显示VarList
+                    if (!tall) {
+                      return Column(
+                        children: [
+                          _buildCompactModeHint(context),
+                          const SizedBox(height: 8),
+                          Expanded(child: list),
                         ],
                       );
                     }
@@ -983,11 +994,23 @@ class _HomePageState extends ConsumerState<HomePage> {
                     trailing: Wrap(
                       spacing: 8,
                       children: [
-                        Chip(
-                          label: Text(item.installed ? 'Installed' : 'Not installed'),
-                          backgroundColor: item.installed
-                              ? Colors.green.shade100
-                              : Colors.grey.shade200,
+                        Builder(
+                          builder: (context) {
+                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            return Chip(
+                              label: Text(
+                                item.installed ? 'Installed' : 'Not installed',
+                                style: TextStyle(
+                                  color: isDark
+                                      ? (item.installed ? Colors.green.shade200 : Colors.grey.shade300)
+                                      : (item.installed ? Colors.green.shade800 : Colors.grey.shade700),
+                                ),
+                              ),
+                              backgroundColor: isDark
+                                  ? (item.installed ? Colors.green.shade900 : Colors.grey.shade800)
+                                  : (item.installed ? Colors.green.shade100 : Colors.grey.shade200),
+                            );
+                          },
                         ),
                         TextButton(
                           onPressed: () {
@@ -1467,6 +1490,35 @@ class _HomePageState extends ConsumerState<HomePage> {
           underline: const SizedBox.shrink(),
         ),
       ],
+    );
+  }
+
+  Widget _buildCompactModeHint(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 18,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Window too small. Enlarge window to show preview panel.',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

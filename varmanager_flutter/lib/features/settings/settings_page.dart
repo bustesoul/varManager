@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app/providers.dart';
+import '../../app/theme.dart';
 import '../../core/app_version.dart';
 import '../../core/models/config.dart';
 
@@ -148,6 +149,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         key: _formKey,
         child: ListView(
           children: [
+            _section(
+              title: 'UI',
+              child: _buildThemeSelector(),
+            ),
+            const SizedBox(height: 12),
             _section(
               title: 'Listen & Logs',
               child: Column(
@@ -296,6 +302,145 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           Text(value),
         ],
+      ),
+    );
+  }
+
+  Widget _buildThemeSelector() {
+    final currentTheme = ref.watch(themeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Theme', style: TextStyle(fontSize: 14)),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: AppThemeType.values.map((theme) {
+            final isSelected = currentTheme == theme;
+            return _ThemeCard(
+              theme: theme,
+              isSelected: isSelected,
+              onTap: () {
+                ref.read(themeProvider.notifier).setTheme(theme);
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _ThemeCard extends StatelessWidget {
+  const _ThemeCard({
+    required this.theme,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final AppThemeType theme;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  Color get _previewColor {
+    switch (theme) {
+      case AppThemeType.defaultTheme:
+        return const Color(0xFF1F5E5B);
+      case AppThemeType.ocean:
+        return const Color(0xFF1565C0);
+      case AppThemeType.forest:
+        return const Color(0xFF2E7D32);
+      case AppThemeType.rose:
+        return const Color(0xFFC2185B);
+      case AppThemeType.dark:
+        return const Color(0xFF121212);
+    }
+  }
+
+  Color get _secondaryColor {
+    switch (theme) {
+      case AppThemeType.defaultTheme:
+        return const Color(0xFFB86B2B);
+      case AppThemeType.ocean:
+        return const Color(0xFF0288D1);
+      case AppThemeType.forest:
+        return const Color(0xFF558B2F);
+      case AppThemeType.rose:
+        return const Color(0xFFE91E63);
+      case AppThemeType.dark:
+        return const Color(0xFF80CBC4);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkTheme = theme == AppThemeType.dark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 120,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isDarkTheme ? _previewColor : _previewColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: _previewColor, width: 3),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: _secondaryColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Icon(
+                theme.icon,
+                size: 20,
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                theme.label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

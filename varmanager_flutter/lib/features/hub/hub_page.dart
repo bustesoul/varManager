@@ -743,7 +743,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                       initiallyExpanded: true,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
                           child: Column(
                             children: [
                               DropdownButtonFormField<String>(
@@ -802,7 +802,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                       initiallyExpanded: false,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
                           child: Column(
                             children: [
                               DropdownButtonFormField<String>(
@@ -883,7 +883,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                       initiallyExpanded: false,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
                           child: Column(
                             children: [
                               if (options?.sorts != null && options!.sorts.isNotEmpty)
@@ -1027,10 +1027,12 @@ class _HubPageState extends ConsumerState<HubPage> {
                           : () => _refreshResources(force: true),
                       child: const Text('Refresh'),
                     ),
+                    const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: _scanMissing,
                       child: const Text('Scan Missing'),
                     ),
+                    const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: _scanUpdates,
                       child: const Text('Scan Updates'),
@@ -1049,6 +1051,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                             },
                       child: const Text('Download All'),
                     ),
+                    const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: downloadUrls.isEmpty
                           ? null
@@ -1059,6 +1062,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                             },
                       child: const Text('Copy Links'),
                     ),
+                    const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: downloadUrls.isEmpty
                           ? null
@@ -1225,16 +1229,30 @@ class _HubPageState extends ConsumerState<HubPage> {
                         children: [
                           ActionChip(
                             label: Text(payType, style: const TextStyle(fontSize: 12)),
+                            avatar: const Icon(Icons.paid, size: 14),
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .tertiaryContainer
+                                .withOpacity(0.6),
                             visualDensity: VisualDensity.compact,
                             onPressed: payType == '-' ? null : () => _applyQuickFilter(payType: payType),
                           ),
                           ActionChip(
                             label: Text(type, style: const TextStyle(fontSize: 12)),
+                            avatar: const Icon(Icons.category, size: 14),
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.outlineVariant,
+                            ),
                             visualDensity: VisualDensity.compact,
                             onPressed: type == '-' ? null : () => _applyQuickFilter(category: type),
                           ),
                           ActionChip(
                             label: Text(username, style: const TextStyle(fontSize: 12)),
+                            avatar: const Icon(Icons.person, size: 14),
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .surfaceVariant
+                                .withOpacity(0.6),
                             visualDensity: VisualDensity.compact,
                             onPressed: () => _applyQuickFilter(creator: username),
                           ),

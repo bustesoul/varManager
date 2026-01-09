@@ -61,6 +61,8 @@ pub struct Config {
     pub(crate) downloader_save_path: Option<String>,
     #[serde(default)]
     pub(crate) image_cache: ImageCacheConfig,
+    #[serde(default)]
+    pub(crate) ui_theme: Option<String>,
 }
 
 impl Default for Config {
@@ -75,6 +77,7 @@ impl Default for Config {
             vam_exec: Some("VaM (Desktop Mode).bat".to_string()),
             downloader_save_path: None,
             image_cache: ImageCacheConfig::default(),
+            ui_theme: None,
         }
     }
 }

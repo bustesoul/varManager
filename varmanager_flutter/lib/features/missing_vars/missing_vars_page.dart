@@ -578,18 +578,22 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                   },
                             child: const Text('Google Search'),
                           ),
+                          const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _downloadSelected,
                             child: const Text('Download Selected'),
                           ),
+                          const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _fetchDownload,
                             child: const Text('Fetch Downloads'),
                           ),
+                          const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _downloadAll,
                             child: const Text('Download All'),
                           ),
+                          const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _createLinks,
                             child: const Text('Create Links'),
@@ -599,6 +603,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             onPressed: _saveMap,
                             child: const Text('Save Map'),
                           ),
+                          const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _loadMap,
                             child: const Text('Load Map'),
