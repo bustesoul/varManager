@@ -4,6 +4,13 @@
 * text=auto
 
 ###############################################################################
+# Keep Flutter generated plugin files consistent across OS.
+###############################################################################
+varmanager_flutter/**/generated_plugin_registrant.* text eol=lf
+varmanager_flutter/**/generated_plugins.cmake text eol=lf
+varmanager_flutter/**/GeneratedPluginRegistrant.swift text eol=lf
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by
