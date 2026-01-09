@@ -104,6 +104,7 @@ class HubPageSnapshot {
     required this.downloadUrlById,
     required this.downloadByVar,
     required this.downloadByUrl,
+    required this.downloadSizeByUrl,
   });
 
   final DateTime savedAt;
@@ -127,6 +128,7 @@ class HubPageSnapshot {
   final Map<String, String> downloadUrlById;
   final Map<String, String> downloadByVar;
   final Map<String, String> downloadByUrl;
+  final Map<String, int> downloadSizeByUrl;
 }
 
 const Duration _hubSnapshotTtl = Duration(minutes: 5);
@@ -170,6 +172,7 @@ class _HubPageState extends ConsumerState<HubPage> {
 
   final Map<String, String> _downloadByVar = {};
   final Map<String, String> _downloadByUrl = {};
+  final Map<String, int> _downloadSizeByUrl = {};
 
   static const int _tagChipLimit = 4;
   static const Duration _resourcesCacheTtl = Duration(seconds: 30);
@@ -278,6 +281,9 @@ class _HubPageState extends ConsumerState<HubPage> {
     _downloadByUrl
       ..clear()
       ..addAll(snapshot.downloadByUrl);
+    _downloadSizeByUrl
+      ..clear()
+      ..addAll(snapshot.downloadSizeByUrl);
     _resourcesCache.clear();
     _loadingInfo = false;
     _loadingResources = false;
@@ -311,6 +317,7 @@ class _HubPageState extends ConsumerState<HubPage> {
       downloadUrlById: Map<String, String>.from(_downloadUrlById),
       downloadByVar: Map<String, String>.from(_downloadByVar),
       downloadByUrl: Map<String, String>.from(_downloadByUrl),
+      downloadSizeByUrl: Map<String, int>.from(_downloadSizeByUrl),
     );
   }
 
@@ -589,23 +596,50 @@ class _HubPageState extends ConsumerState<HubPage> {
   void _mergeDownloads(Map<String, dynamic> payload) {
     final direct = payload['download_urls'] as Map<String, dynamic>? ?? {};
     final noVersion = payload['download_urls_no_version'] as Map<String, dynamic>? ?? {};
+    final sizesRaw = payload['download_sizes'] as Map<String, dynamic>? ?? {};
+    final sizes = <String, int>{};
+    for (final entry in sizesRaw.entries) {
+      final size = _parseDownloadSize(entry.value);
+      if (size != null && size > 0) {
+        sizes[entry.key.toString()] = size;
+      }
+    }
     for (final entry in direct.entries) {
-      _addDownloadUrl(entry.key.toString(), entry.value?.toString() ?? '');
+      final url = entry.value?.toString() ?? '';
+      _addDownloadUrl(entry.key.toString(), url, size: sizes[url]);
     }
     for (final entry in noVersion.entries) {
-      _addDownloadUrl(entry.key.toString(), entry.value?.toString() ?? '');
+      final url = entry.value?.toString() ?? '';
+      _addDownloadUrl(entry.key.toString(), url, size: sizes[url]);
     }
     if (!mounted) return;
     setState(() {});
   }
 
-  void _addDownloadUrl(String varName, String url) {
+  int? _parseDownloadSize(dynamic value) {
+    if (value == null) return null;
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value.toString());
+  }
+
+  void _updateDownloadSize(String url, int? size) {
+    if (size == null || size <= 0) return;
+    final existing = _downloadSizeByUrl[url];
+    if (existing == null || size > existing) {
+      _downloadSizeByUrl[url] = size;
+    }
+  }
+
+  void _addDownloadUrl(String varName, String url, {int? size}) {
     final cleanVar = varName.trim();
     final cleanUrl = url.trim();
     if (cleanVar.isEmpty || cleanUrl.isEmpty || cleanUrl == 'null') return;
     final existingUrl = _downloadByVar[cleanVar];
     if (existingUrl != null && existingUrl.toLowerCase() != cleanUrl.toLowerCase()) {
       _downloadByUrl.remove(existingUrl);
+      _downloadSizeByUrl.remove(existingUrl);
     }
     final existingName = _downloadByUrl[cleanUrl];
     if (existingName != null && existingName.toLowerCase() != cleanVar.toLowerCase()) {
@@ -615,11 +649,15 @@ class _HubPageState extends ConsumerState<HubPage> {
         _downloadByVar.remove(existingName);
         _downloadByVar[cleanVar] = cleanUrl;
         _downloadByUrl[cleanUrl] = cleanVar;
+        _updateDownloadSize(cleanUrl, size);
+      } else {
+        _updateDownloadSize(cleanUrl, size);
       }
       return;
     }
     _downloadByVar[cleanVar] = cleanUrl;
     _downloadByUrl[cleanUrl] = cleanVar;
+    _updateDownloadSize(cleanUrl, size);
   }
 
   bool _isVersionedName(String name) {
@@ -776,10 +814,11 @@ class _HubPageState extends ConsumerState<HubPage> {
       if (entry is! Map) continue;
       final filename = entry['filename']?.toString() ?? '';
       final url = entry['urlHosted']?.toString() ?? '';
+      final size = _parseDownloadSize(entry['file_size']);
       if (filename.isEmpty || url.isEmpty || url == 'null') continue;
       if (!filename.toLowerCase().endsWith('.var')) continue;
       final baseName = filename.substring(0, filename.length - 4);
-      _addDownloadUrl(baseName, url);
+      _addDownloadUrl(baseName, url, size: size);
     }
     if (!mounted) return;
     setState(() {});
@@ -920,6 +959,25 @@ class _HubPageState extends ConsumerState<HubPage> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  int _totalDownloadSizeBytes() {
+    var total = 0;
+    for (final url in _downloadByUrl.keys) {
+      total += _downloadSizeByUrl[url] ?? 0;
+    }
+    return total;
+  }
+
+  String _formatTotalDownloadSize(int bytes) {
+    const bytesPerMb = 1024 * 1024;
+    const mbPerGb = 1024;
+    final mb = bytes / bytesPerMb;
+    if (mb >= 1000) {
+      final gb = mb / mbPerGb;
+      return '${gb.toStringAsFixed(1)} GB';
+    }
+    return '${mb.toStringAsFixed(0)} MB';
+  }
+
   @override
   Widget build(BuildContext context) {
     final options = _info;
@@ -927,6 +985,8 @@ class _HubPageState extends ConsumerState<HubPage> {
         ? null
         : (_sortPrimary.isEmpty ? options.sorts.first : _sortPrimary);
     final downloadUrls = _downloadByUrl.keys.toList();
+    final totalSizeBytes = _totalDownloadSizeBytes();
+    final totalSizeLabel = _formatTotalDownloadSize(totalSizeBytes);
     final visibleResources = _filterResourcesByTags(_resources);
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -1275,7 +1335,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                     const Text('Download List',
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-                    Text('Total ${downloadUrls.length} links'),
+                    Text('Total ${downloadUrls.length} links, Total $totalSizeLabel'),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: downloadUrls.isEmpty
@@ -1304,6 +1364,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                               setState(() {
                                 _downloadByVar.clear();
                                 _downloadByUrl.clear();
+                                _downloadSizeByUrl.clear();
                               });
                             },
                       child: const Text('Clear List'),

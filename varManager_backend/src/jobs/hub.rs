@@ -10,12 +10,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 use scraper::{Html, Selector};
-use sqlx::{Row, SqlitePool};
+use sqlx::{QueryBuilder, Row, SqlitePool};
 
 const HUB_API: &str = "https://hub.virtamate.com/citizenx/api.php";
 const HUB_PACKAGES: &str = "https://s3cdn.virtamate.com/data/packages.json";
 
 type DownloadUrlMaps = (HashMap<String, String>, HashMap<String, String>);
+type DownloadUrlMapsWithSizes =
+    (HashMap<String, String>, HashMap<String, String>, HashMap<String, i64>);
 
 #[derive(Deserialize)]
 pub struct HubFindPackagesArgs {
@@ -57,6 +59,7 @@ static HUB_INFO_CACHE: OnceLock<Mutex<Option<HubInfoCacheEntry>>> = OnceLock::ne
 pub struct HubDownloadList {
     pub download_urls: HashMap<String, String>,
     pub download_urls_no_version: HashMap<String, String>,
+    pub download_sizes: HashMap<String, i64>,
 }
 
 #[derive(Deserialize)]
@@ -148,7 +151,7 @@ pub async fn run_hub_resources_job(
 }
 
 pub async fn run_hub_resource_detail_job(
-    _state: AppState,
+    state: AppState,
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
@@ -157,11 +160,19 @@ pub async fn run_hub_resource_detail_job(
         let args: HubResourceDetailArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
         let detail = get_resource_detail(&args.resource_id)?;
-        let (download_urls, download_urls_no_version) = extract_resource_downloads(&detail);
+        let (mut download_urls, _, mut download_sizes) = extract_resource_downloads(&detail);
+        let handle = tokio::runtime::Handle::current();
+        handle.block_on(filter_existing_downloads(
+            &state.db_pool,
+            &mut download_urls,
+            &mut download_sizes,
+        ))?;
+        let download_urls_no_version = build_download_urls_no_version(&download_urls);
         reporter.set_result(
             serde_json::to_value(HubDownloadList {
                 download_urls,
                 download_urls_no_version,
+                download_sizes,
             })
             .map_err(|err| err.to_string())?,
         );
@@ -205,6 +216,7 @@ pub async fn run_hub_find_packages_job(
             serde_json::to_value(HubDownloadList {
                 download_urls,
                 download_urls_no_version,
+                download_sizes: HashMap::new(),
             })
             .map_err(|err| err.to_string())?,
         );
@@ -236,6 +248,7 @@ fn missing_scan_blocking(
         serde_json::to_value(HubDownloadList {
             download_urls,
             download_urls_no_version,
+            download_sizes: HashMap::new(),
         })
         .map_err(|err| err.to_string())?,
     );
@@ -285,6 +298,7 @@ fn updates_scan_blocking(state: &AppState, reporter: &JobReporter) -> Result<(),
         serde_json::to_value(HubDownloadList {
             download_urls,
             download_urls_no_version,
+            download_sizes: HashMap::new(),
         })
         .map_err(|err| err.to_string())?,
     );
@@ -609,14 +623,41 @@ fn split_var_version(name: &str) -> Option<(&str, &str)> {
     name.rsplit_once('.')
 }
 
-fn extract_resource_downloads(detail: &Value) -> DownloadUrlMaps {
+fn parse_file_size(value: Option<&Value>) -> Option<i64> {
+    let value = value?;
+    if let Some(size) = value.as_i64() {
+        return Some(size);
+    }
+    value
+        .as_str()
+        .and_then(|size| size.parse::<i64>().ok())
+}
+
+fn record_download_size(
+    download_sizes: &mut HashMap<String, i64>,
+    url: &str,
+    size: Option<i64>,
+) {
+    let Some(size) = size else { return };
+    if size <= 0 {
+        return;
+    }
+    let entry = download_sizes.entry(url.to_string()).or_insert(size);
+    if size > *entry {
+        *entry = size;
+    }
+}
+
+fn extract_resource_downloads(detail: &Value) -> DownloadUrlMapsWithSizes {
     let mut download_urls = HashMap::new();
     let mut download_urls_no_version = HashMap::new();
+    let mut download_sizes = HashMap::new();
 
     if let Some(hubfiles) = detail.get("hubFiles").and_then(|v| v.as_array()) {
         for hubfile in hubfiles {
             let filename = hubfile.get("filename").and_then(|v| v.as_str());
             let url = hubfile.get("urlHosted").and_then(|v| v.as_str());
+            let size = parse_file_size(hubfile.get("file_size"));
             if let (Some(name), Some(url)) = (filename, url) {
                 if !url.is_empty() && url != "null" && name.ends_with(".var") {
                     let basename = name.trim_end_matches(".var").to_string();
@@ -624,6 +665,7 @@ fn extract_resource_downloads(detail: &Value) -> DownloadUrlMaps {
                     if let Some((base, _)) = split_var_version(&basename) {
                         download_urls_no_version.insert(base.to_string(), url.to_string());
                     }
+                    record_download_size(&mut download_sizes, url, size);
                 }
             }
         }
@@ -635,21 +677,86 @@ fn extract_resource_downloads(detail: &Value) -> DownloadUrlMaps {
                 for dep in dep_array {
                     let filename = dep.get("filename").and_then(|v| v.as_str());
                     let url = dep.get("downloadUrl").and_then(|v| v.as_str());
+                    let size = parse_file_size(dep.get("file_size"));
                     if let (Some(name), Some(url)) = (filename, url) {
-                        if !url.is_empty() && url != "null" && name.ends_with(".var") {
-                            let basename = name.trim_end_matches(".var").to_string();
-                            download_urls.insert(basename.clone(), url.to_string());
-                            if let Some((base, _)) = split_var_version(&basename) {
-                                download_urls_no_version.insert(base.to_string(), url.to_string());
-                            }
+                        if url.is_empty() || url == "null" {
+                            continue;
                         }
+                        let basename = name.trim_end_matches(".var").trim();
+                        if basename.is_empty() {
+                            continue;
+                        }
+                        let basename = basename.to_string();
+                        download_urls.insert(basename.clone(), url.to_string());
+                        if let Some((base, _)) = split_var_version(&basename) {
+                            download_urls_no_version.insert(base.to_string(), url.to_string());
+                        }
+                        record_download_size(&mut download_sizes, url, size);
                     }
                 }
             }
         }
     }
 
-    (download_urls, download_urls_no_version)
+    (download_urls, download_urls_no_version, download_sizes)
+}
+
+fn build_download_urls_no_version(
+    download_urls: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut download_urls_no_version = HashMap::new();
+    for (name, url) in download_urls {
+        if let Some((base, _)) = split_var_version(name) {
+            download_urls_no_version.insert(base.to_string(), url.to_string());
+        }
+    }
+    download_urls_no_version
+}
+
+async fn filter_existing_downloads(
+    pool: &SqlitePool,
+    download_urls: &mut HashMap<String, String>,
+    download_sizes: &mut HashMap<String, i64>,
+) -> Result<(), String> {
+    if download_urls.is_empty() {
+        download_sizes.clear();
+        return Ok(());
+    }
+    let names: Vec<String> = download_urls.keys().cloned().collect();
+    let mut builder = QueryBuilder::new("SELECT varName FROM vars WHERE varName IN (");
+    let mut separated = builder.separated(", ");
+    for name in &names {
+        separated.push_bind(name);
+    }
+    separated.push_unseparated(")");
+    let rows = builder
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(|err| err.to_string())?;
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let mut existing = HashSet::new();
+    for row in rows {
+        let name: Option<String> = row.try_get(0).map_err(|err| err.to_string())?;
+        if let Some(name) = name {
+            existing.insert(name);
+        }
+    }
+    for name in existing {
+        download_urls.remove(&name);
+    }
+    if download_urls.is_empty() {
+        download_sizes.clear();
+        return Ok(());
+    }
+    let mut allowed = HashSet::new();
+    for url in download_urls.values() {
+        allowed.insert(url.to_string());
+    }
+    download_sizes.retain(|url, _| allowed.contains(url));
+    Ok(())
 }
 
 fn hub_headers() -> header::HeaderMap {
