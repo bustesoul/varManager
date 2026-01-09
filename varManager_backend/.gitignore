@@ -20,3 +20,5 @@ Thumbs.db
 # Application specific
 config.json
 *.log
+
+tmp/

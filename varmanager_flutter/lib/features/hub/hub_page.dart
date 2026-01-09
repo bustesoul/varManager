@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
-import '../../core/utils/debounce.dart';
 import '../../widgets/lazy_dropdown_field.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/image_preview_dialog.dart';
@@ -82,6 +81,57 @@ class HubResourcesCacheEntry {
   final DateTime timestamp;
 }
 
+class HubPageSnapshot {
+  HubPageSnapshot({
+    required this.savedAt,
+    required this.info,
+    required this.resources,
+    required this.totalFound,
+    required this.totalPages,
+    required this.page,
+    required this.perPage,
+    required this.location,
+    required this.payType,
+    required this.category,
+    required this.creator,
+    required this.selectedTags,
+    required this.appliedTags,
+    required this.sortPrimary,
+    required this.sortSecondary,
+    required this.searchText,
+    required this.repoStatusById,
+    required this.repoPackageById,
+    required this.downloadUrlById,
+    required this.downloadByVar,
+    required this.downloadByUrl,
+  });
+
+  final DateTime savedAt;
+  final HubInfo? info;
+  final List<Map<String, dynamic>> resources;
+  final int totalFound;
+  final int totalPages;
+  final int page;
+  final int perPage;
+  final String location;
+  final String payType;
+  final String category;
+  final String creator;
+  final List<String> selectedTags;
+  final List<String> appliedTags;
+  final String sortPrimary;
+  final String sortSecondary;
+  final String searchText;
+  final Map<String, String> repoStatusById;
+  final Map<String, String> repoPackageById;
+  final Map<String, String> downloadUrlById;
+  final Map<String, String> downloadByVar;
+  final Map<String, String> downloadByUrl;
+}
+
+const Duration _hubSnapshotTtl = Duration(minutes: 5);
+HubPageSnapshot? _hubPageSnapshot;
+
 class HubPage extends ConsumerStatefulWidget {
   const HubPage({super.key});
 
@@ -91,7 +141,6 @@ class HubPage extends ConsumerStatefulWidget {
 
 class _HubPageState extends ConsumerState<HubPage> {
   final TextEditingController _searchController = TextEditingController();
-  final _searchDebounce = Debouncer(const Duration(milliseconds: 300));
   HubInfo? _info;
   bool _loadingInfo = false;
   bool _loadingResources = false;
@@ -108,7 +157,8 @@ class _HubPageState extends ConsumerState<HubPage> {
   String _payType = 'All';
   String _category = 'All';
   String _creator = 'All';
-  String _tags = 'All';
+  final List<String> _selectedTags = [];
+  final List<String> _appliedTags = [];
   String _sortPrimary = '';
   String _sortSecondary = '';
 
@@ -127,12 +177,21 @@ class _HubPageState extends ConsumerState<HubPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(_loadInfo);
+    final restored = _restoreSnapshotIfFresh();
+    if (!restored) {
+      Future.microtask(
+        () => _loadInfo(autoSearch: true, applyDefaults: true),
+      );
+    } else if (_info == null) {
+      Future.microtask(
+        () => _loadInfo(autoSearch: false, applyDefaults: false),
+      );
+    }
   }
 
   @override
   void dispose() {
-    _searchDebounce.dispose();
+    _saveSnapshot();
     _searchController.dispose();
     super.dispose();
   }
@@ -176,7 +235,101 @@ class _HubPageState extends ConsumerState<HubPage> {
     );
   }
 
-  Future<void> _loadInfo() async {
+  bool _restoreSnapshotIfFresh() {
+    final snapshot = _hubPageSnapshot;
+    if (snapshot == null) return false;
+    if (DateTime.now().difference(snapshot.savedAt) > _hubSnapshotTtl) {
+      _hubPageSnapshot = null;
+      return false;
+    }
+    _info = snapshot.info;
+    _resources = snapshot.resources
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    _totalFound = snapshot.totalFound;
+    _totalPages = snapshot.totalPages;
+    _page = snapshot.page;
+    _perPage = snapshot.perPage;
+    _location = snapshot.location;
+    _payType = snapshot.payType;
+    _category = snapshot.category;
+    _creator = snapshot.creator;
+    _selectedTags
+      ..clear()
+      ..addAll(snapshot.selectedTags);
+    _appliedTags
+      ..clear()
+      ..addAll(snapshot.appliedTags);
+    _sortPrimary = snapshot.sortPrimary;
+    _sortSecondary = snapshot.sortSecondary;
+    _searchController.text = snapshot.searchText;
+    _repoStatusById
+      ..clear()
+      ..addAll(snapshot.repoStatusById);
+    _repoPackageById
+      ..clear()
+      ..addAll(snapshot.repoPackageById);
+    _downloadUrlById
+      ..clear()
+      ..addAll(snapshot.downloadUrlById);
+    _downloadByVar
+      ..clear()
+      ..addAll(snapshot.downloadByVar);
+    _downloadByUrl
+      ..clear()
+      ..addAll(snapshot.downloadByUrl);
+    _resourcesCache.clear();
+    _loadingInfo = false;
+    _loadingResources = false;
+    _pendingRefresh = false;
+    _pendingForce = false;
+    return true;
+  }
+
+  void _saveSnapshot() {
+    _hubPageSnapshot = HubPageSnapshot(
+      savedAt: DateTime.now(),
+      info: _info,
+      resources: _resources
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(),
+      totalFound: _totalFound,
+      totalPages: _totalPages,
+      page: _page,
+      perPage: _perPage,
+      location: _location,
+      payType: _payType,
+      category: _category,
+      creator: _creator,
+      selectedTags: List<String>.from(_selectedTags),
+      appliedTags: List<String>.from(_appliedTags),
+      sortPrimary: _sortPrimary,
+      sortSecondary: _sortSecondary,
+      searchText: _searchController.text,
+      repoStatusById: Map<String, String>.from(_repoStatusById),
+      repoPackageById: Map<String, String>.from(_repoPackageById),
+      downloadUrlById: Map<String, String>.from(_downloadUrlById),
+      downloadByVar: Map<String, String>.from(_downloadByVar),
+      downloadByUrl: Map<String, String>.from(_downloadByUrl),
+    );
+  }
+
+  void _applyDefaultFilters(HubInfo info) {
+    _location = 'All';
+    _payType = info.payTypes.contains('Free') ? 'Free' : 'All';
+    _category = 'All';
+    _creator = 'All';
+    _selectedTags.clear();
+    _appliedTags.clear();
+    _sortPrimary = info.sorts.isNotEmpty ? info.sorts.first : '';
+    _sortSecondary = '';
+    _searchController.clear();
+  }
+
+  Future<void> _loadInfo({
+    required bool autoSearch,
+    bool applyDefaults = false,
+  }) async {
     if (_loadingInfo) return;
     setState(() {
       _loadingInfo = true;
@@ -191,15 +344,13 @@ class _HubPageState extends ConsumerState<HubPage> {
       if (!mounted) return;
       setState(() {
         _info = info;
-        _location = 'All';
-        _payType = info.payTypes.contains('Free') ? 'Free' : 'All';
-        _category = 'All';
-        _creator = 'All';
-        _tags = 'All';
-        _sortPrimary = info.sorts.isNotEmpty ? info.sorts.first : '';
-        _sortSecondary = '';
+        if (applyDefaults) {
+          _applyDefaultFilters(info);
+        }
       });
-      await _refreshResources(force: true);
+      if (autoSearch) {
+        await _triggerSearch();
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -219,7 +370,7 @@ class _HubPageState extends ConsumerState<HubPage> {
       'paytype': _payType,
       'category': _category,
       'username': _creator,
-      'tags': _tags,
+      'tags': _tagQuery(),
       'search': _searchController.text.trim(),
       'sort': sort,
       'page': _page,
@@ -233,6 +384,19 @@ class _HubPageState extends ConsumerState<HubPage> {
 
   bool _isCacheExpired(HubResourcesCacheEntry entry) {
     return DateTime.now().difference(entry.timestamp) > _resourcesCacheTtl;
+  }
+
+  Future<void> _triggerSearch({bool resetPage = true}) async {
+    if (!mounted) return;
+    setState(() {
+      if (resetPage) {
+        _page = 1;
+      }
+      _appliedTags
+        ..clear()
+        ..addAll(_selectedTags);
+    });
+    await _refreshResources(force: true);
   }
 
   Future<void> _refreshResources({bool force = false}) async {
@@ -656,9 +820,68 @@ class _HubPageState extends ConsumerState<HubPage> {
       if (creator != null && creator.isNotEmpty) {
         _creator = creator;
       }
-      _page = 1;
     });
-    _refreshResources();
+  }
+
+  String _tagQuery() {
+    if (_appliedTags.isEmpty) return '';
+    final tags = _appliedTags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+    return tags.join(',');
+  }
+
+  void _addTagFilter(String tag) {
+    final cleaned = tag.trim();
+    if (cleaned.isEmpty || cleaned.toLowerCase() == 'all') return;
+    final exists = _selectedTags.any(
+      (item) => item.toLowerCase() == cleaned.toLowerCase(),
+    );
+    if (exists) return;
+    setState(() {
+      _selectedTags.add(cleaned);
+    });
+  }
+
+  void _removeTagFilter(String tag) {
+    final cleaned = tag.trim();
+    if (cleaned.isEmpty) return;
+    final before = _selectedTags.length;
+    _selectedTags.removeWhere(
+      (item) => item.toLowerCase() == cleaned.toLowerCase(),
+    );
+    if (before == _selectedTags.length) return;
+    setState(() {});
+  }
+
+  void _clearTagFilters() {
+    if (_selectedTags.isEmpty) return;
+    setState(() {
+      _selectedTags.clear();
+    });
+  }
+
+  List<Map<String, dynamic>> _filterResourcesByTags(
+      List<Map<String, dynamic>> resources) {
+    if (_appliedTags.isEmpty) return resources;
+    final required = _appliedTags
+        .map((tag) => tag.toLowerCase())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+    if (required.isEmpty) return resources;
+    return resources.where((resource) {
+      final tags = _parseResourceTags(resource);
+      if (tags.isEmpty) return false;
+      final tagSet =
+          tags.map((tag) => tag.toLowerCase()).toSet();
+      for (final tag in required) {
+        if (tagSet.contains(tag)) {
+          return true;
+        }
+      }
+      return false;
+    }).toList();
   }
 
   void _resetFilters() {
@@ -668,18 +891,25 @@ class _HubPageState extends ConsumerState<HubPage> {
       _payType = info != null && info.payTypes.contains('Free') ? 'Free' : 'All';
       _category = 'All';
       _creator = 'All';
-      _tags = 'All';
+      _selectedTags.clear();
       _sortPrimary = info != null && info.sorts.isNotEmpty ? info.sorts.first : '';
       _sortSecondary = '';
-      _page = 1;
       _searchController.clear();
     });
-    _refreshResources(force: true);
   }
 
-  void _updateAndRefresh(VoidCallback update) {
+  void _updateFilters(VoidCallback update) {
     setState(update);
-    _refreshResources();
+  }
+
+  KeyEventResult _handleFilterKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        (event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+      _triggerSearch();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   String _formatDate(dynamic unixSeconds) {
@@ -697,6 +927,7 @@ class _HubPageState extends ConsumerState<HubPage> {
         ? null
         : (_sortPrimary.isEmpty ? options.sorts.first : _sortPrimary);
     final downloadUrls = _downloadByUrl.keys.toList();
+    final visibleResources = _filterResourcesByTags(_resources);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -706,8 +937,11 @@ class _HubPageState extends ConsumerState<HubPage> {
             child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: ListView(
-                  children: [
+                child: Focus(
+                  skipTraversal: true,
+                  onKeyEvent: _handleFilterKeyEvent,
+                  child: ListView(
+                    children: [
                     const Text('Filters & Actions',
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 12),
@@ -719,20 +953,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                         labelText: 'Search',
                         border: OutlineInputBorder(),
                       ),
-                      onChanged: (_) {
-                        _searchDebounce.run(() {
-                          if (!mounted) return;
-                          setState(() {
-                            _page = 1;
-                          });
-                          _refreshResources();
-                        });
-                      },
                       onSubmitted: (_) {
-                        setState(() {
-                          _page = 1;
-                        });
-                        _refreshResources();
+                        _triggerSearch();
                       },
                     ),
                     const SizedBox(height: 12),
@@ -757,9 +979,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                                     .toList(),
                                 onChanged: (value) {
                                   if (value == null) return;
-                                  _updateAndRefresh(() {
+                                  _updateFilters(() {
                                     _location = value;
-                                    _page = 1;
                                   });
                                 },
                                 decoration: const InputDecoration(
@@ -779,9 +1000,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                                     .toList(),
                                 onChanged: (value) {
                                   if (value == null) return;
-                                  _updateAndRefresh(() {
+                                  _updateFilters(() {
                                     _payType = value;
-                                    _page = 1;
                                   });
                                 },
                                 decoration: const InputDecoration(
@@ -816,9 +1036,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                                     .toList(),
                                 onChanged: (value) {
                                   if (value == null) return;
-                                  _updateAndRefresh(() {
+                                  _updateFilters(() {
                                     _category = value;
-                                    _page = 1;
                                   });
                                 },
                                 decoration: const InputDecoration(
@@ -842,18 +1061,18 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   );
                                 },
                                 onChanged: (value) {
-                                  _updateAndRefresh(() {
+                                  _updateFilters(() {
                                     _creator = value;
-                                    _page = 1;
                                   });
                                 },
                               ),
                               const SizedBox(height: 8),
                               LazyDropdownField(
                                 label: 'Tag',
-                                value: _tags.isEmpty ? 'All' : _tags,
+                                value: 'All',
                                 allValue: 'All',
                                 allLabel: 'All tags',
+                                clearOnSelect: true,
                                 optionsLoader: (queryText, offset, limit) async {
                                   final client = ref.read(backendClientProvider);
                                   return client.listHubOptions(
@@ -864,12 +1083,30 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   );
                                 },
                                 onChanged: (value) {
-                                  _updateAndRefresh(() {
-                                    _tags = value;
-                                    _page = 1;
-                                  });
+                                  if (value == 'All') {
+                                    _clearTagFilters();
+                                    return;
+                                  }
+                                  _addTagFilter(value);
                                 },
                               ),
+                              if (_selectedTags.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      for (final tag in _selectedTags)
+                                        InputChip(
+                                          label: Text(tag),
+                                          onDeleted: () => _removeTagFilter(tag),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 8),
                             ],
                           ),
@@ -898,9 +1135,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                                       .toList(),
                                   onChanged: (value) {
                                     if (value == null) return;
-                                    _updateAndRefresh(() {
+                                    _updateFilters(() {
                                       _sortPrimary = value;
-                                      _page = 1;
                                     });
                                   },
                                   decoration: const InputDecoration(
@@ -927,9 +1163,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                                       .toList(),
                                   onChanged: (value) {
                                     if (value == null) return;
-                                    _updateAndRefresh(() {
+                                    _updateFilters(() {
                                       _sortSecondary = value;
-                                      _page = 1;
                                     });
                                   },
                                   decoration: const InputDecoration(
@@ -962,9 +1197,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                                 .toList(),
                             onChanged: (value) {
                               if (value == null) return;
-                              _updateAndRefresh(() {
+                              _updateFilters(() {
                                 _perPage = value;
-                                _page = 1;
                               });
                             },
                           ),
@@ -981,7 +1215,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   setState(() {
                                     _page = 1;
                                   });
-                                  _refreshResources();
+                                  _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.first_page),
                         ),
@@ -992,7 +1226,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   setState(() {
                                     _page -= 1;
                                   });
-                                  _refreshResources();
+                                  _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.chevron_left),
                         ),
@@ -1003,7 +1237,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   setState(() {
                                     _page += 1;
                                   });
-                                  _refreshResources();
+                                  _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.chevron_right),
                         ),
@@ -1014,7 +1248,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   setState(() {
                                     _page = _totalPages;
                                   });
-                                  _refreshResources();
+                                  _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.last_page),
                         ),
@@ -1024,8 +1258,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                     FilledButton(
                       onPressed: _loadingResources
                           ? null
-                          : () => _refreshResources(force: true),
-                      child: const Text('Refresh'),
+                          : () => _triggerSearch(),
+                      child: const Text('Search'),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
@@ -1076,6 +1310,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                   ],
                 ),
+                ),
               ),
             ),
           ),
@@ -1098,8 +1333,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                           ),
                         const SizedBox(width: 8),
                         TextButton(
-                          onPressed: () => _refreshResources(force: true),
-                          child: const Text('Refresh'),
+                          onPressed:
+                              _loadingResources ? null : () => _triggerSearch(),
+                          child: const Text('Search'),
                         ),
                       ],
                     ),
@@ -1122,9 +1358,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                             mainAxisSpacing: 12,
                             childAspectRatio: 1.6,
                           ),
-                          itemCount: _resources.length,
+                          itemCount: visibleResources.length,
                           itemBuilder: (context, index) {
-                            final resource = _resources[index];
+                            final resource = visibleResources[index];
                             return _buildResourceCard(resource);
                           },
                         );
@@ -1287,12 +1523,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                   for (final tag in displayTags)
                     ActionChip(
                       label: Text(tag),
-                      onPressed: () {
-                        _updateAndRefresh(() {
-                          _tags = tag;
-                          _page = 1;
-                        });
-                      },
+                      onPressed: () => _addTagFilter(tag),
                     ),
                   if (extraTagCount > 0) Chip(label: Text('+$extraTagCount')),
                 ],

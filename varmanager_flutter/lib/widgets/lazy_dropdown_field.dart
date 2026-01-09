@@ -14,6 +14,7 @@ class LazyDropdownField extends StatefulWidget {
     this.allValue = 'ALL',
     this.allLabel = 'All',
     this.debounce = const Duration(milliseconds: 250),
+    this.clearOnSelect = false,
   });
 
   final String label;
@@ -26,6 +27,7 @@ class LazyDropdownField extends StatefulWidget {
   final String allValue;
   final String allLabel;
   final Duration debounce;
+  final bool clearOnSelect;
 
   @override
   State<LazyDropdownField> createState() => _LazyDropdownFieldState();
@@ -136,7 +138,11 @@ class _LazyDropdownFieldState extends State<LazyDropdownField> {
 
   void _applySelection(String value) {
     widget.onChanged(value);
-    _setControllerText(_displayText(value));
+    if (widget.clearOnSelect) {
+      _setControllerText(_displayText(widget.allValue));
+    } else {
+      _setControllerText(_displayText(value));
+    }
   }
 
   void _onTextChanged(String value) {
