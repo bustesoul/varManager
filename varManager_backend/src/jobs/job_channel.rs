@@ -81,6 +81,17 @@ impl JobReporter {
             result,
         });
     }
+
+    /// Set job result from async contexts without blocking the runtime.
+    pub async fn set_result_async(&self, result: Value) {
+        let _ = self
+            .tx
+            .send(JobEvent::Result {
+                id: self.id,
+                result,
+            })
+            .await;
+    }
 }
 
 /// Job status enum

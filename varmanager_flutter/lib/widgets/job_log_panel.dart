@@ -74,17 +74,12 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
           Expanded(
             child: Scrollbar(
               controller: _scrollController,
-              child: ListView.builder(
+              child: SingleChildScrollView(
                 controller: _scrollController,
-                itemCount: logs.length,
-                itemBuilder: (context, index) {
-                  return Text(
-                    logs[index],
-                    style: const TextStyle(fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  );
-                },
+                child: SelectableText(
+                  logs.join('\n'),
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
             ),
           ),

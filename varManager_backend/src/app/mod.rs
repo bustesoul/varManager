@@ -130,6 +130,31 @@ pub fn init_logging(
     (file_guard, stdout_guard)
 }
 
+pub fn init_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = if let Some(payload) = info.payload().downcast_ref::<&str>() {
+            (*payload).to_string()
+        } else if let Some(payload) = info.payload().downcast_ref::<String>() {
+            payload.clone()
+        } else {
+            "non-string panic payload".to_string()
+        };
+        let location = info
+            .location()
+            .map(|loc| format!("{}:{}", loc.file(), loc.line()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        tracing::error!(
+            panic_payload = %payload,
+            panic_location = %location,
+            panic_backtrace = %backtrace,
+            "panic occurred"
+        );
+        default_hook(info);
+    }));
+}
+
 pub fn read_parent_pid() -> Option<u32> {
     let raw = env::var(PARENT_PID_ENV).ok()?;
     let trimmed = raw.trim();

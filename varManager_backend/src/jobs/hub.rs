@@ -298,7 +298,8 @@ async fn download_all_async(
 ) -> Result<(), String> {
     let summary = crate::infra::downloader::download_urls(state, reporter, &args.urls).await?;
     reporter
-        .set_result(serde_json::to_value(&summary).map_err(|err| err.to_string())?);
+        .set_result_async(serde_json::to_value(&summary).map_err(|err| err.to_string())?)
+        .await;
     if summary.failed > 0 {
         return Err(format!("{} download(s) failed.", summary.failed));
     }

@@ -29,6 +29,7 @@ use crate::services::image_cache::ImageCacheService;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = app::load_or_write_config()?;
     let (_file_guard, _stdout_guard) = app::init_logging(&config);
+    app::init_panic_hook();
 
     let db_pool = db::open_default_pool()
         .await
