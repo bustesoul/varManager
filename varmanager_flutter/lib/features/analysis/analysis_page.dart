@@ -39,7 +39,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   Future<void> _runJob(String kind, Map<String, dynamic> args) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob(kind, args: args, onLog: log.addLine);
+    await runner.runJob(kind, args: args, onLog: log.addEntry);
   }
 
   Future<void> _loadAtoms() async {
@@ -483,3 +483,4 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     );
   }
 }
+

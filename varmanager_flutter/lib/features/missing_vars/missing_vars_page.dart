@@ -93,7 +93,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   Future<void> _runJob(String kind, Map<String, dynamic> args) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob(kind, args: args, onLog: log.addLine);
+    await runner.runJob(kind, args: args, onLog: log.addEntry);
   }
 
   Future<void> _refreshResolved() async {
@@ -206,7 +206,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
       args: {
         'packages': packages,
       },
-      onLog: log.addLine,
+      onLog: log.addEntry,
     );
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null) return;
@@ -700,3 +700,4 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     );
   }
 }
+

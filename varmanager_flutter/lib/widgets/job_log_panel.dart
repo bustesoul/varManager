@@ -77,7 +77,7 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
               child: SingleChildScrollView(
                 controller: _scrollController,
                 child: SelectableText(
-                  logs.join('\n'),
+                  logs.map((entry) => entry.format()).join('\n'),
                   style: const TextStyle(fontSize: 12),
                 ),
               ),

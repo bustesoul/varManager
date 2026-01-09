@@ -22,13 +22,13 @@ class VarDetailPage extends ConsumerWidget {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
     await runner.runJob('vars_locate',
-        args: {'var_name': varName}, onLog: log.addLine);
+        args: {'var_name': varName}, onLog: log.addEntry);
   }
 
   Future<void> _runJob(WidgetRef ref, String kind, Map<String, dynamic> args) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob(kind, args: args, onLog: log.addLine);
+    await runner.runJob(kind, args: args, onLog: log.addEntry);
   }
 
   @override
@@ -365,3 +365,4 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
     );
   }
 }
+

@@ -5,6 +5,7 @@
 //! - JobManager (single async task): consumes events and updates state.jobs
 //! - HTTP handlers: read state.jobs (no contention with job execution)
 
+use chrono::{Local, SecondsFormat};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -16,13 +17,97 @@ const EVENT_CHANNEL_CAPACITY: usize = 10_000;
 /// Maximum log lines per job
 const MAX_LOG_LINES: usize = 1000;
 
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JobLogLevel {
+    Info,
+    Warn,
+    Error,
+    Debug,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct JobLogEntry {
+    pub timestamp: String,
+    pub level: JobLogLevel,
+    pub message: String,
+}
+
+impl JobLogEntry {
+    pub fn new(level: JobLogLevel, message: String) -> Self {
+        let timestamp = Local::now().to_rfc3339_opts(SecondsFormat::Micros, true);
+        Self {
+            timestamp,
+            level,
+            message,
+        }
+    }
+}
+
+impl JobLogLevel {
+    pub fn severity(self) -> u8 {
+        match self {
+            JobLogLevel::Debug => 0,
+            JobLogLevel::Info => 1,
+            JobLogLevel::Warn => 2,
+            JobLogLevel::Error => 3,
+        }
+    }
+}
+
+pub fn min_job_log_level(raw: &str) -> JobLogLevel {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "error" => JobLogLevel::Error,
+        "warn" | "warning" => JobLogLevel::Warn,
+        "debug" => JobLogLevel::Debug,
+        "trace" => JobLogLevel::Debug,
+        _ => JobLogLevel::Info,
+    }
+}
+
+fn infer_log_level(message: &str) -> JobLogLevel {
+    let trimmed = message.trim_start();
+    if let Some(level) = trimmed
+        .strip_prefix('[')
+        .and_then(|rest| rest.split_once(']'))
+        .map(|(label, _)| label.trim().to_ascii_lowercase())
+    {
+        return match level.as_str() {
+            "error" => JobLogLevel::Error,
+            "warn" | "warning" => JobLogLevel::Warn,
+            "debug" => JobLogLevel::Debug,
+            "info" => JobLogLevel::Info,
+            _ => JobLogLevel::Info,
+        };
+    }
+
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("error:") || lower.starts_with("err:") {
+        return JobLogLevel::Error;
+    }
+    if lower.starts_with("warn:") || lower.starts_with("warning:") {
+        return JobLogLevel::Warn;
+    }
+    if lower.starts_with("debug:") {
+        return JobLogLevel::Debug;
+    }
+    if lower.starts_with("info:") {
+        return JobLogLevel::Info;
+    }
+    JobLogLevel::Info
+}
+
 /// Events sent from job execution threads to the JobManager
 #[derive(Debug)]
 pub enum JobEvent {
     /// Job started running
     Started { id: u64, message: String },
     /// Log line from job
-    Log { id: u64, line: String },
+    Log {
+        id: u64,
+        level: JobLogLevel,
+        message: String,
+    },
     /// Progress update (0-100)
     Progress { id: u64, value: u8 },
     /// Job result data
@@ -59,10 +144,12 @@ impl JobReporter {
 
     /// Send a log line. Uses try_send - drops if channel is full.
     pub fn log(&self, msg: impl Into<String>) {
-        let line = msg.into();
+        let message = msg.into();
+        let level = infer_log_level(&message);
         let _ = self.tx.try_send(JobEvent::Log {
             id: self.id,
-            line,
+            level,
+            message,
         });
     }
 
@@ -113,7 +200,7 @@ pub struct JobState {
     pub progress: u8,
     pub message: String,
     pub error: Option<String>,
-    pub logs: VecDeque<String>,
+    pub logs: VecDeque<JobLogEntry>,
     pub log_offset: usize,
     pub result: Option<Value>,
 }
@@ -133,12 +220,13 @@ impl JobState {
         }
     }
 
-    fn push_log(&mut self, line: String) {
+    fn push_log(&mut self, level: JobLogLevel, message: String) {
+        let entry = JobLogEntry::new(level, message);
         if self.logs.len() >= MAX_LOG_LINES {
             self.logs.pop_front();
             self.log_offset += 1;
         }
-        self.logs.push_back(line);
+        self.logs.push_back(entry);
     }
 }
 
@@ -179,7 +267,7 @@ pub struct JobLogsResponse {
     pub from: usize,
     pub next: usize,
     pub dropped: bool,
-    pub lines: Vec<String>,
+    pub entries: Vec<JobLogEntry>,
 }
 
 /// Job result response
@@ -225,15 +313,15 @@ impl JobManager {
                 if let Some(job) = jobs.get_mut(&id) {
                     job.status = JobStatus::Running;
                     job.message = message.clone();
-                    job.push_log(message.clone());
+                    job.push_log(JobLogLevel::Info, message.clone());
                     job.result = None;
                     tracing::info!(job_id = id, job_kind = %job.kind, msg = %message, "job started");
                 }
             }
-            JobEvent::Log { id, line } => {
+            JobEvent::Log { id, level, message } => {
                 let mut jobs = self.jobs.write().await;
                 if let Some(job) = jobs.get_mut(&id) {
-                    job.push_log(line);
+                    job.push_log(level, message);
                 }
             }
             JobEvent::Progress { id, value } => {
@@ -255,7 +343,7 @@ impl JobManager {
                     job.progress = 100;
                     job.message = message.clone();
                     job.error = None;
-                    job.push_log(message.clone());
+                    job.push_log(JobLogLevel::Info, message.clone());
                     tracing::info!(job_id = id, job_kind = %job.kind, msg = %message, "job completed");
                 }
             }
@@ -265,7 +353,7 @@ impl JobManager {
                     job.status = JobStatus::Failed;
                     job.message = "job failed".to_string();
                     job.error = Some(error.clone());
-                    job.push_log(format!("error: {}", error));
+                    job.push_log(JobLogLevel::Error, error.clone());
                     tracing::error!(job_id = id, job_kind = %job.kind, error = %error, "job failed");
                 }
             }

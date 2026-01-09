@@ -140,7 +140,7 @@ class _HubPageState extends ConsumerState<HubPage> {
   Future<void> _runJob(String kind, Map<String, dynamic> args) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob(kind, args: args, onLog: log.addLine);
+    await runner.runJob(kind, args: args, onLog: log.addEntry);
   }
 
   Future<void> _openImagePreview(
@@ -184,7 +184,7 @@ class _HubPageState extends ConsumerState<HubPage> {
     try {
       final runner = ref.read(jobRunnerProvider);
       final log = ref.read(jobLogProvider.notifier);
-      final result = await runner.runJob('hub_info', args: {}, onLog: log.addLine);
+      final result = await runner.runJob('hub_info', args: {}, onLog: log.addEntry);
       final payload = result.result as Map<String, dynamic>?;
       if (payload == null) return;
       final info = HubInfo.fromPayload(payload);
@@ -274,7 +274,7 @@ class _HubPageState extends ConsumerState<HubPage> {
       final result = await runner.runJob(
         'hub_resources',
         args: query,
-        onLog: log.addLine,
+        onLog: log.addEntry,
       );
       final payload = result.result as Map<String, dynamic>?;
       if (payload == null || !mounted || !isCurrent()) {
@@ -407,7 +407,7 @@ class _HubPageState extends ConsumerState<HubPage> {
   Future<void> _scanMissing() async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    final result = await runner.runJob('hub_missing_scan', args: {}, onLog: log.addLine);
+    final result = await runner.runJob('hub_missing_scan', args: {}, onLog: log.addEntry);
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null) return;
     _mergeDownloads(payload);
@@ -416,7 +416,7 @@ class _HubPageState extends ConsumerState<HubPage> {
   Future<void> _scanUpdates() async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    final result = await runner.runJob('hub_updates_scan', args: {}, onLog: log.addLine);
+    final result = await runner.runJob('hub_updates_scan', args: {}, onLog: log.addEntry);
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null) return;
     _mergeDownloads(payload);
@@ -598,7 +598,7 @@ class _HubPageState extends ConsumerState<HubPage> {
     final result = await runner.runJob(
       'hub_resource_detail',
       args: {'resource_id': resourceId},
-      onLog: log.addLine,
+      onLog: log.addEntry,
     );
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null) return;
@@ -1383,7 +1383,7 @@ class _EnhancedResourceDetailDialogState
       final result = await widget.runner.runJob(
         'hub_overview_panel',
         args: {'resource_id': widget.resourceId},
-        onLog: widget.log.addLine,
+        onLog: widget.log.addEntry,
       );
 
       final payload = result.result as Map<String, dynamic>?;

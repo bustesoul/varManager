@@ -22,7 +22,7 @@ class JobRunner {
   Future<JobResult<dynamic>> runJob(
     String kind, {
     Map<String, dynamic>? args,
-    void Function(String line)? onLog,
+    void Function(JobLogEntry entry)? onLog,
   }) async {
     final start = await client.startJob(kind, args);
     int logOffset = 0;
@@ -39,8 +39,8 @@ class JobRunner {
       if (hasLogChanges) {
         final logs = await client.getJobLogs(start.id, from: logOffset);
         logOffset = logs.next;
-        for (final line in logs.lines) {
-          onLog(line);
+        for (final entry in logs.entries) {
+          onLog(entry);
         }
       }
       lastLogOffset = job.logOffset;

@@ -70,7 +70,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final busy = ref.read(jobBusyProvider.notifier);
     busy.setBusy(true);
     try {
-      return await runner.runJob(kind, args: args, onLog: log.addLine);
+      return await runner.runJob(kind, args: args, onLog: log.addEntry);
     } finally {
       busy.setBusy(false);
     }
@@ -1470,3 +1470,4 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 }
+

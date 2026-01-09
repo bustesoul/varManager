@@ -62,7 +62,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   Future<void> _runJob(String kind, Map<String, dynamic> args) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob(kind, args: args, onLog: log.addLine);
+    await runner.runJob(kind, args: args, onLog: log.addEntry);
   }
 
   void _updateQuery(ScenesQueryParams Function(ScenesQueryParams) updater) {
@@ -629,7 +629,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
           'save_name': '${item.varName}:/${item.scenePath.replaceAll('\\', '/')}',
           'character_gender': _forMale ? 'male' : 'female',
         },
-        onLog: log.addLine);
+        onLog: log.addEntry);
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null || !context.mounted) return;
     Navigator.of(context).push(
@@ -702,3 +702,4 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     ref.invalidate(scenesListProvider);
   }
 }
+

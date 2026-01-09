@@ -51,7 +51,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     final busy = ref.read(jobBusyProvider.notifier);
     busy.setBusy(true);
     try {
-      return await runner.runJob(kind, args: args, onLog: log.addLine);
+      return await runner.runJob(kind, args: args, onLog: log.addEntry);
     } finally {
       busy.setBusy(false);
     }
@@ -665,3 +665,4 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     );
   }
 }
+

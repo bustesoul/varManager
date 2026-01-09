@@ -67,7 +67,7 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
   Future<void> _analyze() async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    final result = await runner.runJob('saves_deps', args: {}, onLog: log.addLine);
+    final result = await runner.runJob('saves_deps', args: {}, onLog: log.addEntry);
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null) return;
     setState(() {

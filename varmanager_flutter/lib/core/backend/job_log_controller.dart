@@ -1,25 +1,29 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class JobLogController extends Notifier<List<String>> {
-  @override
-  List<String> build() => const [];
+import '../models/job_models.dart';
 
-  void addLine(String line) {
-    final next = [...state, line];
-    if (next.length > 1000) {
-      state = next.sublist(next.length - 1000);
+class JobLogController extends Notifier<List<JobLogEntry>> {
+  static const int _maxLines = 1000;
+
+  @override
+  List<JobLogEntry> build() => const [];
+
+  void addEntry(JobLogEntry entry) {
+    final next = [...state, entry];
+    if (next.length > _maxLines) {
+      state = next.sublist(next.length - _maxLines);
     } else {
       state = next;
     }
   }
 
-  void addLines(Iterable<String> lines) {
-    if (lines.isEmpty) {
+  void addEntries(Iterable<JobLogEntry> entries) {
+    if (entries.isEmpty) {
       return;
     }
-    final next = [...state, ...lines];
-    if (next.length > 1000) {
-      state = next.sublist(next.length - 1000);
+    final next = [...state, ...entries];
+    if (next.length > _maxLines) {
+      state = next.sublist(next.length - _maxLines);
     } else {
       state = next;
     }
@@ -30,7 +34,7 @@ class JobLogController extends Notifier<List<String>> {
   }
 }
 
-final jobLogProvider = NotifierProvider<JobLogController, List<String>>(
+final jobLogProvider = NotifierProvider<JobLogController, List<JobLogEntry>>(
   JobLogController.new,
 );
 

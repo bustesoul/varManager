@@ -17,7 +17,9 @@ use std::{
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
 
-use crate::jobs::job_channel::{JobLogsResponse, JobResultResponse, JobState, JobStatus, JobView};
+use crate::jobs::job_channel::{
+    min_job_log_level, JobLogsResponse, JobResultResponse, JobState, JobStatus, JobView,
+};
 use crate::app::{exe_dir, AppState, APP_VERSION, Config};
 use crate::infra::db;
 use crate::services::image_cache::{
@@ -494,11 +496,20 @@ pub async fn get_job_logs(
         .get(&id)
         .ok_or_else(|| ApiError::not_found("job not found"))?;
 
+    let cfg = read_config(&state).map_err(ApiError::internal)?;
+    let min_level = min_job_log_level(&cfg.log_level);
+
     let request_from = query.from.unwrap_or(job.log_offset);
     let dropped = request_from < job.log_offset;
     let from = if dropped { job.log_offset } else { request_from };
     let start = from.saturating_sub(job.log_offset);
-    let lines: Vec<String> = job.logs.iter().skip(start).cloned().collect();
+    let entries = job
+        .logs
+        .iter()
+        .skip(start)
+        .filter(|entry| entry.level.severity() >= min_level.severity())
+        .cloned()
+        .collect();
     let next = job.log_offset + job.logs.len();
 
     Ok(Json(JobLogsResponse {
@@ -506,7 +517,7 @@ pub async fn get_job_logs(
         from,
         next,
         dropped,
-        lines,
+        entries,
     }))
 }
 

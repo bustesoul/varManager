@@ -1,4 +1,5 @@
 use crate::jobs::job_channel::{JobEventSender, JobMap};
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::{
@@ -14,6 +15,9 @@ use tokio::{
     sync::{oneshot, Semaphore},
     time::{interval, Duration},
 };
+use tracing::{Event, Subscriber};
+use tracing_subscriber::fmt::{format::Writer, FmtContext, FormatEvent, FormatFields};
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 pub const PARENT_PID_ENV: &str = "VARMANAGER_PARENT_PID";
@@ -93,15 +97,7 @@ pub fn init_logging(
     tracing_appender::non_blocking::WorkerGuard,
     tracing_appender::non_blocking::WorkerGuard,
 ) {
-    // Parse the configured log level, but filter out noisy third-party libraries
     let base_level = config.log_level.as_str();
-    let env_filter = if base_level == "debug" {
-        // If debug is requested, only show debug for our crate, info for others
-        EnvFilter::new("varManager_backend=debug,h2=info,reqwest=info,hyper=info,hyper_util=info")
-    } else {
-        // For other levels, use the configured level
-        EnvFilter::try_new(base_level).unwrap_or_else(|_| EnvFilter::new("info"))
-    };
 
     let log_dir = exe_dir();
     let file_appender = tracing_appender::rolling::never(&log_dir, "backend.log");
@@ -111,16 +107,16 @@ pub fn init_logging(
     // when Flutter frontend doesn't read stdout pipe fast enough
     let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
     let stdout_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .event_format(SimpleEventFormat::new("Backend"))
         .with_writer(stdout_writer)
-        .with_filter(env_filter);
+        .with_filter(build_env_filter(base_level));
 
-    // File layer: debug for our crate, info for third-party libraries
-    let file_filter =
-        EnvFilter::new("varManager_backend=debug,h2=info,reqwest=info,hyper=info,hyper_util=info");
     let file_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
+        .event_format(SimpleEventFormat::new("File"))
         .with_writer(file_writer)
-        .with_filter(file_filter);
+        .with_filter(build_env_filter(base_level));
 
     tracing_subscriber::registry()
         .with(stdout_layer)
@@ -128,6 +124,125 @@ pub fn init_logging(
         .init();
 
     (file_guard, stdout_guard)
+}
+
+struct SimpleEventFormat {
+    tag: &'static str,
+}
+
+impl SimpleEventFormat {
+    const fn new(tag: &'static str) -> Self {
+        Self { tag }
+    }
+}
+
+impl<S, N> FormatEvent<S, N> for SimpleEventFormat
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'writer> FormatFields<'writer> + 'static,
+{
+    fn format_event(
+        &self,
+        _ctx: &FmtContext<'_, S, N>,
+        mut writer: Writer<'_>,
+        event: &Event<'_>,
+    ) -> std::fmt::Result {
+        let now = Local::now();
+        write!(writer, "{} ", now.format("%Y-%m-%d %H:%M:%S"))?;
+
+        let level = event.metadata().level();
+        write!(writer, "[{}][{}] ", level.as_str(), self.tag)?;
+
+        let mut visitor = MessageVisitor::default();
+        event.record(&mut visitor);
+
+        if let Some(message) = visitor.msg {
+            return writeln!(writer, "{}", message);
+        }
+
+        let message = visitor.message.unwrap_or_default();
+        if !message.is_empty() {
+            write!(writer, "{}", message)?;
+            if !visitor.fields.is_empty() {
+                write!(writer, " {}", visitor.fields.join(" "))?;
+            }
+            return writeln!(writer);
+        }
+
+        if !visitor.fields.is_empty() {
+            return writeln!(writer, "{}", visitor.fields.join(" "));
+        }
+        writeln!(writer)
+    }
+}
+
+#[derive(Default)]
+struct MessageVisitor {
+    message: Option<String>,
+    msg: Option<String>,
+    fields: Vec<String>,
+}
+
+impl MessageVisitor {
+    fn set_field(&mut self, field: &tracing::field::Field, value: String) {
+        match field.name() {
+            "msg" => self.msg = Some(value),
+            "message" => self.message = Some(value),
+            _ => self.fields.push(format!("{}={}", field.name(), value)),
+        }
+    }
+
+    fn set_debug_field(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        let raw = format!("{value:?}");
+        let trimmed = raw
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(&raw);
+        self.set_field(field, trimmed.to_string());
+    }
+}
+
+impl tracing::field::Visit for MessageVisitor {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.set_field(field, value.to_string());
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.set_debug_field(field, value);
+    }
+
+    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
+        self.set_field(field, value.to_string());
+    }
+
+    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+        self.set_field(field, value.to_string());
+    }
+
+    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
+        self.set_field(field, value.to_string());
+    }
+
+    fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
+        self.set_field(field, value.to_string());
+    }
+
+    fn record_error(
+        &mut self,
+        field: &tracing::field::Field,
+        value: &(dyn std::error::Error + 'static),
+    ) {
+        self.set_field(field, value.to_string());
+    }
+}
+
+fn build_env_filter(base_level: &str) -> EnvFilter {
+    let level = base_level.trim().to_ascii_lowercase();
+    if level == "debug" {
+        EnvFilter::new("varManager_backend=debug,h2=info,reqwest=info,hyper=info,hyper_util=info")
+    } else {
+        EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"))
+    }
 }
 
 pub fn init_panic_hook() {
