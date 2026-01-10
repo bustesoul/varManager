@@ -8,6 +8,7 @@ import '../../core/backend/job_log_controller.dart';
 import '../../core/models/var_models.dart';
 import '../../widgets/image_preview_dialog.dart';
 import '../../widgets/preview_placeholder.dart';
+import '../missing_vars/missing_vars_page.dart';
 import '../home/providers.dart';
 
 final varDetailProvider = FutureProvider.family<VarDetailResponse, String>((ref, name) async {
@@ -31,6 +32,35 @@ class VarDetailPage extends ConsumerWidget {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
     await runner.runJob(kind, args: args, onLog: log.addEntry);
+  }
+
+  Future<void> _runMissingDeps(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final runner = ref.read(jobRunnerProvider);
+    final log = ref.read(jobLogProvider.notifier);
+    final result = await runner.runJob(
+      'missing_deps',
+      args: {
+        'scope': 'filtered',
+        'var_names': [varName],
+      },
+      onLog: log.addEntry,
+    );
+    final payload = result.result as Map<String, dynamic>?;
+    if (payload == null) {
+      return;
+    }
+    final missing = (payload['missing'] as List<dynamic>? ?? [])
+        .map((item) => item.toString())
+        .toList();
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MissingVarsPage(missing: missing),
+      ),
+    );
   }
 
   @override
@@ -76,6 +106,10 @@ class VarDetailPage extends ConsumerWidget {
                       Navigator.pop(context);
                     },
                     child: const Text('Filter by Creator'),
+                  ),
+                  TextButton(
+                    onPressed: () => _runMissingDeps(context, ref),
+                    child: const Text('Missing Deps'),
                   ),
                 ],
               ),

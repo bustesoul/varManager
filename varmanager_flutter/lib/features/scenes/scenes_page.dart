@@ -12,6 +12,7 @@ import '../../widgets/image_preview_dialog.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/lazy_dropdown_field.dart';
 import '../analysis/analysis_page.dart';
+import '../var_detail/var_detail_page.dart';
 
 class ScenesQueryNotifier extends Notifier<ScenesQueryParams> {
   @override
@@ -632,6 +633,16 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                 TextButton(
                   onPressed: () => _clearCache(item),
                   child: const Text('Clear cache'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => VarDetailPage(varName: item.varName),
+                      ),
+                    );
+                  },
+                  child: const Text('Details'),
                 ),
                 TextButton(
                   onPressed: () => _toggleHide(item),
