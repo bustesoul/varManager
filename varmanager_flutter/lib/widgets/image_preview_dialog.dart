@@ -49,6 +49,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
   late int currentIndex;
   late TransformationController transformationController;
   double currentZoom = 1.0;
+  bool _ctrlPressed = false;
 
   @override
   void initState() {
@@ -56,13 +57,29 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
     currentIndex = widget.initialIndex.clamp(0, widget.items.length - 1);
     transformationController = TransformationController();
     transformationController.addListener(_onTransformChanged);
+    HardwareKeyboard.instance.addHandler(_handleKeyMessage);
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyMessage);
     transformationController.removeListener(_onTransformChanged);
     transformationController.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyMessage(KeyEvent event) {
+    final isCtrl = event.logicalKey == LogicalKeyboardKey.controlLeft ||
+        event.logicalKey == LogicalKeyboardKey.controlRight;
+    if (!isCtrl) return false;
+
+    final pressed = event is KeyDownEvent || event is KeyRepeatEvent;
+    if (_ctrlPressed != pressed) {
+      setState(() {
+        _ctrlPressed = pressed;
+      });
+    }
+    return false;
   }
 
   void _onTransformChanged() {
@@ -84,6 +101,18 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
     if (event.scrollDelta.dy == 0) {
       return;
     }
+
+    // CTRL+Scroll: switch images
+    if (_ctrlPressed) {
+      if (event.scrollDelta.dy > 0) {
+        _stepIndex(1);
+      } else {
+        _stepIndex(-1);
+      }
+      return;
+    }
+
+    // Normal scroll: zoom
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null || !renderBox.hasSize) {
       return;
@@ -258,67 +287,70 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                   ),
                           ),
                           const SizedBox(width: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black87,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.white24,
-                                width: 1,
+                          SizedBox(
+                            width: 72,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
                               ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (showSideNavigation)
-                                  IconButton(
-                                    onPressed: canGoPrev
-                                        ? () => _stepIndex(-1)
-                                        : null,
-                                    icon: const Icon(
-                                      Icons.keyboard_arrow_up,
-                                      color: Colors.white70,
+                              decoration: BoxDecoration(
+                                color: Colors.black87,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.white24,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (showSideNavigation)
+                                    IconButton(
+                                      onPressed: canGoPrev
+                                          ? () => _stepIndex(-1)
+                                          : null,
+                                      icon: const Icon(
+                                        Icons.keyboard_arrow_up,
+                                        color: Colors.white70,
+                                      ),
+                                      tooltip: 'Previous',
                                     ),
-                                    tooltip: 'Previous',
+                                  Icon(
+                                    _ctrlPressed ? Icons.swap_vert : Icons.zoom_in,
+                                    color: Colors.white70,
+                                    size: 20,
                                   ),
-                                const Icon(
-                                  Icons.zoom_in,
-                                  color: Colors.white70,
-                                  size: 20,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${currentZoom.toStringAsFixed(2)}x',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'Scroll',
-                                  style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                                if (showSideNavigation)
-                                  IconButton(
-                                    onPressed: canGoNext
-                                        ? () => _stepIndex(1)
-                                        : null,
-                                    icon: const Icon(
-                                      Icons.keyboard_arrow_down,
-                                      color: Colors.white70,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${currentZoom.toStringAsFixed(2)}x',
+                                    style: TextStyle(
+                                      color: _ctrlPressed ? Colors.white38 : Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
                                     ),
-                                    tooltip: 'Next',
                                   ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Scroll',
+                                    style: TextStyle(
+                                      color: _ctrlPressed ? Colors.white70 : Colors.white54,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  if (showSideNavigation)
+                                    IconButton(
+                                      onPressed: canGoNext
+                                          ? () => _stepIndex(1)
+                                          : null,
+                                      icon: const Icon(
+                                        Icons.keyboard_arrow_down,
+                                        color: Colors.white70,
+                                      ),
+                                      tooltip: 'Next',
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
