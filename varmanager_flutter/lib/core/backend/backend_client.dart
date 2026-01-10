@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/config.dart';
+import '../models/download_models.dart';
 import '../models/extra_models.dart';
 import '../models/job_models.dart';
 import '../models/scene_models.dart';
@@ -223,6 +224,18 @@ class BackendClient {
   Future<dynamic> getJobResult(int id) async {
     final json = await _getJson('/jobs/$id/result');
     return json['result'];
+  }
+
+  Future<DownloadListResponse> getDownloads() async {
+    final json = await _getJson('/downloads');
+    return DownloadListResponse.fromJson(json);
+  }
+
+  Future<void> downloadAction(String action, List<int> ids) async {
+    await _postJson('/downloads/actions', {
+      'action': action,
+      'ids': ids,
+    });
   }
 
   Future<void> shutdown() async {

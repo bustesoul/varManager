@@ -22,6 +22,7 @@ mod util;
 
 use crate::app::{AppState, APP_VERSION};
 use crate::infra::db;
+use crate::infra::download_manager::DownloadManager;
 use crate::jobs::job_channel::{create_job_channel, create_job_map, JobManager};
 use crate::services::image_cache::ImageCacheService;
 
@@ -43,8 +44,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(std::io::Error::other)?,
     );
     image_cache.clone().start_maintenance();
+    let config_state = Arc::new(RwLock::new(config.clone()));
+    let download_manager = Arc::new(DownloadManager::new(db_pool.clone(), Arc::clone(&config_state)));
+    download_manager
+        .pause_incomplete()
+        .await
+        .map_err(std::io::Error::other)?;
     let state = AppState {
-        config: Arc::new(RwLock::new(config.clone())),
+        config: Arc::clone(&config_state),
         shutdown_tx: Arc::new(tokio::sync::Mutex::new(Some(shutdown_tx))),
         jobs: jobs.clone(),
         job_counter: Arc::new(AtomicU64::new(1)),
@@ -54,6 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         job_tx,
         db_pool,
         image_cache,
+        download_manager,
     };
 
     // Start JobManager to consume job events and update state
@@ -100,6 +108,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/jobs/{id}", get(api::get_job))
         .route("/jobs/{id}/logs", get(api::get_job_logs))
         .route("/jobs/{id}/result", get(api::get_job_result))
+        .route("/downloads", get(api::list_downloads))
+        .route("/downloads", post(api::enqueue_downloads))
+        .route("/downloads/actions", post(api::download_actions))
         .route("/shutdown", post(api::shutdown))
         .with_state(state);
 

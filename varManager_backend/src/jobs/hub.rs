@@ -63,8 +63,16 @@ pub struct HubDownloadList {
 }
 
 #[derive(Deserialize)]
+pub struct HubDownloadItemArgs {
+    pub url: String,
+    pub name: Option<String>,
+    pub size: Option<u64>,
+}
+
+#[derive(Deserialize)]
 pub struct HubDownloadAllArgs {
-    pub urls: Vec<String>,
+    pub urls: Option<Vec<String>>,
+    pub items: Option<Vec<HubDownloadItemArgs>>,
 }
 
 #[derive(Serialize)]
@@ -312,13 +320,51 @@ async fn download_all_async(
     reporter: &JobReporter,
     args: HubDownloadAllArgs,
 ) -> Result<(), String> {
-    let summary = crate::infra::downloader::download_urls(state, reporter, &args.urls).await?;
-    reporter
-        .set_result_async(serde_json::to_value(&summary).map_err(|err| err.to_string())?)
-        .await;
-    if summary.failed > 0 {
-        return Err(format!("{} download(s) failed.", summary.failed));
+    let mut merged = HashMap::<String, crate::infra::download_manager::DownloadEnqueueItem>::new();
+    if let Some(items) = args.items {
+        for item in items {
+            let url = item.url.trim().to_string();
+            if url.is_empty() {
+                continue;
+            }
+            let entry = merged.entry(url.clone()).or_insert(crate::infra::download_manager::DownloadEnqueueItem {
+                url: url.clone(),
+                name: item.name.clone(),
+                size: item.size,
+            });
+            if entry.name.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
+                && item.name.as_ref().map(|v| !v.trim().is_empty()).unwrap_or(false)
+            {
+                entry.name = item.name.clone();
+            }
+            if entry.size.is_none() && item.size.is_some() {
+                entry.size = item.size;
+            }
+        }
     }
+    if let Some(urls) = args.urls {
+        for url in urls {
+            let trimmed = url.trim().to_string();
+            if trimmed.is_empty() {
+                continue;
+            }
+            merged.entry(trimmed.clone()).or_insert(crate::infra::download_manager::DownloadEnqueueItem {
+                url: trimmed,
+                name: None,
+                size: None,
+            });
+        }
+    }
+    if merged.is_empty() {
+        return Err("no download urls provided".to_string());
+    }
+    let items = merged.into_values().collect::<Vec<_>>();
+    let added = state.download_manager.enqueue_items(items).await?;
+    reporter.log(format!("Queued {} download(s).", added));
+    reporter.progress(100);
+    reporter
+        .set_result_async(serde_json::json!({ "added": added }))
+        .await;
     Ok(())
 }
 

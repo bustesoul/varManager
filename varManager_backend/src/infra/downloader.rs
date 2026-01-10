@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::app::{app_root, AppState};
 use crate::infra::paths::addon_packages_dir;
 use crate::jobs::job_channel::JobReporter;
@@ -173,7 +175,7 @@ fn normalize_urls(urls: &[String]) -> Vec<String> {
     normalized
 }
 
-fn ensure_dir(path: &Path) -> Result<(), String> {
+pub(crate) fn ensure_dir(path: &Path) -> Result<(), String> {
     if path.exists() {
         if path.is_dir() {
             return Ok(());
@@ -277,7 +279,15 @@ async fn download_one(
     Ok(filename)
 }
 
-async fn resolve_final_url(url: &str, client: &Client) -> Result<String, String> {
+pub(crate) async fn resolve_final_url(url: &str, client: &Client) -> Result<String, String> {
+    resolve_final_url_with_retry(url, client, MAX_GET_RETRIES).await
+}
+
+pub(crate) async fn resolve_final_url_with_retry(
+    url: &str,
+    client: &Client,
+    max_retries: u8,
+) -> Result<String, String> {
     if url.ends_with(".data") {
         return Ok(url.to_string());
     }
@@ -310,7 +320,7 @@ async fn resolve_final_url(url: &str, client: &Client) -> Result<String, String>
         match result {
             Ok(url) => return Ok(url),
             Err(err) => {
-                if attempt <= MAX_GET_RETRIES && is_retryable_error(&err) {
+                if attempt <= max_retries && is_retryable_error(&err) {
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     continue;
                 }
@@ -320,13 +330,28 @@ async fn resolve_final_url(url: &str, client: &Client) -> Result<String, String>
     }
 }
 
-async fn resolve_filename(url: &str, client: &Client) -> Result<String, String> {
+pub(crate) async fn resolve_filename(url: &str, client: &Client) -> Result<String, String> {
+    let (filename, _size) = resolve_file_info(url, client).await?;
+    Ok(filename)
+}
+
+pub(crate) async fn resolve_file_info(
+    url: &str,
+    client: &Client,
+) -> Result<(String, Option<u64>), String> {
     let response = client
         .head(url)
         .headers(hub_headers())
         .send()
         .await
         .map_err(|err| err.to_string())?;
+
+    let content_length = response
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .and_then(|val| val.to_str().ok())
+        .and_then(|val| val.parse::<u64>().ok())
+        .filter(|size| *size > 0);
 
     let content_disposition = response.headers().get(header::CONTENT_DISPOSITION);
     let mut extracted = if let Some(cd_val) = content_disposition {
@@ -362,10 +387,10 @@ async fn resolve_filename(url: &str, client: &Client) -> Result<String, String> 
     if extracted.is_empty() {
         extracted = "default_filename".to_string();
     }
-    Ok(extracted)
+    Ok((extracted, content_length))
 }
 
-fn finalize_download(url: &Url, save_dir: &Path, filename: &str) -> Result<(), String> {
+pub(crate) fn finalize_download(url: &Url, save_dir: &Path, filename: &str) -> Result<(), String> {
     let downloaded_file_path = save_dir.join(
         url.path_segments()
             .and_then(|mut s| s.next_back())
@@ -403,7 +428,7 @@ fn verify_file_size(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn is_retryable_error(err: &str) -> bool {
+pub(crate) fn is_retryable_error(err: &str) -> bool {
     let lower = err.to_lowercase();
     lower.contains("error sending request")
         || lower.contains("connection")
@@ -411,7 +436,7 @@ fn is_retryable_error(err: &str) -> bool {
         || lower.contains("dns")
 }
 
-fn hub_headers() -> header::HeaderMap {
+pub(crate) fn hub_headers() -> header::HeaderMap {
     let mut headers = header::HeaderMap::new();
     headers.insert(
         header::ACCEPT,
@@ -469,11 +494,15 @@ fn hub_headers() -> header::HeaderMap {
     headers
 }
 
-fn resolve_download_save_path(state: &AppState) -> Result<PathBuf, String> {
+pub(crate) fn resolve_download_save_path(state: &AppState) -> Result<PathBuf, String> {
     let cfg = state
         .config
         .read()
         .map_err(|_| "config lock poisoned".to_string())?;
+    resolve_download_save_path_config(&cfg)
+}
+
+pub(crate) fn resolve_download_save_path_config(cfg: &crate::app::Config) -> Result<PathBuf, String> {
     if let Some(path) = cfg
         .downloader_save_path
         .as_ref()

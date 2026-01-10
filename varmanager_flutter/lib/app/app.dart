@@ -7,6 +7,7 @@ import '../features/home/home_page.dart';
 import '../features/hub/hub_page.dart';
 import '../features/scenes/scenes_page.dart';
 import '../features/settings/settings_page.dart';
+import '../widgets/download_manager.dart';
 import '../widgets/job_log_panel.dart';
 import 'providers.dart';
 import 'theme.dart';
@@ -170,20 +171,33 @@ class _AppShellState extends ConsumerState<AppShell> {
               )
             : Row(
                 children: [
-                  NavigationRail(
-                    selectedIndex: index,
-                    labelType: NavigationRailLabelType.all,
-                    onDestinationSelected: (value) {
-                      ref.read(navIndexProvider.notifier).setIndex(value);
-                    },
-                    destinations: _pages
-                        .map(
-                          (entry) => NavigationRailDestination(
-                            icon: Icon(entry.icon),
-                            label: Text(entry.label),
+                  SizedBox(
+                    width: 92,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: NavigationRail(
+                            selectedIndex: index,
+                            labelType: NavigationRailLabelType.all,
+                            onDestinationSelected: (value) {
+                              ref.read(navIndexProvider.notifier).setIndex(value);
+                            },
+                            destinations: _pages
+                                .map(
+                                  (entry) => NavigationRailDestination(
+                                    icon: Icon(entry.icon),
+                                    label: Text(entry.label),
+                                  ),
+                                )
+                                .toList(),
                           ),
-                        )
-                        .toList(),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 16),
+                          child: DownloadManagerBubble(),
+                        ),
+                      ],
+                    ),
                   ),
                   Expanded(
                     child: Column(

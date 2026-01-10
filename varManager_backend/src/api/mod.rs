@@ -20,6 +20,7 @@ use walkdir::WalkDir;
 use crate::jobs::job_channel::{
     min_job_log_level, JobLogsResponse, JobResultResponse, JobState, JobStatus, JobView,
 };
+use crate::infra::download_manager::{DownloadAction, DownloadEnqueueItem, DownloadListResponse};
 use crate::app::{app_root, data_dir, AppState, APP_VERSION, Config};
 use crate::infra::db;
 use crate::services::image_cache::{
@@ -537,6 +538,94 @@ pub async fn get_job_result(
         .ok_or_else(|| ApiError::conflict("job result not ready"))?;
 
     Ok(Json(JobResultResponse { id, result }))
+}
+
+#[derive(Deserialize)]
+pub struct DownloadEnqueueItemRequest {
+    pub url: String,
+    pub name: Option<String>,
+    pub size: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct DownloadEnqueueRequest {
+    pub urls: Option<Vec<String>>,
+    pub items: Option<Vec<DownloadEnqueueItemRequest>>,
+}
+
+#[derive(Deserialize)]
+pub struct DownloadActionRequest {
+    pub action: String,
+    pub ids: Vec<i64>,
+}
+
+pub async fn list_downloads(
+    State(state): State<AppState>,
+) -> ApiResult<Json<DownloadListResponse>> {
+    let data = state
+        .download_manager
+        .list_downloads()
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(Json(data))
+}
+
+pub async fn enqueue_downloads(
+    State(state): State<AppState>,
+    Json(req): Json<DownloadEnqueueRequest>,
+) -> ApiResult<Json<Value>> {
+    let mut items = Vec::new();
+    if let Some(urls) = req.urls {
+        for url in urls {
+            items.push(DownloadEnqueueItem {
+                url,
+                name: None,
+                size: None,
+            });
+        }
+    }
+    if let Some(extra) = req.items {
+        for item in extra {
+            items.push(DownloadEnqueueItem {
+                url: item.url,
+                name: item.name,
+                size: item.size,
+            });
+        }
+    }
+    if items.is_empty() {
+        return Err(ApiError::bad_request("download urls required"));
+    }
+    let added = state
+        .download_manager
+        .enqueue_items(items)
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "added": added })))
+}
+
+pub async fn download_actions(
+    State(state): State<AppState>,
+    Json(req): Json<DownloadActionRequest>,
+) -> ApiResult<Json<Value>> {
+    let action = parse_download_action(&req.action)
+        .ok_or_else(|| ApiError::bad_request("invalid download action"))?;
+    state
+        .download_manager
+        .apply_action(action, req.ids)
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "status": "ok" })))
+}
+
+fn parse_download_action(raw: &str) -> Option<DownloadAction> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "pause" => Some(DownloadAction::Pause),
+        "resume" => Some(DownloadAction::Resume),
+        "remove" => Some(DownloadAction::Remove),
+        "delete" => Some(DownloadAction::Delete),
+        _ => None,
+    }
 }
 
 fn read_config(state: &AppState) -> Result<Config, String> {

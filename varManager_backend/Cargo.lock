@@ -3528,6 +3528,7 @@ dependencies = [
  "bytes",
  "chrono",
  "dashmap",
+ "headers",
  "hex",
  "http-downloader",
  "moka",

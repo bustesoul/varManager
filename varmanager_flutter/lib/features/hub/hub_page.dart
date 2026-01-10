@@ -1341,7 +1341,26 @@ class _HubPageState extends ConsumerState<HubPage> {
                       onPressed: downloadUrls.isEmpty
                           ? null
                           : () async {
-                              await _runJob('hub_download_all', {'urls': downloadUrls});
+                              final items = downloadUrls
+                                  .map((url) => {
+                                        'url': url,
+                                        'name': _downloadByUrl[url],
+                                        'size': _downloadSizeByUrl[url],
+                                      })
+                                  .toList();
+                              final messenger = ScaffoldMessenger.of(context);
+                              await _runJob('hub_download_all', {'items': items});
+                              if (!mounted) return;
+                              setState(() {
+                                _downloadByVar.clear();
+                                _downloadByUrl.clear();
+                                _downloadSizeByUrl.clear();
+                              });
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text('Added ${items.length} downloads.'),
+                                ),
+                              );
                             },
                       child: const Text('Download All'),
                     ),

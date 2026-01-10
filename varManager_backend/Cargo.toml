@@ -35,6 +35,7 @@ http-downloader = { version = "0.3", features = ["status-tracker", "speed-limite
 percent-encoding = "2"
 url = "2"
 scraper = "0.25"
+headers = "0.3"
 
 [profile.release]
 opt-level = 3

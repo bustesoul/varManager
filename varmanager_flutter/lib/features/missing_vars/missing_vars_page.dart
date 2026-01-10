@@ -527,7 +527,12 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
       _showSnackBar('No download URL available for the selected var.');
       return;
     }
-    await _runJob('hub_download_all', {'urls': [url]});
+    await _runJob('hub_download_all', {
+      'items': [
+        {'url': url, 'name': name},
+      ],
+    });
+    _showSnackBar('Added 1 download.');
   }
 
   Future<void> _downloadAll() async {
@@ -535,14 +540,26 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
       _showSnackBar('Please click "Fetch Hub Links" first to get download URLs.');
       return;
     }
-    final urls = <String>{};
-    urls.addAll(_downloadUrls.values);
-    urls.addAll(_downloadUrlsNoVersion.values);
-    if (urls.isEmpty) {
+    final items = <Map<String, String>>[];
+    final seen = <String>{};
+    for (final entry in _downloadUrls.entries) {
+      final url = entry.value;
+      if (url.isEmpty || seen.contains(url)) continue;
+      seen.add(url);
+      items.add({'url': url, 'name': entry.key});
+    }
+    for (final entry in _downloadUrlsNoVersion.entries) {
+      final url = entry.value;
+      if (url.isEmpty || seen.contains(url)) continue;
+      seen.add(url);
+      items.add({'url': url, 'name': entry.key});
+    }
+    if (items.isEmpty) {
       _showSnackBar('No download URLs available.');
       return;
     }
-    await _runJob('hub_download_all', {'urls': urls.toList()});
+    await _runJob('hub_download_all', {'items': items});
+    _showSnackBar('Added ${items.length} downloads.');
   }
 
   void _setDraftLink(String name, String value) {

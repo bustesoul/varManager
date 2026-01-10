@@ -46,6 +46,35 @@ impl Default for ImageCacheConfig {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct DownloadConfig {
+    pub concurrency: usize,
+    pub connection_count: u8,
+    pub chunk_size_mb: u64,
+    pub http_timeout_secs: u64,
+    pub per_file_timeout_secs: u64,
+    pub max_get_retries: u8,
+    pub max_download_retries: u8,
+    pub progress_tick_ms: u64,
+    pub progress_db_flush_secs: u64,
+}
+
+impl Default for DownloadConfig {
+    fn default() -> Self {
+        Self {
+            concurrency: 3,
+            connection_count: 4,
+            chunk_size_mb: 10,
+            http_timeout_secs: 30,
+            per_file_timeout_secs: 300,
+            max_get_retries: 3,
+            max_download_retries: 3,
+            progress_tick_ms: 800,
+            progress_db_flush_secs: 2,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     pub(crate) listen_host: String,
     pub(crate) listen_port: u16,
@@ -62,6 +91,8 @@ pub struct Config {
     #[serde(default)]
     pub(crate) image_cache: ImageCacheConfig,
     #[serde(default)]
+    pub(crate) download: DownloadConfig,
+    #[serde(default)]
     pub(crate) ui_theme: Option<String>,
 }
 
@@ -77,6 +108,7 @@ impl Default for Config {
             vam_exec: Some("VaM (Desktop Mode).bat".to_string()),
             downloader_save_path: None,
             image_cache: ImageCacheConfig::default(),
+            download: DownloadConfig::default(),
             ui_theme: None,
         }
     }
@@ -92,6 +124,7 @@ pub struct AppState {
     pub(crate) job_tx: JobEventSender,
     pub(crate) db_pool: SqlitePool,
     pub(crate) image_cache: Arc<crate::services::image_cache::ImageCacheService>,
+    pub(crate) download_manager: Arc<crate::infra::download_manager::DownloadManager>,
 }
 
 pub fn init_logging(

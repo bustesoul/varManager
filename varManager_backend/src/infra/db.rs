@@ -164,6 +164,20 @@ pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
                     last_accessed INTEGER NOT NULL,
                     access_count INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS downloads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT NOT NULL,
+                    name TEXT,
+                    status TEXT NOT NULL,
+                    downloaded_bytes INTEGER NOT NULL DEFAULT 0,
+                    total_bytes INTEGER,
+                    speed_bytes INTEGER NOT NULL DEFAULT 0,
+                    error TEXT,
+                    save_path TEXT,
+                    temp_path TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
 
                 CREATE INDEX IF NOT EXISTS idx_vars_creatorName ON vars(creatorName);
                 CREATE INDEX IF NOT EXISTS idx_vars_packageName ON vars(packageName);
@@ -177,6 +191,8 @@ pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
                 CREATE INDEX IF NOT EXISTS idx_dependencies_dependency ON dependencies(dependency);
                 CREATE INDEX IF NOT EXISTS idx_savedepens_dependency ON savedepens(dependency);
                 CREATE INDEX IF NOT EXISTS idx_image_cache_last_accessed ON image_cache_entries(last_accessed);
+                CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);
+                CREATE INDEX IF NOT EXISTS idx_downloads_created_at ON downloads(created_at);
                 "#
     )
     .execute(pool)
@@ -184,6 +200,9 @@ pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
     .map_err(|err| err.to_string())?;
 
     let _ = sqlx::query("ALTER TABLE vars ADD COLUMN fsize REAL")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE downloads ADD COLUMN temp_path TEXT")
         .execute(pool)
         .await;
 
