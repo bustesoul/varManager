@@ -463,21 +463,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    return LongPressDraggable<SceneListItem>(
-                      data: item,
-                      feedback: Material(
-                        elevation: 6,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 280),
-                          child: _sceneCard(context, item),
-                        ),
-                      ),
-                      childWhenDragging: Opacity(
-                        opacity: 0.4,
-                        child: _sceneCard(context, item),
-                      ),
-                      child: _sceneCard(context, item),
-                    );
+                    return _sceneCard(context, item);
                   },
                 ),
               ),
@@ -489,11 +475,103 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   Widget _sceneCard(BuildContext context, SceneListItem item) {
+    final header = _buildSceneHeader(context, item);
+    final feedback = _sceneCardContent(
+      context,
+      item,
+      _buildSceneHeader(context, item),
+    );
+    final draggableHeader = Draggable<SceneListItem>(
+      data: item,
+      feedback: Material(
+        elevation: 6,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 280),
+          child: feedback,
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.4,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.move,
+          child: header,
+        ),
+      ),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.move,
+        child: header,
+      ),
+    );
+    return _sceneCardContent(context, item, draggableHeader);
+  }
+
+  Widget _buildSceneHeader(BuildContext context, SceneListItem item) {
     final client = ref.read(backendClientProvider);
     final previewUrl = _previewUrl(client, item);
     final title = p.basenameWithoutExtension(item.scenePath);
     final cacheSize =
         (72 * MediaQuery.of(context).devicePixelRatio).round();
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: previewUrl == null
+              ? const PreviewPlaceholder(width: 72, height: 72)
+              : Image.network(
+                  previewUrl,
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                  cacheWidth: cacheSize,
+                  cacheHeight: cacheSize,
+                  errorBuilder: (_, _, _) => const PreviewPlaceholder(
+                    width: 72,
+                    height: 72,
+                    icon: Icons.broken_image,
+                  ),
+                ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$title (${item.atomType})',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                item.varName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                children: [
+                  Chip(
+                    label: Text(item.location),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Icon(
+          Icons.drag_indicator,
+          size: 18,
+          color: Theme.of(context).colorScheme.outline,
+        ),
+      ],
+    );
+  }
+
+  Widget _sceneCardContent(
+      BuildContext context, SceneListItem item, Widget header) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Padding(
@@ -501,58 +579,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: previewUrl == null
-                      ? const PreviewPlaceholder(width: 72, height: 72)
-                      : Image.network(
-                          previewUrl,
-                          width: 72,
-                          height: 72,
-                          fit: BoxFit.cover,
-                          cacheWidth: cacheSize,
-                          cacheHeight: cacheSize,
-                          errorBuilder: (_, _, _) => const PreviewPlaceholder(
-                            width: 72,
-                            height: 72,
-                            icon: Icons.broken_image,
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$title (${item.atomType})',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.varName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 6,
-                        children: [
-                          Chip(
-                            label: Text(item.location),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            header,
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,

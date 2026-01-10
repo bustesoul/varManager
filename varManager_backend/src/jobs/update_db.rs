@@ -1,6 +1,6 @@
 use crate::infra::db::{
-    delete_var_related, list_vars, replace_dependencies, replace_scenes,
-    upsert_install_status, upsert_var, var_exists_conn, SceneRecord, VarRecord,
+    delete_var_related, list_vars, replace_dependencies, replace_hide_fav, replace_scenes,
+    upsert_install_status, upsert_var, var_exists_conn, HideFavRecord, SceneRecord, VarRecord,
 };
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
@@ -102,6 +102,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     let pool_for_tx = pool.clone();
     let varspath_async = varspath.clone();
     let reporter_async = reporter.clone();
+    let vampath_async = vampath.clone();
     let dependency_regex = dependency_regex.clone();
     let var_files = var_files.clone();
     handle.block_on(async move {
@@ -126,6 +127,15 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                     .await?;
                     replace_scenes(&mut tx, &processed.var_record.var_name, &processed.scenes)
                         .await?;
+                    if let Some(vampath) = vampath_async.as_ref() {
+                        let entries = collect_hide_fav_records(
+                            vampath,
+                            &processed.var_record.var_name,
+                            &processed.scenes,
+                        );
+                        replace_hide_fav(&mut tx, &processed.var_record.var_name, &entries)
+                            .await?;
+                    }
                 }
                 Err(ProcessError::NotComply(err)) => {
                     reporter_async.log(err);
@@ -220,6 +230,47 @@ fn normalize_path(value: &str) -> Option<PathBuf> {
     } else {
         Some(PathBuf::from(trimmed))
     }
+}
+
+fn read_hide_fav_for_scene(vampath: &Path, var_name: &str, scene_path: &str) -> (bool, bool) {
+    let scenepath = Path::new(scene_path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let scenename = Path::new(scene_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let base = crate::infra::paths::prefs_root(vampath)
+        .join(var_name)
+        .join(&scenepath);
+    let pathhide = base.join(format!("{}.hide", scenename));
+    let pathfav = base.join(format!("{}.fav", scenename));
+    (pathhide.exists(), pathfav.exists())
+}
+
+fn collect_hide_fav_records(
+    vampath: &Path,
+    var_name: &str,
+    scenes: &[SceneRecord],
+) -> Vec<HideFavRecord> {
+    scenes
+        .iter()
+        .filter_map(|scene| {
+            let (hide, fav) =
+                read_hide_fav_for_scene(vampath, var_name, &scene.scene_path);
+            if hide || fav {
+                Some(HideFavRecord {
+                    scene_path: scene.scene_path.clone(),
+                    hide,
+                    fav,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn tidy_vars(

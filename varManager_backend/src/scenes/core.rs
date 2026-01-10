@@ -186,6 +186,11 @@ pub(crate) struct SceneHideFavArgs {
     pub(crate) scene_path: String,
 }
 
+pub(crate) struct HideFavState {
+    pub(crate) hide: bool,
+    pub(crate) fav: bool,
+}
+
 #[derive(Deserialize)]
 pub(crate) struct CacheClearArgs {
     var_name: String,
@@ -1143,7 +1148,7 @@ pub(crate) fn set_hide_fav(
     var_name: Option<&str>,
     scene_path: &str,
     hide_fav: i32,
-) -> Result<(), String> {
+) -> Result<HideFavState, String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let scenepath = Path::new(scene_path)
@@ -1211,6 +1216,44 @@ pub(crate) fn set_hide_fav(
         }
         _ => {}
     }
+    let hide = pathhide.exists();
+    let fav = pathfav.exists();
+    Ok(HideFavState { hide, fav })
+}
+
+pub(crate) async fn sync_hide_fav_db(
+    state: &AppState,
+    var_name: Option<&str>,
+    scene_path: &str,
+    status: HideFavState,
+) -> Result<(), String> {
+    let var_name = match var_name.map(|name| name.trim()) {
+        Some(name) if !name.is_empty() => name,
+        _ => return Ok(()),
+    };
+    if var_name.eq_ignore_ascii_case("save") || var_name.eq_ignore_ascii_case("(save).") {
+        return Ok(());
+    }
+    if !status.hide && !status.fav {
+        sqlx::query("DELETE FROM HideFav WHERE varName = ?1 AND scenePath = ?2")
+            .bind(var_name)
+            .bind(scene_path)
+            .execute(&state.db_pool)
+            .await
+            .map_err(|err| err.to_string())?;
+        return Ok(());
+    }
+    sqlx::query(
+        "INSERT INTO HideFav (varName, scenePath, hide, fav) VALUES (?1, ?2, ?3, ?4)\
+         ON CONFLICT(varName, scenePath) DO UPDATE SET hide = excluded.hide, fav = excluded.fav",
+    )
+    .bind(var_name)
+    .bind(scene_path)
+    .bind(if status.hide { 1 } else { 0 })
+    .bind(if status.fav { 1 } else { 0 })
+    .execute(&state.db_pool)
+    .await
+    .map_err(|err| err.to_string())?;
     Ok(())
 }
 

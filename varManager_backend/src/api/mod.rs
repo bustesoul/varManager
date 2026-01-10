@@ -1211,7 +1211,7 @@ pub async fn list_scenes(
          FROM scenes s
          LEFT JOIN vars v ON s.varName = v.varName
          LEFT JOIN installStatus i ON s.varName = i.varName
-         LEFT JOIN HideFav h ON s.varName = h.varName
+         LEFT JOIN HideFav h ON s.varName = h.varName AND s.scenePath = h.scenePath
          {}",
         where_clause
     );

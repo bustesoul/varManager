@@ -42,6 +42,13 @@ pub struct SceneRecord {
     pub is_loadable: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct HideFavRecord {
+    pub scene_path: String,
+    pub hide: bool,
+    pub fav: bool,
+}
+
 pub fn default_path() -> PathBuf {
     data_dir().join("varManager.db")
 }
@@ -64,6 +71,27 @@ pub async fn open_default_pool() -> Result<SqlitePool, String> {
 }
 
 pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
+    let hide_fav_needs_migration = {
+        let rows = sqlx::query("PRAGMA table_info(HideFav)")
+            .fetch_all(pool)
+            .await
+            .map_err(|err| err.to_string())?;
+        if rows.is_empty() {
+            false
+        } else {
+            !rows.iter().any(|row| {
+                let name: String = row.try_get("name").unwrap_or_default();
+                name.eq_ignore_ascii_case("scenePath")
+            })
+        }
+    };
+    if hide_fav_needs_migration {
+        sqlx::query("DROP TABLE IF EXISTS HideFav")
+            .execute(pool)
+            .await
+            .map_err(|err| err.to_string())?;
+    }
+
     sqlx::query(
         r#"
                 CREATE TABLE IF NOT EXISTS dependencies (
@@ -72,10 +100,11 @@ pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
                     dependency TEXT
                 );
                 CREATE TABLE IF NOT EXISTS HideFav (
-                    varName TEXT PRIMARY KEY,
-                    ID INTEGER NOT NULL,
+                    varName TEXT NOT NULL,
+                    scenePath TEXT NOT NULL,
                     hide INTEGER NOT NULL,
-                    fav INTEGER NOT NULL
+                    fav INTEGER NOT NULL,
+                    PRIMARY KEY (varName, scenePath)
                 );
                 CREATE TABLE IF NOT EXISTS installStatus (
                     varName TEXT PRIMARY KEY,
@@ -371,6 +400,34 @@ pub async fn replace_scenes(
         .bind(&scene.scene_path)
         .bind(scene.is_preset as i64)
         .bind(scene.is_loadable as i64)
+        .execute(tx.as_mut())
+        .await
+        .map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+pub async fn replace_hide_fav(
+    tx: &mut Transaction<'_, Sqlite>,
+    var_name: &str,
+    entries: &[HideFavRecord],
+) -> Result<(), String> {
+    sqlx::query("DELETE FROM HideFav WHERE varName = ?1")
+        .bind(var_name)
+        .execute(tx.as_mut())
+        .await
+        .map_err(|err| err.to_string())?;
+    for entry in entries {
+        if !entry.hide && !entry.fav {
+            continue;
+        }
+        sqlx::query(
+            "INSERT INTO HideFav (varName, scenePath, hide, fav) VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(var_name)
+        .bind(&entry.scene_path)
+        .bind(if entry.hide { 1 } else { 0 })
+        .bind(if entry.fav { 1 } else { 0 })
         .execute(tx.as_mut())
         .await
         .map_err(|err| err.to_string())?;
