@@ -438,11 +438,21 @@ async fn download_with_progress(
 
     let final_url = resolve_final_url_with_retry(url, client, runtime.max_get_retries).await?;
     let (filename, head_size) = resolve_file_info(&final_url, client).await?;
-    let final_name = if let Some(name_hint) = name_hint {
-        if !name_hint.trim().is_empty() {
-            name_hint.trim().to_string()
-        } else {
+
+    // Priority: Content-Disposition filename > name_hint > URL filename
+    // Content-Disposition from server is the most accurate source
+    let final_name = if filename != "default_filename" && filename.to_lowercase().ends_with(".var") {
+        // Server returned a valid .var filename, use it
+        filename
+    } else if let Some(hint) = name_hint {
+        // Fallback to name_hint if provided
+        let trimmed = hint.trim();
+        if trimmed.is_empty() {
             filename
+        } else if trimmed.to_lowercase().ends_with(".var") {
+            trimmed.to_string()
+        } else {
+            format!("{}.var", trimmed)
         }
     } else {
         filename

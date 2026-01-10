@@ -392,10 +392,12 @@ class _ActionRow extends StatelessWidget {
           icon: const Icon(Icons.clear, size: 20),
           tooltip: 'Remove Record',
         ),
-        IconButton(
-          onPressed: enabled ? onDelete : null,
-          icon: const Icon(Icons.delete, size: 20),
+        _DeleteIconButton(
+          onConfirmed: onDelete,
+          icon: Icons.delete,
           tooltip: 'Delete File',
+          enabled: enabled,
+          size: 20,
         ),
       ],
     );
@@ -503,9 +505,9 @@ class _DownloadRow extends StatelessWidget {
               icon: const Icon(Icons.clear, size: 18),
               tooltip: 'Remove Record',
             ),
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline, size: 18),
+            _DeleteIconButton(
+              onConfirmed: onDelete,
+              icon: Icons.delete_outline,
               tooltip: 'Delete File',
             ),
           ],
@@ -555,4 +557,65 @@ String _formatBytes(int bytes) {
   }
   final precision = size >= 10 || unitIndex == 0 ? 0 : 1;
   return '${size.toStringAsFixed(precision)} ${units[unitIndex]}';
+}
+
+class _DeleteIconButton extends StatefulWidget {
+  const _DeleteIconButton({
+    required this.onConfirmed,
+    required this.icon,
+    required this.tooltip,
+    this.enabled = true,
+    this.size = 18,
+  });
+
+  final VoidCallback onConfirmed;
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final double size;
+
+  @override
+  State<_DeleteIconButton> createState() => _DeleteIconButtonState();
+}
+
+class _DeleteIconButtonState extends State<_DeleteIconButton> {
+  bool _hovering = false;
+
+  Future<void> _handleTap() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: const Text('This will permanently delete the file. Are you sure?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      widget.onConfirmed();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.enabled && _hovering ? Colors.red : null;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: IconButton(
+        onPressed: widget.enabled ? _handleTap : null,
+        icon: Icon(widget.icon, size: widget.size, color: color),
+        tooltip: widget.tooltip,
+      ),
+    );
+  }
 }
