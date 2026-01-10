@@ -20,6 +20,17 @@ class BackendProcessManager {
   static const String parentPidEnvKey = 'VARMANAGER_PARENT_PID';
 
   static Future<String> resolveBaseUrl(Directory workDir) async {
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+    final exeDirConfig = File(p.join(exeDir, 'config.json'));
+    if (await exeDirConfig.exists()) {
+      try {
+        final raw = await exeDirConfig.readAsString();
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        final config = AppConfig.fromJson(json);
+        return config.baseUrl;
+      } catch (_) {}
+    }
+    
     final configFile = File(p.join(workDir.path, 'config.json'));
     if (!await configFile.exists()) {
       return 'http://$defaultHost:$defaultPort';
@@ -43,14 +54,15 @@ class BackendProcessManager {
       if (await _isHealthy()) {
         await _shutdownExisting();
       }
-      final exePath = _resolveBackendExe();
-      if (exePath == null) {
+      final resolved = _resolveBackendExe();
+      if (resolved == null) {
         throw Exception('backend exe not found');
       }
+      final (exePath, backendWorkDir) = resolved;
       _process = await Process.start(
         exePath,
         [],
-        workingDirectory: workDir.path,
+        workingDirectory: backendWorkDir,
         environment: {parentPidEnvKey: pid.toString()},
       );
       await _waitForHealth();
@@ -98,7 +110,9 @@ class BackendProcessManager {
       }
       await Future.delayed(const Duration(milliseconds: 350));
     }
-    throw Exception('backend health check timeout');
+    throw Exception(
+      'backend health check timeout (if using a proxy, set NO_PROXY=127.0.0.1,localhost)',
+    );
   }
 
   Future<void> _waitForShutdown() async {
@@ -114,11 +128,18 @@ class BackendProcessManager {
     }
   }
 
-  String? _resolveBackendExe() {
+  (String exePath, String workingDir)? _resolveBackendExe() {
     final name = Platform.isWindows ? 'varManager_backend.exe' : 'varManager_backend';
+    
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+    final exeDirCandidate = File(p.join(exeDir, name));
+    if (exeDirCandidate.existsSync()) {
+      return (exeDirCandidate.path, exeDir);
+    }
+    
     final candidate = File(p.join(workDir.path, name));
     if (candidate.existsSync()) {
-      return candidate.path;
+      return (candidate.path, workDir.path);
     }
     return null;
   }
