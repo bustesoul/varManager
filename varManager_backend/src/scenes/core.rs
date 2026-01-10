@@ -329,7 +329,7 @@ pub(crate) fn scene_preset_look_blocking(
         &mut save_names,
         &mut character_gender,
         args.ignore_gender,
-        args.person_order.unwrap_or(0),
+        args.person_order.unwrap_or(1),
     )?;
 
     let deps = read_lines(&cache_root.join("depend.txt"))?;
@@ -345,7 +345,7 @@ pub(crate) fn scene_preset_look_blocking(
         Some(deps),
         &character_gender,
         args.ignore_gender,
-        args.person_order.unwrap_or(0) + 1,
+        args.person_order.unwrap_or(1),
     )?;
     reporter.set_result(serde_json::to_value(result).map_err(|e| e.to_string())?);
     Ok(())
@@ -371,7 +371,7 @@ pub(crate) fn scene_preset_blocking(
     let atom = load_person_atom(&cache_root, &args.atom_name)?;
     let mut save_names = Vec::new();
     let character_gender = "unknown".to_string();
-    let person_order = args.person_order.unwrap_or(0);
+    let person_order = args.person_order.unwrap_or(1);
 
     match kind {
         PresetKind::Plugin => save_plugin_preset(
@@ -429,7 +429,7 @@ pub(crate) fn scene_preset_blocking(
         Some(deps),
         &character_gender,
         args.ignore_gender,
-        person_order + 1,
+        person_order,
     )?;
     reporter.set_result(serde_json::to_value(result).map_err(|e| e.to_string())?);
     Ok(())
@@ -451,14 +451,14 @@ pub(crate) fn scene_preset_scene_blocking(
         "",
         "unknown",
         args.ignore_gender,
-        args.person_order.unwrap_or(0) + 1,
+        args.person_order.unwrap_or(1),
     );
     let atom_resources = add_atom_resources(
         state,
         &cache_root,
         &args.atom_paths,
         args.ignore_gender,
-        args.person_order.unwrap_or(0),
+        args.person_order.unwrap_or(1),
         false,
     )?;
     save_names.extend(atom_resources);
@@ -476,7 +476,7 @@ pub(crate) fn scene_preset_scene_blocking(
         Some(deps),
         "unknown",
         args.ignore_gender,
-        args.person_order.unwrap_or(0) + 1,
+        args.person_order.unwrap_or(1),
     )?;
     reporter.set_result(serde_json::to_value(result).map_err(|e| e.to_string())?);
     Ok(())
@@ -496,7 +496,7 @@ pub(crate) fn scene_add_atoms_blocking(
         &cache_root,
         &args.atom_paths,
         args.ignore_gender,
-        args.person_order.unwrap_or(0),
+        args.person_order.unwrap_or(1),
         args.as_subscene,
     )?;
 
@@ -513,7 +513,7 @@ pub(crate) fn scene_add_atoms_blocking(
         Some(deps),
         "unknown",
         args.ignore_gender,
-        args.person_order.unwrap_or(0) + 1,
+        args.person_order.unwrap_or(1),
     )?;
     reporter.set_result(serde_json::to_value(result).map_err(|e| e.to_string())?);
     Ok(())
@@ -754,7 +754,7 @@ pub fn list_analysis_atoms(
     Ok((atoms, person_atoms))
 }
 
-pub fn analysis_summary(
+pub async fn analysis_summary(
     state: &AppState,
     var_name: &str,
     entry_name: &str,
@@ -771,7 +771,7 @@ pub fn analysis_summary(
     };
 
     let person_atoms = list_person_info(&atoms_root, &entry_name)?;
-    let dependencies = read_dependencies(state, &cache_root)?;
+    let dependencies = read_dependencies(state, &cache_root).await?;
     let parent_links = read_parent_links(&cache_root)?;
     let character_gender = read_cached_gender(&cache_root);
     let is_scene = entry_name.to_ascii_lowercase().contains("/scene/");
@@ -901,18 +901,21 @@ fn analyze_person_atom(atom: &Value) -> (String, bool, bool) {
     (gender, has_animation, has_plugin)
 }
 
-fn read_dependencies(state: &AppState, cache_root: &Path) -> Result<Vec<AnalysisDependency>, String> {
+async fn read_dependencies(
+    state: &AppState,
+    cache_root: &Path,
+) -> Result<Vec<AnalysisDependency>, String> {
     let dep_path = cache_root.join("depend.txt");
     if !dep_path.exists() {
         return Ok(Vec::new());
     }
     let deps = distinct(read_lines(&dep_path)?);
-    let handle = tokio::runtime::Handle::current();
     let mut items = Vec::new();
     for dep in deps {
-        let resolved = handle
-            .block_on(resolve_var_exist_name(&state.db_pool, &dep))
-            .unwrap_or_else(|_| "missing".to_string());
+        let resolved =
+            resolve_var_exist_name(&state.db_pool, &dep)
+                .await
+                .unwrap_or_else(|_| "missing".to_string());
         let (status, resolved_name) = if resolved == "missing" {
             ("missing", String::new())
         } else if let Some(stripped) = resolved.strip_suffix('$') {
@@ -1145,31 +1148,31 @@ fn save_preset(
 
     if skin {
         save_static_preset(state, "Custom\\Atom\\Person\\Appearance\\Preset_eyeDefault.vap", DEFAULT_EYE_COLOR)?;
-        add_preset_resource(save_names, "looks", "Custom/Atom/Person/Appearance/Preset_eyeDefault.vap", character_gender, ignore_gender, person_order + 1);
+        add_preset_resource(save_names, "looks", "Custom/Atom/Person/Appearance/Preset_eyeDefault.vap", character_gender, ignore_gender, person_order);
     }
     if clothing {
         save_static_preset(state, "Custom\\Atom\\Person\\Clothing\\Preset_ClothNaked.vap", CLOTH_NAKED)?;
-        add_preset_resource(save_names, "clothing", "Custom/Atom/Person/Clothing/Preset_ClothNaked.vap", character_gender, ignore_gender, person_order + 1);
+        add_preset_resource(save_names, "clothing", "Custom/Atom/Person/Clothing/Preset_ClothNaked.vap", character_gender, ignore_gender, person_order);
     }
     if hair {
         save_static_preset(state, "Custom\\Atom\\Person\\Hair\\Preset_HairBald.vap", HAIR_BALD)?;
-        add_preset_resource(save_names, "hairstyle", "Custom/Atom/Person/Hair/Preset_HairBald.vap", character_gender, ignore_gender, person_order + 1);
+        add_preset_resource(save_names, "hairstyle", "Custom/Atom/Person/Hair/Preset_HairBald.vap", character_gender, ignore_gender, person_order);
     }
     if morphs {
         save_json_preset(state, var_name, "Custom\\Atom\\Person\\Morphs\\Preset_temp.vap", &json_morphs)?;
-        add_preset_resource(save_names, "morphs", "Custom/Atom/Person/Morphs/Preset_temp.vap", character_gender, ignore_gender, person_order + 1);
+        add_preset_resource(save_names, "morphs", "Custom/Atom/Person/Morphs/Preset_temp.vap", character_gender, ignore_gender, person_order);
     }
     if breast {
         save_json_preset(state, var_name, "Custom\\Atom\\Person\\BreastPhysics\\Preset_temp.vap", &json_breast)?;
-        add_preset_resource(save_names, "breast", "Custom/Atom/Person/BreastPhysics/Preset_temp.vap", character_gender, ignore_gender, person_order + 1);
+        add_preset_resource(save_names, "breast", "Custom/Atom/Person/BreastPhysics/Preset_temp.vap", character_gender, ignore_gender, person_order);
     }
     if glute {
         save_json_preset(state, var_name, "Custom\\Atom\\Person\\GlutePhysics\\Preset_temp.vap", &json_glute)?;
-        add_preset_resource(save_names, "glute", "Custom/Atom/Person/GlutePhysics/Preset_temp.vap", character_gender, ignore_gender, person_order + 1);
+        add_preset_resource(save_names, "glute", "Custom/Atom/Person/GlutePhysics/Preset_temp.vap", character_gender, ignore_gender, person_order);
     }
     if clothing || hair || skin {
         save_json_preset(state, var_name, "Custom\\Atom\\Person\\Appearance\\Preset_temp.vap", &json_preset)?;
-        add_preset_resource(save_names, "looks", "Custom/Atom/Person/Appearance/Preset_temp.vap", character_gender, ignore_gender, person_order + 1);
+        add_preset_resource(save_names, "looks", "Custom/Atom/Person/Appearance/Preset_temp.vap", character_gender, ignore_gender, person_order);
     }
 
     Ok(())
@@ -1205,7 +1208,7 @@ fn save_plugin_preset(
         }
     }
     save_json_preset(state, var_name, "Custom\\Atom\\Person\\Plugins\\Preset_temp.vap", &json_plugin)?;
-    add_preset_resource(save_names, "plugin", "Custom/Atom/Person/Plugins/Preset_temp.vap", character_gender, ignore_gender, person_order + 1);
+    add_preset_resource(save_names, "plugin", "Custom/Atom/Person/Plugins/Preset_temp.vap", character_gender, ignore_gender, person_order);
     Ok(())
 }
 
@@ -1235,7 +1238,7 @@ fn save_pose_preset(
         }
     }
     save_json_preset(state, var_name, "Custom\\Atom\\Person\\Pose\\Preset_temp.vap", &json_pose)?;
-    add_preset_resource(save_names, "pose", "Custom/Atom/Person/Pose/Preset_temp.vap", character_gender, ignore_gender, person_order + 1);
+    add_preset_resource(save_names, "pose", "Custom/Atom/Person/Pose/Preset_temp.vap", character_gender, ignore_gender, person_order);
     Ok(())
 }
 
@@ -1279,7 +1282,7 @@ fn save_animation_preset(
         "Custom/Atom/Person/AnimationPresets/Preset_temp.bin",
         character_gender,
         ignore_gender,
-        person_order + 1,
+        person_order,
     );
     Ok(())
 }
@@ -1342,7 +1345,7 @@ fn add_atom_resources(
             &save_name,
             "unknown",
             ignore_gender,
-            person_order + 1,
+            person_order,
         );
     }
     Ok(resources)
@@ -1474,6 +1477,18 @@ fn build_loadscene(
     ignore_gender: bool,
     person_order: u32,
 ) -> Result<SceneLoadResult, String> {
+    if json_ls.get("merge").is_none() {
+        json_ls["merge"] = Value::Bool(merge);
+    }
+    if json_ls.get("characterGender").is_none() {
+        json_ls["characterGender"] = Value::String(character_gender.to_string());
+    }
+    if json_ls.get("ignoreGender").is_none() {
+        json_ls["ignoreGender"] = Value::Bool(ignore_gender);
+    }
+    if json_ls.get("personOrder").is_none() {
+        json_ls["personOrder"] = Value::from(person_order);
+    }
     let resources = json_ls
         .get_mut("resources")
         .and_then(|v| v.as_array_mut())

@@ -2,9 +2,6 @@ mod core;
 mod jobs;
 
 pub use core::{
-    AnalysisDependency,
-    AnalysisParentLink,
-    AnalysisPersonInfo,
     AnalysisSummary,
     AtomTreeNode,
     analysis_summary,

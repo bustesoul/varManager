@@ -23,7 +23,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   bool _breast = false;
   bool _glute = false;
   bool _ignoreGender = false;
-  int _personOrder = 0;
+  int _personOrder = 1;
   bool _includeBaseAtoms = true;
 
   AnalysisSummaryResponse? _summary;
@@ -611,8 +611,6 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildTargetOptions(),
-          const SizedBox(height: 12),
           _section(
             title: 'Atom Search',
             child: TextField(
@@ -704,6 +702,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           Expanded(
             child: _section(
               title: 'Atom Tree',
+              expandChild: true,
               child: summary.atoms.isEmpty
                   ? const Center(child: Text('No atoms available'))
                   : ListView(
@@ -730,8 +729,6 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                             'var_name': summary.varName,
                             'entry_name': summary.entryName,
                             'atom_paths': paths.toList(),
-                            'ignore_gender': _ignoreGender,
-                            'person_order': _personOrder,
                           });
                         }
                       : null,
@@ -744,8 +741,6 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                             'var_name': summary.varName,
                             'entry_name': summary.entryName,
                             'atom_paths': _selectedAtomPaths.toList(),
-                            'ignore_gender': _ignoreGender,
-                            'person_order': _personOrder,
                           });
                         }
                       : null,
@@ -758,8 +753,6 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                             'var_name': summary.varName,
                             'entry_name': summary.entryName,
                             'atom_paths': _selectedAtomPaths.toList(),
-                            'ignore_gender': _ignoreGender,
-                            'person_order': _personOrder,
                           });
                         }
                       : null,
@@ -823,13 +816,14 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     );
     if (!hasChildren) {
       return Padding(
-        padding: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.only(left: 16),
         child: title,
       );
     }
     return ExpansionTile(
       key: PageStorageKey<String>(key),
       title: title,
+      childrenPadding: const EdgeInsets.only(left: 16),
       children: children,
     );
   }
@@ -954,6 +948,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           Expanded(
             child: _section(
               title: 'Dependencies (${filtered.length})',
+              expandChild: true,
               child: filtered.isEmpty
                   ? const Center(child: Text('No dependencies match'))
                   : ListView.separated(
@@ -1009,40 +1004,57 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
 
   Widget _buildTargetOptions() {
     return _section(
-      title: 'Target',
-      child: Row(
+      title: 'Preset Target',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: DropdownButton<int>(
-              value: _personOrder,
-              isExpanded: true,
-              items: List.generate(
-                8,
-                (index) => DropdownMenuItem(
-                  value: index,
-                  child: Text('Person ${index + 1}'),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButton<int>(
+                  value: _personOrder,
+                  isExpanded: true,
+                  items: List.generate(
+                    8,
+                    (index) => DropdownMenuItem(
+                      value: index + 1,
+                      child: Text('Person ${index + 1}'),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _personOrder = value);
+                  },
                 ),
               ),
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() => _personOrder = value);
-              },
-            ),
+              const SizedBox(width: 12),
+              FilterChip(
+                label: const Text('Ignore Gender'),
+                selected: _ignoreGender,
+                onSelected: (value) {
+                  setState(() => _ignoreGender = value);
+                },
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          FilterChip(
-            label: const Text('Ignore Gender'),
-            selected: _ignoreGender,
-            onSelected: (value) {
-              setState(() => _ignoreGender = value);
-            },
+          const SizedBox(height: 6),
+          Text(
+            'Applies to person presets only. Atom actions ignore this.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
         ],
       ),
     );
   }
 
-  Widget _section({required String title, required Widget child}) {
+  Widget _section({
+    required String title,
+    required Widget child,
+    bool expandChild = false,
+  }) {
+    final content = expandChild ? Expanded(child: child) : child;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1051,7 +1063,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            child,
+            content,
           ],
         ),
       ),

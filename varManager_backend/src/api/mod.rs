@@ -1930,6 +1930,7 @@ pub async fn get_analysis_summary(
     Query(query): Query<AnalysisAtomsQuery>,
 ) -> ApiResult<Json<scenes::AnalysisSummary>> {
     let summary = scenes::analysis_summary(&state, &query.var_name, &query.entry_name)
+        .await
         .map_err(internal_error)?;
     Ok(Json(summary))
 }
