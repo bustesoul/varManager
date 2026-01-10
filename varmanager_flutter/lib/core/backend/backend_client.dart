@@ -162,6 +162,11 @@ class BackendClient {
     return MissingMapResponse.fromJson(json);
   }
 
+  Future<MissingMapResponse> listMissingLinks() async {
+    final json = await _getJson('/missing/map/current');
+    return MissingMapResponse.fromJson(json);
+  }
+
   Future<ResolveVarsResponse> resolveVars(List<String> names) async {
     final json = await _postJson('/vars/resolve', {'names': names});
     return ResolveVarsResponse.fromJson(json);

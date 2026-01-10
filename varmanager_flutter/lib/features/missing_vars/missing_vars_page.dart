@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
+import '../../core/backend/query_params.dart';
 import '../../core/models/extra_models.dart';
 import '../home/providers.dart';
 import '../../widgets/lazy_dropdown_field.dart';
@@ -34,12 +35,23 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   final TextEditingController _linkController = TextEditingController();
   String _creatorFilter = 'ALL';
   String _versionFilter = 'ignore';
+  bool _includeLinked = true;
 
+  List<MissingEntry> _missingEntries = [];
   List<MissingEntry> _entries = [];
   int _selectedIndex = -1;
   String? _selectedVar;
 
-  Map<String, String> _linkMap = {};
+  Map<String, String> _existingLinkMap = {};
+  Map<String, String> _linkAliasMap = {};
+  Map<String, String> _draftLinkMap = {};
+  Set<String> _brokenLinks = {};
+  Set<String> _brokenAliasSet = {};
+  Set<String> _missingKeySet = {};
+  List<String> _linkedNames = [];
+  bool _loadingLinks = false;
+  bool _linkFilterSamePackage = true;
+  String _pickerValue = '';
   Map<String, String> _downloadUrls = {};
   Map<String, String> _downloadUrlsNoVersion = {};
   Map<String, String> _resolved = {};
@@ -51,8 +63,14 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   @override
   void initState() {
     super.initState();
-    _entries = widget.missing.map(_parseEntry).toList();
-    Future.microtask(_refreshResolved);
+    _missingEntries = widget.missing.map(_parseEntry).toList();
+    _missingKeySet =
+        _missingEntries.map((entry) => _nameKey(entry.displayName)).toSet();
+    _entries = List.of(_missingEntries);
+    Future.microtask(() async {
+      await _loadExistingLinks();
+      await _refreshResolved();
+    });
   }
 
   @override
@@ -76,9 +94,24 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     return MissingEntry(rawName: raw, displayName: name, versionMismatch: mismatch);
   }
 
+  String _nameKey(String name) {
+    return name.trim().toLowerCase();
+  }
+
+  List<MissingEntry> get _viewEntries {
+    if (!_includeLinked) {
+      return _entries
+          .where((entry) =>
+              _missingKeySet.contains(_nameKey(entry.displayName)) &&
+              !_hasAppliedLink(entry.displayName))
+          .toList();
+    }
+    return _entries;
+  }
+
   List<MissingEntry> get _filteredEntries {
     final search = _searchController.text.trim().toLowerCase();
-    return _entries.where((entry) {
+    return _viewEntries.where((entry) {
       if (_versionFilter == 'ignore' && entry.versionMismatch) {
         return false;
       }
@@ -88,6 +121,240 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
       if (search.isEmpty) return true;
       return entry.displayName.toLowerCase().contains(search);
     }).toList();
+  }
+
+  void _rebuildEntries() {
+    final linkedKeys = <String>{..._existingLinkMap.keys, ..._brokenLinks};
+    final linkedNames = _linkedNames.toSet();
+    final aliasTargets = <String>{};
+    final aliasMap = <String, String>{};
+    final brokenAliases = <String>{};
+    for (final entry in _missingEntries) {
+      final name = entry.displayName;
+      if (!name.endsWith('.latest')) continue;
+      final base = name.substring(0, name.lastIndexOf('.'));
+      final matchKey = _findLatestLinkMatch(_nameKey(base), linkedKeys);
+      if (matchKey == null) continue;
+      aliasTargets.add(matchKey);
+      final dest = _existingLinkMap[matchKey];
+      if (dest != null && dest.trim().isNotEmpty) {
+        aliasMap[_nameKey(name)] = dest;
+      }
+      if (_brokenLinks.contains(matchKey)) {
+        brokenAliases.add(_nameKey(name));
+      }
+    }
+    final linkedEntries = <MissingEntry>[];
+    for (final name in linkedNames) {
+      final key = _nameKey(name);
+      if (_missingKeySet.contains(key)) continue;
+      if (aliasTargets.contains(key)) continue;
+      linkedEntries.add(_parseEntry(name));
+    }
+    linkedEntries.sort((a, b) => a.displayName.compareTo(b.displayName));
+    _linkAliasMap = aliasMap;
+    _brokenAliasSet = brokenAliases;
+    _entries = [..._missingEntries, ...linkedEntries];
+  }
+
+  String? _findLatestLinkMatch(String baseKey, Iterable<String> keys) {
+    final exactLatest = '$baseKey.latest';
+    if (keys.contains(exactLatest)) {
+      return exactLatest;
+    }
+    final prefix = '$baseKey.';
+    String? best;
+    int? bestVer;
+    for (final key in keys) {
+      if (!key.startsWith(prefix)) continue;
+      final version = key.substring(prefix.length);
+      final parsed = int.tryParse(version);
+      if (parsed != null) {
+        if (bestVer == null || parsed > bestVer) {
+          bestVer = parsed;
+          best = key;
+        }
+      } else if (best == null) {
+        best = key;
+      }
+    }
+    return best;
+  }
+
+  Future<void> _loadExistingLinks() async {
+    setState(() {
+      _loadingLinks = true;
+    });
+    final client = ref.read(backendClientProvider);
+    MissingMapResponse response;
+    try {
+      response = await client.listMissingLinks();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingLinks = false;
+      });
+      return;
+    }
+    if (!mounted) return;
+    final existing = <String, String>{};
+    final broken = <String>{};
+    final linkedNames = <String>{};
+    for (final link in response.links) {
+      final missing = link.missingVar.trim();
+      final dest = link.destVar.trim();
+      if (missing.isEmpty) continue;
+      linkedNames.add(missing);
+      final key = _nameKey(missing);
+      if (dest.isEmpty) {
+        broken.add(key);
+      } else {
+        existing[key] = dest;
+      }
+    }
+    setState(() {
+      _existingLinkMap = existing;
+      _brokenLinks = broken;
+      _linkedNames = linkedNames.toList();
+      _draftLinkMap = {};
+      _loadingLinks = false;
+      _rebuildEntries();
+      if (_selectedVar != null) {
+        _linkController.text = _effectiveLink(_selectedVar!);
+        _pickerValue = _linkController.text;
+      }
+    });
+    _ensureSelection();
+  }
+
+  String _effectiveLink(String name) {
+    if (_draftLinkMap.containsKey(name)) {
+      return _draftLinkMap[name]?.trim() ?? '';
+    }
+    final key = _nameKey(name);
+    final alias = _linkAliasMap[key];
+    if (alias != null) {
+      return alias.trim();
+    }
+    return _existingLinkMap[key]?.trim() ?? '';
+  }
+
+  String _appliedLink(String name) {
+    final key = _nameKey(name);
+    return _linkAliasMap[key]?.trim() ?? _existingLinkMap[key]?.trim() ?? '';
+  }
+
+  String _draftLink(String name) {
+    return _draftLinkMap[name]?.trim() ?? '';
+  }
+
+  bool _hasDraft(String name) {
+    return _draftLinkMap.containsKey(name);
+  }
+
+  bool _hasAppliedLink(String name) {
+    return _appliedLink(name).isNotEmpty;
+  }
+
+  bool _isBroken(String name) {
+    final key = _nameKey(name);
+    return _brokenLinks.contains(key) || _brokenAliasSet.contains(key);
+  }
+
+  bool _isPendingChange(String name) {
+    if (!_draftLinkMap.containsKey(name)) {
+      return false;
+    }
+    final desired = _draftLink(name);
+    final existing = _appliedLink(name);
+    if (_isBroken(name)) {
+      return true;
+    }
+    return desired != existing;
+  }
+
+  String _linkStatusLabel(String name) {
+    final applied = _appliedLink(name);
+    final draft = _draftLink(name);
+    final hasDraft = _hasDraft(name);
+    final broken = _isBroken(name);
+    if (broken && !hasDraft) {
+      return 'Broken link';
+    }
+    if (hasDraft) {
+      if (draft.isEmpty && applied.isNotEmpty) return 'Remove link';
+      if (draft.isEmpty && applied.isEmpty) return 'Clear link';
+      if (applied.isEmpty) return 'New link';
+      if (draft == applied) return 'Linked';
+      return 'Link changed';
+    }
+    if (applied.isNotEmpty) return 'Linked';
+    return 'Not linked';
+  }
+
+  Color _linkStatusColor(String name) {
+    final applied = _appliedLink(name);
+    final draft = _draftLink(name);
+    final hasDraft = _hasDraft(name);
+    final broken = _isBroken(name);
+    if (broken && !hasDraft) {
+      return Colors.orange;
+    }
+    if (hasDraft) {
+      if (draft.isEmpty && applied.isNotEmpty) return Colors.red;
+      if (draft.isEmpty && applied.isEmpty) return Colors.grey;
+      if (applied.isEmpty) return Colors.blue;
+      if (draft == applied) return Colors.green;
+      return Colors.blue;
+    }
+    if (applied.isNotEmpty) return Colors.green;
+    return Colors.grey;
+  }
+
+  String? _suggestedLink(String name) {
+    final resolved = _resolved[name];
+    if (resolved == null || resolved == 'missing') return null;
+    if (resolved.endsWith(r'$')) {
+      return resolved.substring(0, resolved.length - 1);
+    }
+    return resolved;
+  }
+
+  bool _suggestedIsClosest(String name) {
+    final resolved = _resolved[name];
+    if (resolved == null || resolved == 'missing') return false;
+    return resolved.endsWith(r'$');
+  }
+
+  String? _packageKey(String name) {
+    final parts = name.split('.');
+    if (parts.length < 2) return null;
+    return '${parts[0]}.${parts[1]}';
+  }
+
+  Future<List<String>> _loadLinkOptions(
+      String queryText, int offset, int limit) async {
+    final client = ref.read(backendClientProvider);
+    final selected = _selectedVar;
+    var creator = '';
+    var package = '';
+    if (_linkFilterSamePackage && selected != null) {
+      final parts = selected.split('.');
+      if (parts.length >= 2) {
+        creator = parts[0];
+        package = parts[1];
+      }
+    }
+    final page = (offset ~/ limit) + 1;
+    final params = VarsQueryParams(
+      page: page,
+      perPage: limit,
+      search: queryText,
+      creator: creator,
+      package: package,
+    );
+    final response = await client.listVars(params);
+    return response.items.map((item) => item.varName).toList();
   }
 
   Future<void> _runJob(String kind, Map<String, dynamic> args) async {
@@ -115,6 +382,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
         _selectedIndex = -1;
         _selectedVar = null;
         _linkController.text = '';
+        _pickerValue = '';
         _dependents = [];
         _dependentSaves = [];
       });
@@ -132,7 +400,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     setState(() {
       _selectedIndex = index;
       _selectedVar = entry.displayName;
-      _linkController.text = _linkMap[entry.displayName] ?? '';
+      _linkController.text = _effectiveLink(entry.displayName);
+      _pickerValue = _linkController.text;
     });
     _loadDependents(entry.displayName);
   }
@@ -197,7 +466,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   }
 
   Future<void> _fetchDownload() async {
-    final packages = _entries.map((entry) => entry.displayName).toSet().toList();
+    final packages =
+        _missingEntries.map((entry) => entry.displayName).toSet().toList();
     if (packages.isEmpty) return;
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
@@ -250,18 +520,144 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     await _runJob('hub_download_all', {'urls': urls.toList()});
   }
 
+  void _setDraftLink(String name, String value) {
+    setState(() {
+      _draftLinkMap[name] = value.trim();
+    });
+  }
+
+  void _clearDraftLink(String name) {
+    setState(() {
+      _draftLinkMap[name] = '';
+    });
+  }
+
+  void _revertDraft(String name) {
+    setState(() {
+      _draftLinkMap.remove(name);
+      _linkController.text = _effectiveLink(name);
+      _pickerValue = _linkController.text;
+    });
+  }
+
+  void _applySuggestedForSelected() {
+    final name = _selectedVar;
+    if (name == null) return;
+    final suggested = _suggestedLink(name);
+    if (suggested == null || suggested.isEmpty) return;
+    setState(() {
+      _linkController.text = suggested;
+      _pickerValue = suggested;
+      _draftLinkMap[name] = suggested;
+    });
+  }
+
+  void _applyDraftToPackage() {
+    final name = _selectedVar;
+    if (name == null) return;
+    final dest = _linkController.text.trim();
+    if (dest.isEmpty) return;
+    final key = _packageKey(name);
+    if (key == null) return;
+    setState(() {
+      for (final entry in _entries) {
+        if (_packageKey(entry.displayName) == key) {
+          _draftLinkMap[entry.displayName] = dest;
+        }
+      }
+    });
+  }
+
+  void _autoFillResolved() {
+    setState(() {
+      for (final entry in _entries) {
+        final name = entry.displayName;
+        if (_draftLinkMap.containsKey(name)) continue;
+        if (_existingLinkMap.containsKey(name)) continue;
+        final suggested = _suggestedLink(name);
+        if (suggested == null || suggested.isEmpty) continue;
+        _draftLinkMap[name] = suggested;
+      }
+      if (_selectedVar != null) {
+        _linkController.text = _effectiveLink(_selectedVar!);
+        _pickerValue = _linkController.text;
+      }
+    });
+  }
+
+  void _discardDrafts() {
+    setState(() {
+      _draftLinkMap = {};
+      if (_selectedVar != null) {
+        _linkController.text = _effectiveLink(_selectedVar!);
+        _pickerValue = _linkController.text;
+      }
+    });
+  }
+
+  Map<String, String> _buildEffectiveMap() {
+    final map = <String, String>{};
+    for (final entry in _entries) {
+      final name = entry.displayName;
+      final link = _effectiveLink(name).trim();
+      if (link.isEmpty) continue;
+      map[name] = link;
+    }
+    return map;
+  }
+
+  List<Map<String, String>> _buildLinkChanges() {
+    final changes = <Map<String, String>>[];
+    for (final entry in _entries) {
+      final name = entry.displayName;
+      if (!_draftLinkMap.containsKey(name)) continue;
+      final desired = _draftLink(name);
+      final existing = _appliedLink(name);
+      if (!_isBroken(name) && desired == existing) {
+        continue;
+      }
+      changes.add({'missing_var': name, 'dest_var': desired});
+    }
+    return changes;
+  }
+
+  Future<void> _applyLinkChanges() async {
+    final changes = _buildLinkChanges();
+    if (changes.isEmpty) return;
+    final runner = ref.read(jobRunnerProvider);
+    final log = ref.read(jobLogProvider.notifier);
+    final result = await runner.runJob(
+      'links_missing_create',
+      args: {'links': changes},
+      onLog: log.addEntry,
+    );
+    if (!mounted) return;
+    await _loadExistingLinks();
+    if (!mounted) return;
+    final payload = result.result as Map<String, dynamic>? ?? {};
+    final total = payload['total'] ?? changes.length;
+    final created = payload['created'] ?? 0;
+    final skipped = payload['skipped'] ?? 0;
+    final failed = payload['failed'] ?? 0;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Link changes applied: $total total, $created created, $skipped skipped, $failed failed.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveMap() async {
     final location = await getSaveLocation(suggestedName: 'missing_map.txt');
     if (location == null) return;
     final path = location.path;
-    final links = _linkMap.entries
-        .where((entry) => entry.value.trim().isNotEmpty)
-        .map(
-          (entry) => MissingMapItem(
-            missingVar: entry.key,
-            destVar: entry.value.trim(),
-          ),
-        )
+    final effective = _buildEffectiveMap();
+    final links = effective.entries
+        .map((entry) => MissingMapItem(
+              missingVar: entry.key,
+              destVar: entry.value,
+            ))
         .toList();
     final client = ref.read(backendClientProvider);
     await client.saveMissingMap(path, links);
@@ -276,26 +672,16 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     final response = await client.loadMissingMap(file.path);
     if (!mounted) return;
     setState(() {
-      _linkMap = {
-        for (final link in response.links) link.missingVar: link.destVar,
+      final allowed = _entries.map((entry) => entry.displayName).toSet();
+      _draftLinkMap = {
+        for (final link in response.links)
+          if (allowed.contains(link.missingVar) && link.destVar.trim().isNotEmpty)
+            link.missingVar: link.destVar.trim(),
       };
       if (_selectedVar != null) {
-        _linkController.text = _linkMap[_selectedVar!] ?? '';
+        _linkController.text = _effectiveLink(_selectedVar!);
+        _pickerValue = _linkController.text;
       }
-    });
-  }
-
-  Future<void> _createLinks() async {
-    final links = _linkMap.entries
-        .where((entry) => entry.value.trim().isNotEmpty)
-        .map((entry) => {
-              'missing_var': entry.key,
-              'dest_var': entry.value.trim(),
-            })
-        .toList();
-    if (links.isEmpty) return;
-    await _runJob('links_missing_create', {
-      'links': links,
     });
   }
 
@@ -328,11 +714,32 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredEntries;
-    final creators = _entries
+    final creators = _viewEntries
         .map((entry) => entry.displayName.split('.').first)
         .toSet()
         .toList()
       ..sort();
+    final appliedCount =
+        _entries.where((entry) => _appliedLink(entry.displayName).isNotEmpty).length;
+    final pendingCount =
+        _entries.where((entry) => _isPendingChange(entry.displayName)).length;
+    final brokenCount =
+        _entries.where((entry) => _isBroken(entry.displayName)).length;
+    final selectedVar = _selectedVar;
+    final appliedLink = selectedVar == null ? '' : _appliedLink(selectedVar!);
+    final draftLink = selectedVar == null ? '' : _draftLink(selectedVar!);
+    final hasDraft = selectedVar != null && _hasDraft(selectedVar!);
+    final isBroken = selectedVar != null && _isBroken(selectedVar!);
+    final suggestion = selectedVar == null ? null : _suggestedLink(selectedVar!);
+    final suggestionLabel = suggestion == null
+        ? '-'
+        : '${suggestion}${_suggestedIsClosest(selectedVar!) ? ' (closest)' : ''}';
+    final linkStatusLabel =
+        selectedVar == null ? '-' : _linkStatusLabel(selectedVar!);
+    final linkStatusColor =
+        selectedVar == null ? Colors.grey : _linkStatusColor(selectedVar!);
+    final hasPendingChanges = pendingCount > 0;
+    final hasDrafts = _draftLinkMap.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Missing Dependencies')),
@@ -412,6 +819,25 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                               _ensureSelection();
                             },
                           ),
+                          const SizedBox(width: 12),
+                          Tooltip(
+                            message: 'Show entries that already have link substitutions.',
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value: _includeLinked,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _includeLinked = value ?? true;
+                                    });
+                                    _ensureSelection();
+                                  },
+                                ),
+                                const Text('Include Linked'),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -449,6 +875,26 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                         ],
                       ),
                     ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Row(
+                        children: [
+                          Text('Applied $appliedCount'),
+                          const SizedBox(width: 12),
+                          Text('Draft $pendingCount'),
+                          const SizedBox(width: 12),
+                          Text('Broken $brokenCount'),
+                          if (_loadingLinks) ...[
+                            const SizedBox(width: 12),
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                     const Divider(height: 1),
                     Container(
                       color: Colors.grey.shade100,
@@ -456,7 +902,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                       child: Row(
                         children: const [
                           Expanded(flex: 3, child: Text('Missing Var', style: TextStyle(fontWeight: FontWeight.w600))),
-                          Expanded(flex: 3, child: Text('Link To', style: TextStyle(fontWeight: FontWeight.w600))),
+                          Expanded(flex: 3, child: Text('Substitute', style: TextStyle(fontWeight: FontWeight.w600))),
                           SizedBox(width: 32, child: Text('DL', style: TextStyle(fontWeight: FontWeight.w600))),
                         ],
                       ),
@@ -467,7 +913,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                         separatorBuilder: (_, _) => const Divider(height: 1),
                         itemBuilder: (context, index) {
                           final entry = filtered[index];
-                          final link = _linkMap[entry.displayName] ?? '';
+                          final link = _effectiveLink(entry.displayName);
+                          final pending = _isPendingChange(entry.displayName);
+                          final broken = _isBroken(entry.displayName);
                           final selected = index == _selectedIndex;
                           return InkWell(
                             onTap: () => _selectIndex(index, filtered),
@@ -491,7 +939,21 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                   ),
                                   Expanded(
                                     flex: 3,
-                                    child: Text(link.isEmpty ? '-' : link),
+                                    child: Row(
+                                      children: [
+                                        Expanded(child: Text(link.isEmpty ? '-' : link)),
+                                        if (pending)
+                                          const Padding(
+                                            padding: EdgeInsets.only(left: 6),
+                                            child: Icon(Icons.edit, size: 14, color: Colors.blueGrey),
+                                          ),
+                                        if (broken && !pending)
+                                          const Padding(
+                                            padding: EdgeInsets.only(left: 6),
+                                            child: Icon(Icons.link_off, size: 14, color: Colors.orange),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                   SizedBox(
                                     width: 32,
@@ -522,16 +984,87 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                         children: [
                           const Text('Details', style: TextStyle(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
-                          Text('Selected: ${_selectedVar ?? '-'}'),
+                          Text('Selected: ${selectedVar ?? '-'}'),
                           const SizedBox(height: 4),
-                          Text('Resolved: ${_selectedVar == null ? '-' : _resolvedDisplay(_selectedVar!)}'),
+                          Text('Resolved: ${selectedVar == null ? '-' : _resolvedDisplay(selectedVar!)}'),
                           const SizedBox(height: 4),
-                          Text('Download: ${_selectedVar == null ? '-' : _downloadStatus(_selectedVar!)}'),
-                          const SizedBox(height: 12),
+                          Text('Download: ${selectedVar == null ? '-' : _downloadStatus(selectedVar!)}'),
+                          const SizedBox(height: 4),
+                          Text('Link status: $linkStatusLabel',
+                              style: TextStyle(color: linkStatusColor)),
+                          if (_loadingLinks)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: LinearProgressIndicator(minHeight: 2),
+                            ),
+                          const Divider(height: 16),
+                          const Text('Link Substitution',
+                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Links create symlinks in ___MissingVarLink___ to substitute missing dependencies.',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Applied: ${selectedVar == null ? '-' : (isBroken ? 'broken link' : (appliedLink.isEmpty ? '-' : appliedLink))}',
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Draft: ${selectedVar == null ? '-' : (hasDraft ? (draftLink.isEmpty ? '(clear)' : draftLink) : '-')}',
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Expanded(child: Text('Suggestion: $suggestionLabel')),
+                              Tooltip(
+                                message: 'Use suggested resolved var as draft link.',
+                                child: TextButton(
+                                  onPressed: suggestion == null ? null : _applySuggestedForSelected,
+                                  child: const Text('Use'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          LazyDropdownField(
+                            label: 'Find target',
+                            value: _pickerValue,
+                            allValue: '',
+                            allLabel: 'Pick target',
+                            pageSize: 15,
+                            minQueryLength: 2,
+                            optionsLoader: _loadLinkOptions,
+                            onChanged: (value) {
+                              setState(() {
+                                _pickerValue = value;
+                                _linkController.text = value;
+                              });
+                            },
+                          ),
+                          Row(
+                            children: [
+                              Tooltip(
+                                message: 'Limit picker to same creator/package as missing var.',
+                                child: Checkbox(
+                                  value: _linkFilterSamePackage,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _linkFilterSamePackage = value ?? true;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const Expanded(
+                                child: Text('Limit to same creator/package'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           TextField(
                             controller: _linkController,
                             decoration: const InputDecoration(
-                              labelText: 'Link To',
+                              labelText: 'Target Var',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -539,86 +1072,182 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           Row(
                             children: [
                               Expanded(
-                                child: FilledButton(
-                                  onPressed: _selectedVar == null
-                                      ? null
-                                      : () {
-                                          setState(() {
-                                            _linkMap[_selectedVar!] = _linkController.text.trim();
-                                          });
-                                        },
-                                  child: const Text('Set Link'),
+                                child: Tooltip(
+                                  message: 'Save draft link for selected missing var.',
+                                  child: FilledButton(
+                                    onPressed: selectedVar == null
+                                        ? null
+                                        : () {
+                                            _setDraftLink(selectedVar!, _linkController.text);
+                                            setState(() {
+                                              _pickerValue = _linkController.text.trim();
+                                            });
+                                          },
+                                    child: const Text('Set Draft'),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _selectedVar == null
-                                      ? null
-                                      : () {
-                                          setState(() {
-                                            _linkMap.remove(_selectedVar!);
-                                            _linkController.text = '';
-                                          });
-                                        },
-                                  child: const Text('Clear Link'),
+                                child: Tooltip(
+                                  message: 'Clear draft link for selected var (will remove).',
+                                  child: OutlinedButton(
+                                    onPressed: selectedVar == null
+                                        ? null
+                                        : () {
+                                            _clearDraftLink(selectedVar!);
+                                            setState(() {
+                                              _linkController.text = '';
+                                              _pickerValue = '';
+                                            });
+                                          },
+                                    child: const Text('Clear Draft'),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _selectedVar == null
-                                ? null
-                                : () async {
-                                    final search = _selectedVar!.replaceAll('.latest', '.1');
-                                    await _runJob('open_url', {
-                                      'url': 'https://www.google.com/search?q=$search var',
-                                    });
-                                  },
-                            child: const Text('Google Search'),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Tooltip(
+                                  message: 'Revert draft to currently applied link.',
+                                  child: OutlinedButton(
+                                    onPressed: selectedVar == null || !hasDraft
+                                        ? null
+                                        : () => _revertDraft(selectedVar!),
+                                    child: const Text('Revert Draft'),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Tooltip(
+                                  message: 'Apply draft target to all missing vars in same package.',
+                                  child: OutlinedButton(
+                                    onPressed: selectedVar == null ||
+                                            _linkController.text.trim().isEmpty
+                                        ? null
+                                        : _applyDraftToPackage,
+                                    child: const Text('Apply to Package'),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _downloadSelected,
-                            child: const Text('Download Selected'),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Tooltip(
+                                  message: 'Fill drafts using best resolved matches.',
+                                  child: OutlinedButton(
+                                    onPressed: _autoFillResolved,
+                                    child: const Text('Auto-fill Resolved'),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Tooltip(
+                                  message: 'Create/update/remove symlinks from draft changes.',
+                                  child: FilledButton(
+                                    onPressed:
+                                        hasPendingChanges ? _applyLinkChanges : null,
+                                    child: const Text('Apply Link Changes'),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _fetchDownload,
-                            child: const Text('Fetch Downloads'),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Tooltip(
+                                  message: 'Save current effective map to a text file.',
+                                  child: OutlinedButton(
+                                    onPressed: _saveMap,
+                                    child: const Text('Save Map'),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Tooltip(
+                                  message: 'Load a map file as drafts for this list.',
+                                  child: OutlinedButton(
+                                    onPressed: _loadMap,
+                                    child: const Text('Load Map'),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _downloadAll,
-                            child: const Text('Download All'),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _createLinks,
-                            child: const Text('Create Links'),
+                          Tooltip(
+                            message: 'Discard all draft changes.',
+                            child: OutlinedButton(
+                              onPressed: hasDrafts ? _discardDrafts : null,
+                              child: const Text('Discard Drafts'),
+                            ),
                           ),
                           const Divider(height: 16),
-                          OutlinedButton(
-                            onPressed: _saveMap,
-                            child: const Text('Save Map'),
+                          Tooltip(
+                            message: 'Search the missing var on the web.',
+                            child: OutlinedButton(
+                              onPressed: selectedVar == null
+                                  ? null
+                                  : () async {
+                                      final search =
+                                          selectedVar!.replaceAll('.latest', '.1');
+                                      await _runJob('open_url', {
+                                        'url':
+                                            'https://www.google.com/search?q=$search var',
+                                      });
+                                    },
+                              child: const Text('Google Search'),
+                            ),
                           ),
                           const SizedBox(height: 8),
-                          OutlinedButton(
-                            onPressed: _loadMap,
-                            child: const Text('Load Map'),
+                          Tooltip(
+                            message: 'Query hub for download links for missing vars.',
+                            child: OutlinedButton(
+                              onPressed: _fetchDownload,
+                              child: const Text('Fetch Hub Links'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Tooltip(
+                            message: 'Download link for selected missing var if available.',
+                            child: OutlinedButton(
+                              onPressed: _downloadSelected,
+                              child: const Text('Download Selected'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Tooltip(
+                            message: 'Queue downloads for all missing vars with links.',
+                            child: OutlinedButton(
+                              onPressed: _downloadAll,
+                              child: const Text('Download All'),
+                            ),
                           ),
                           const Divider(height: 16),
-                          OutlinedButton(
-                            onPressed: () async {
-                              final path = await _askText(context, 'Export path',
-                                  hint: 'installed_vars.txt');
-                              if (path == null || path.trim().isEmpty) return;
-                              await _runJob('vars_export_installed', {
-                                'path': path.trim(),
-                              });
-                            },
-                            child: const Text('Export Installed'),
+                          Tooltip(
+                            message: 'Export installed vars to a text file.',
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final path = await _askText(context, 'Export path',
+                                    hint: 'installed_vars.txt');
+                                if (path == null || path.trim().isEmpty) return;
+                                await _runJob('vars_export_installed', {
+                                  'path': path.trim(),
+                                });
+                              },
+                              child: const Text('Export Installed'),
+                            ),
                           ),
                         ],
                       ),

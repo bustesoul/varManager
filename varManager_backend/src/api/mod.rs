@@ -1017,6 +1017,55 @@ pub async fn load_missing_map(
     Ok(Json(MissingMapResponse { links }))
 }
 
+pub async fn list_missing_links(
+    State(state): State<AppState>,
+) -> ApiResult<Json<MissingMapResponse>> {
+    let cfg = read_config(&state).map_err(internal_error)?;
+    let vampath = cfg
+        .vampath
+        .as_ref()
+        .map(PathBuf::from)
+        .ok_or_else(|| ApiError::bad_request("vampath is required in config.json"))?;
+    let root = crate::infra::paths::missing_links_dir(&vampath);
+    if !root.exists() {
+        return Ok(Json(MissingMapResponse { links: Vec::new() }));
+    }
+
+    let mut map: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for entry in WalkDir::new(&root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file() || e.file_type().is_symlink())
+    {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("var") {
+            continue;
+        }
+        let missing = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(value) if !value.is_empty() => value.to_string(),
+            _ => continue,
+        };
+        let dest = match crate::infra::winfs::read_link_target(path) {
+            Ok(target) => target
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string(),
+            Err(_) => String::new(),
+        };
+        map.insert(missing, dest);
+    }
+
+    let links = map
+        .into_iter()
+        .map(|(missing_var, dest_var)| MissingMapItem {
+            missing_var,
+            dest_var,
+        })
+        .collect();
+    Ok(Json(MissingMapResponse { links }))
+}
+
 pub async fn get_var_detail(
     State(state): State<AppState>,
     Path(name): Path<String>,

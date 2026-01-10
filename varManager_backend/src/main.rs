@@ -94,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/saves/validate_output", post(api::validate_output_dir))
         .route("/missing/map/save", post(api::save_missing_map))
         .route("/missing/map/load", post(api::load_missing_map))
+        .route("/missing/map/current", get(api::list_missing_links))
         .route("/jobs", post(api::start_job))
         .route("/jobs/{id}", get(api::get_job))
         .route("/jobs/{id}/logs", get(api::get_job_logs))
