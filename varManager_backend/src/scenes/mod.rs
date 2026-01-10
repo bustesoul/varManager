@@ -1,7 +1,15 @@
 mod core;
 mod jobs;
 
-pub use core::{AtomTreeNode, list_analysis_atoms};
+pub use core::{
+    AnalysisDependency,
+    AnalysisParentLink,
+    AnalysisPersonInfo,
+    AnalysisSummary,
+    AtomTreeNode,
+    analysis_summary,
+    list_analysis_atoms,
+};
 pub use jobs::{
     run_cache_clear_job,
     run_scene_add_atoms_job,

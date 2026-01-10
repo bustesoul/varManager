@@ -138,6 +138,15 @@ class BackendClient {
     return AnalysisAtomsResponse.fromJson(json);
   }
 
+  Future<AnalysisSummaryResponse> getAnalysisSummary(
+      String varName, String entryName) async {
+    final json = await _getJson('/analysis/summary', {
+      'var_name': varName,
+      'entry_name': entryName,
+    });
+    return AnalysisSummaryResponse.fromJson(json);
+  }
+
   Future<SavesTreeResponse> getSavesTree() async {
     final json = await _getJson('/saves/tree');
     return SavesTreeResponse.fromJson(json);

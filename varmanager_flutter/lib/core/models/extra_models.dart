@@ -41,6 +41,114 @@ class AnalysisAtomsResponse {
   }
 }
 
+class AnalysisPersonInfo {
+  AnalysisPersonInfo({
+    required this.name,
+    required this.gender,
+    required this.hasAnimation,
+    required this.hasPlugin,
+    required this.hasPose,
+  });
+
+  final String name;
+  final String gender;
+  final bool hasAnimation;
+  final bool hasPlugin;
+  final bool hasPose;
+
+  factory AnalysisPersonInfo.fromJson(Map<String, dynamic> json) {
+    return AnalysisPersonInfo(
+      name: json['name'] as String? ?? '',
+      gender: json['gender'] as String? ?? 'unknown',
+      hasAnimation: json['has_animation'] as bool? ?? false,
+      hasPlugin: json['has_plugin'] as bool? ?? false,
+      hasPose: json['has_pose'] as bool? ?? false,
+    );
+  }
+}
+
+class AnalysisDependency {
+  AnalysisDependency({
+    required this.name,
+    required this.resolved,
+    required this.status,
+  });
+
+  final String name;
+  final String resolved;
+  final String status;
+
+  factory AnalysisDependency.fromJson(Map<String, dynamic> json) {
+    return AnalysisDependency(
+      name: json['name'] as String? ?? '',
+      resolved: json['resolved'] as String? ?? '',
+      status: json['status'] as String? ?? 'ok',
+    );
+  }
+}
+
+class AnalysisParentLink {
+  AnalysisParentLink({required this.parent, required this.children});
+
+  final String parent;
+  final List<String> children;
+
+  factory AnalysisParentLink.fromJson(Map<String, dynamic> json) {
+    return AnalysisParentLink(
+      parent: json['parent'] as String? ?? '',
+      children: (json['children'] as List<dynamic>? ?? [])
+          .map((item) => item.toString())
+          .toList(),
+    );
+  }
+}
+
+class AnalysisSummaryResponse {
+  AnalysisSummaryResponse({
+    required this.varName,
+    required this.entryName,
+    required this.characterGender,
+    required this.cacheDir,
+    required this.isScene,
+    required this.atoms,
+    required this.personAtoms,
+    required this.dependencies,
+    required this.parentLinks,
+  });
+
+  final String varName;
+  final String entryName;
+  final String characterGender;
+  final String cacheDir;
+  final bool isScene;
+  final List<AtomTreeNode> atoms;
+  final List<AnalysisPersonInfo> personAtoms;
+  final List<AnalysisDependency> dependencies;
+  final List<AnalysisParentLink> parentLinks;
+
+  factory AnalysisSummaryResponse.fromJson(Map<String, dynamic> json) {
+    return AnalysisSummaryResponse(
+      varName: json['var_name'] as String? ?? '',
+      entryName: json['entry_name'] as String? ?? '',
+      characterGender: json['character_gender'] as String? ?? 'unknown',
+      cacheDir: json['cache_dir'] as String? ?? '',
+      isScene: json['is_scene'] as bool? ?? false,
+      atoms: (json['atoms'] as List<dynamic>? ?? [])
+          .map((item) => AtomTreeNode.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      personAtoms: (json['person_atoms'] as List<dynamic>? ?? [])
+          .map((item) => AnalysisPersonInfo.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      dependencies: (json['dependencies'] as List<dynamic>? ?? [])
+          .map((item) => AnalysisDependency.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      parentLinks: (json['parent_links'] as List<dynamic>? ?? [])
+          .map((item) => AnalysisParentLink.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
 class SavesTreeItem {
   SavesTreeItem({
     required this.path,

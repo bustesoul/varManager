@@ -1925,6 +1925,15 @@ pub async fn list_analysis_atoms(
     }))
 }
 
+pub async fn get_analysis_summary(
+    State(state): State<AppState>,
+    Query(query): Query<AnalysisAtomsQuery>,
+) -> ApiResult<Json<scenes::AnalysisSummary>> {
+    let summary = scenes::analysis_summary(&state, &query.var_name, &query.entry_name)
+        .map_err(internal_error)?;
+    Ok(Json(summary))
+}
+
 pub async fn list_saves_tree(
     State(state): State<AppState>,
 ) -> ApiResult<Json<SavesTreeResponse>> {

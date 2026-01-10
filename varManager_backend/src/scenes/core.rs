@@ -2,7 +2,7 @@ use crate::infra::db::var_exists_conn;
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR};
-use crate::domain::var_logic::vars_dependencies;
+use crate::domain::var_logic::{resolve_var_exist_name, vars_dependencies};
 use crate::app::{data_dir, AppState};
 use crate::infra::winfs;
 use crate::util;
@@ -22,6 +22,41 @@ pub struct AtomTreeNode {
     pub name: String,
     pub path: Option<String>,
     pub children: Vec<AtomTreeNode>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct AnalysisPersonInfo {
+    pub name: String,
+    pub gender: String,
+    pub has_animation: bool,
+    pub has_plugin: bool,
+    pub has_pose: bool,
+}
+
+#[derive(Clone, Serialize)]
+pub struct AnalysisDependency {
+    pub name: String,
+    pub resolved: String,
+    pub status: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct AnalysisParentLink {
+    pub parent: String,
+    pub children: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct AnalysisSummary {
+    pub var_name: String,
+    pub entry_name: String,
+    pub character_gender: String,
+    pub cache_dir: String,
+    pub is_scene: bool,
+    pub atoms: Vec<AtomTreeNode>,
+    pub person_atoms: Vec<AnalysisPersonInfo>,
+    pub dependencies: Vec<AnalysisDependency>,
+    pub parent_links: Vec<AnalysisParentLink>,
 }
 
 const SCENE_BASE_ATOMS: [&str; 4] = ["CoreControl", "PlayerNavigationPanel", "VRController", "WindowCamera"];
@@ -719,6 +754,41 @@ pub fn list_analysis_atoms(
     Ok((atoms, person_atoms))
 }
 
+pub fn analysis_summary(
+    state: &AppState,
+    var_name: &str,
+    entry_name: &str,
+) -> Result<AnalysisSummary, String> {
+    let (var_name, entry_name) = normalize_cache_key(var_name, entry_name);
+    let cache_root = cache_dir(&var_name, &entry_name);
+    ensure_analysis_cache(state, &var_name, &entry_name, &cache_root)?;
+
+    let atoms_root = cache_root.join("atoms");
+    let atoms = if atoms_root.exists() {
+        build_atom_tree(&atoms_root, &cache_root)?
+    } else {
+        Vec::new()
+    };
+
+    let person_atoms = list_person_info(&atoms_root, &entry_name)?;
+    let dependencies = read_dependencies(state, &cache_root)?;
+    let parent_links = read_parent_links(&cache_root)?;
+    let character_gender = read_cached_gender(&cache_root);
+    let is_scene = entry_name.to_ascii_lowercase().contains("/scene/");
+
+    Ok(AnalysisSummary {
+        var_name,
+        entry_name,
+        character_gender,
+        cache_dir: cache_root.to_string_lossy().to_string(),
+        is_scene,
+        atoms,
+        person_atoms,
+        dependencies,
+        parent_links,
+    })
+}
+
 fn build_atom_tree(dir: &Path, cache_root: &Path) -> Result<Vec<AtomTreeNode>, String> {
     let mut entries = Vec::new();
     if dir.exists() {
@@ -770,6 +840,141 @@ fn build_atom_tree(dir: &Path, cache_root: &Path) -> Result<Vec<AtomTreeNode>, S
     }
 
     Ok(nodes)
+}
+
+fn list_person_info(atoms_root: &Path, entry_name: &str) -> Result<Vec<AnalysisPersonInfo>, String> {
+    let person_dir = atoms_root.join("Person");
+    let mut people = Vec::new();
+    if person_dir.exists() {
+        for entry in fs::read_dir(&person_dir).map_err(|err| err.to_string())? {
+            let entry = entry.map_err(|err| err.to_string())?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("bin") {
+                continue;
+            }
+            let name = match path.file_stem().and_then(|s| s.to_str()) {
+                Some(stem) => stem.to_string(),
+                None => continue,
+            };
+            let contents = fs::read_to_string(&path).map_err(|err| err.to_string())?;
+            let atom: Value = serde_json::from_str(&contents).map_err(|err| err.to_string())?;
+            let (gender, has_animation, has_plugin) = analyze_person_atom(&atom);
+            let has_pose = entry_name.to_ascii_lowercase().ends_with(".json");
+            people.push(AnalysisPersonInfo {
+                name,
+                gender,
+                has_animation,
+                has_plugin,
+                has_pose,
+            });
+        }
+    }
+    people.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    people.dedup_by(|a, b| a.name.eq_ignore_ascii_case(&b.name));
+    Ok(people)
+}
+
+fn analyze_person_atom(atom: &Value) -> (String, bool, bool) {
+    let mut gender = "unknown".to_string();
+    let mut has_animation = false;
+    let mut has_plugin = false;
+    if let Some(storables) = atom.get("storables").and_then(|v| v.as_array()) {
+        for storable in storables {
+            let id = storable.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            if id == "geometry" {
+                if let Some(character) = storable.get("character").and_then(|v| v.as_str()) {
+                    gender = get_character_gender(character);
+                }
+            }
+            if id.ends_with("Animation") {
+                has_animation = true;
+            }
+            if id == "PluginManager" {
+                if let Some(plugins) = storable.get("plugins").and_then(|v| v.as_object()) {
+                    if !plugins.is_empty() {
+                        has_plugin = true;
+                    }
+                }
+            }
+        }
+    }
+    (gender, has_animation, has_plugin)
+}
+
+fn read_dependencies(state: &AppState, cache_root: &Path) -> Result<Vec<AnalysisDependency>, String> {
+    let dep_path = cache_root.join("depend.txt");
+    if !dep_path.exists() {
+        return Ok(Vec::new());
+    }
+    let deps = distinct(read_lines(&dep_path)?);
+    let handle = tokio::runtime::Handle::current();
+    let mut items = Vec::new();
+    for dep in deps {
+        let resolved = handle
+            .block_on(resolve_var_exist_name(&state.db_pool, &dep))
+            .unwrap_or_else(|_| "missing".to_string());
+        let (status, resolved_name) = if resolved == "missing" {
+            ("missing", String::new())
+        } else if let Some(stripped) = resolved.strip_suffix('$') {
+            ("version_mismatch", stripped.to_string())
+        } else if !resolved.eq_ignore_ascii_case(&dep) {
+            ("resolved", resolved.clone())
+        } else {
+            ("ok", resolved.clone())
+        };
+        items.push(AnalysisDependency {
+            name: dep,
+            resolved: resolved_name,
+            status: status.to_string(),
+        });
+    }
+    items.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    Ok(items)
+}
+
+fn read_parent_links(cache_root: &Path) -> Result<Vec<AnalysisParentLink>, String> {
+    let path = cache_root.join("parentAtom.txt");
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = fs::read_to_string(path).map_err(|err| err.to_string())?;
+    let mut links = Vec::new();
+    for line in contents.lines() {
+        let mut parts = line.split('\t');
+        let parent_raw = parts.next().unwrap_or("").trim();
+        let children_raw = parts.next().unwrap_or("").trim();
+        if parent_raw.is_empty() {
+            continue;
+        }
+        let parent = ensure_bin(parent_raw);
+        let mut children = Vec::new();
+        for child in children_raw.split(',') {
+            let child = child.trim();
+            if child.is_empty() {
+                continue;
+            }
+            children.push(ensure_bin(child));
+        }
+        if !children.is_empty() {
+            links.push(AnalysisParentLink { parent, children });
+        }
+    }
+    Ok(links)
+}
+
+fn ensure_bin(name: &str) -> String {
+    if name.to_ascii_lowercase().ends_with(".bin") {
+        name.to_string()
+    } else {
+        format!("{}.bin", name)
+    }
+}
+
+fn read_cached_gender(cache_root: &Path) -> String {
+    let path = cache_root.join("gender.txt");
+    fs::read_to_string(path)
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|_| "unknown".to_string())
 }
 
 fn load_person_atom(cache_root: &Path, atom_name: &str) -> Result<Value, String> {

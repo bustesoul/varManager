@@ -90,6 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/hub/options", get(api::list_hub_options))
         .route("/dependents", get(api::list_dependents))
         .route("/analysis/atoms", get(api::list_analysis_atoms))
+        .route("/analysis/summary", get(api::get_analysis_summary))
         .route("/saves/tree", get(api::list_saves_tree))
         .route("/saves/validate_output", post(api::validate_output_dir))
         .route("/missing/map/save", post(api::save_missing_map))
