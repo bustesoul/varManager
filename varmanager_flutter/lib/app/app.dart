@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/app_version.dart';
 import '../core/backend/job_log_controller.dart';
 import '../features/home/home_page.dart';
 import '../features/hub/hub_page.dart';
@@ -35,6 +36,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   bool _ready = false;
   String? _error;
+  String _appVersion = '';
 
   final List<_NavEntry> _pages = const [
     _NavEntry(label: 'Home', icon: Icons.dashboard, page: HomePage()),
@@ -51,6 +53,12 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   Future<void> _initBackend() async {
     try {
+      // Load app version
+      final version = await loadAppVersion();
+      if (!mounted) return;
+      setState(() {
+        _appVersion = version;
+      });
       // baseUrl is already resolved and injected in main.dart via overrideWithValue
       await ref.read(backendProcessManagerProvider).start();
       if (!mounted) return;
@@ -88,7 +96,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('varManager'),
+        title: Text(_appVersion.isNotEmpty ? 'varManager $_appVersion' : 'varManager'),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../app/providers.dart';
@@ -516,17 +515,21 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
         final tileWidth = constraints.maxWidth / crossAxisCount;
         final cacheWidth =
             (tileWidth * MediaQuery.of(context).devicePixelRatio).round();
-        return MasonryGridView.count(
+        return GridView.builder(
           itemCount: items.length,
-          crossAxisCount: crossAxisCount,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: tileWidth / 140,
+          ),
           itemBuilder: (context, index) {
             final item = items[index];
             final globalIndex = startIndex + index;
             final isSelected = selectedIndex == globalIndex;
             final previewPath = _previewPath(item);
             return InkWell(
+              key: ValueKey('preview_${item.varName}_${item.scenePath}'),
               onTap: () => _handlePreviewTap(
                 globalIndex,
                 totalItems,
@@ -535,18 +538,17 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.grey.shade300,
-                        width: isSelected ? 2 : 1,
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey.shade300,
+                          width: isSelected ? 2 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: SizedBox(
-                      height: 110,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: previewPath == null
@@ -556,7 +558,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
                                   root: 'varspath',
                                   path: previewPath,
                                 ),
-                                fit: BoxFit.fitWidth,
+                                fit: BoxFit.cover,
                                 cacheWidth: cacheWidth,
                                 filterQuality: FilterQuality.low,
                                 errorBuilder: (_, _, _) =>

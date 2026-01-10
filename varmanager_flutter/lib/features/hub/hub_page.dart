@@ -1416,7 +1416,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: columns,
                             crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
+                            mainAxisSpacing: 24,
                             childAspectRatio: 1.6,
                           ),
                           itemCount: visibleResources.length,
@@ -1485,112 +1485,120 @@ class _HubPageState extends ConsumerState<HubPage> {
 
     return Card(
       elevation: 1,
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GestureDetector(
-                  onDoubleTap: canPreview
-                      ? () => _openImagePreview(context, [imageUrl], 0)
-                      : null,
-                  child: previewImage,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      GestureDetector(
+                        onDoubleTap: canPreview
+                            ? () => _openImagePreview(context, [imageUrl], 0)
+                            : null,
+                        child: previewImage,
                       ),
-                      if (tagLine.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          tagLine,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.grey.shade700),
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        children: [
-                          ActionChip(
-                            label: Text(payType, style: const TextStyle(fontSize: 12)),
-                            avatar: const Icon(Icons.paid, size: 14),
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .tertiaryContainer
-                                .withValues(alpha: 0.6),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: payType == '-' ? null : () => _applyQuickFilter(payType: payType),
-                          ),
-                          ActionChip(
-                            label: Text(type, style: const TextStyle(fontSize: 12)),
-                            avatar: const Icon(Icons.category, size: 14),
-                            side: BorderSide(
-                              color: Theme.of(context).colorScheme.outlineVariant,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: type == '-' ? null : () => _applyQuickFilter(category: type),
-                          ),
-                          ActionChip(
-                            label: Text(username, style: const TextStyle(fontSize: 12)),
-                            avatar: const Icon(Icons.person, size: 14),
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.6),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _applyQuickFilter(creator: username),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text('Rating $ratingAvg ($ratingCount) | $downloads downloads'),
-                      Text('Updated $lastUpdated'),
-                      if (version.isNotEmpty && version != 'null' ||
-                          dependencyCount != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          [
-                            if (version.isNotEmpty && version != 'null')
-                              'Version $version',
-                            if (dependencyCount != null)
-                              'Deps $dependencyCount',
-                          ].join(' | '),
+                            if (tagLine.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                tagLine,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Colors.grey.shade700),
+                              ),
+                            ],
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: [
+                                ActionChip(
+                                  label: Text(payType, style: const TextStyle(fontSize: 12)),
+                                  avatar: const Icon(Icons.paid, size: 14),
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .tertiaryContainer
+                                      .withValues(alpha: 0.6),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: payType == '-' ? null : () => _applyQuickFilter(payType: payType),
+                                ),
+                                ActionChip(
+                                  label: Text(type, style: const TextStyle(fontSize: 12)),
+                                  avatar: const Icon(Icons.category, size: 14),
+                                  side: BorderSide(
+                                    color: Theme.of(context).colorScheme.outlineVariant,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: type == '-' ? null : () => _applyQuickFilter(category: type),
+                                ),
+                                ActionChip(
+                                  label: Text(username, style: const TextStyle(fontSize: 12)),
+                                  avatar: const Icon(Icons.person, size: 14),
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.6),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: () => _applyQuickFilter(creator: username),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text('Rating $ratingAvg ($ratingCount) | $downloads downloads'),
+                            Text('Updated $lastUpdated'),
+                            if (version.isNotEmpty && version != 'null' ||
+                                dependencyCount != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                [
+                                  if (version.isNotEmpty && version != 'null')
+                                    'Version $version',
+                                  if (dependencyCount != null)
+                                    'Deps $dependencyCount',
+                                ].join(' | '),
+                              ),
+                            ],
+                          ],
                         ),
-                      ],
+                      ),
                     ],
                   ),
-                ),
-              ],
-            ),
-            if (displayTags.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final tag in displayTags)
-                    ActionChip(
-                      label: Text(tag),
-                      onPressed: () => _addTagFilter(tag),
+                  if (displayTags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final tag in displayTags)
+                          ActionChip(
+                            label: Text(tag),
+                            onPressed: () => _addTagFilter(tag),
+                          ),
+                        if (extraTagCount > 0) Chip(label: Text('+$extraTagCount')),
+                      ],
                     ),
-                  if (extraTagCount > 0) Chip(label: Text('+$extraTagCount')),
+                  ],
                 ],
               ),
-            ],
-            const Spacer(),
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
