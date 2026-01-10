@@ -2,6 +2,8 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include <string>
+
 #include "flutter_window.h"
 #include "utils.h"
 
@@ -12,6 +14,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
     CreateAndAttachConsole();
   }
+
+  // Set DLL search path to data directory where flutter_windows.dll and
+  // plugin DLLs are located.
+  wchar_t exe_path[MAX_PATH];
+  GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+  std::wstring exe_dir(exe_path);
+  exe_dir = exe_dir.substr(0, exe_dir.find_last_of(L"\\"));
+  std::wstring dll_path = exe_dir + L"\\data";
+  SetDllDirectoryW(dll_path.c_str());
 
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.

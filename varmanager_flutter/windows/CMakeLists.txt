@@ -57,6 +57,11 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# Delay load plugin DLLs so we can set DLL search path before they load
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  target_link_options(${BINARY_NAME} PRIVATE "/DELAYLOAD:${plugin}_plugin.dll")
+endforeach(plugin)
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
@@ -70,7 +75,7 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
-set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/data")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
