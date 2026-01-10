@@ -504,19 +504,44 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     });
   }
 
+  bool get _hasHubLinks => _downloadUrls.isNotEmpty || _downloadUrlsNoVersion.isNotEmpty;
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   Future<void> _downloadSelected() async {
     final name = _selectedVar;
-    if (name == null) return;
+    if (name == null) {
+      _showSnackBar('Please select a missing var first.');
+      return;
+    }
+    if (!_hasHubLinks) {
+      _showSnackBar('Please click "Fetch Hub Links" first to get download URLs.');
+      return;
+    }
     final url = _downloadUrls[name] ?? _downloadUrlsNoVersion[_noVersionKey(name)];
-    if (url == null || url.isEmpty) return;
+    if (url == null || url.isEmpty) {
+      _showSnackBar('No download URL available for the selected var.');
+      return;
+    }
     await _runJob('hub_download_all', {'urls': [url]});
   }
 
   Future<void> _downloadAll() async {
+    if (!_hasHubLinks) {
+      _showSnackBar('Please click "Fetch Hub Links" first to get download URLs.');
+      return;
+    }
     final urls = <String>{};
     urls.addAll(_downloadUrls.values);
     urls.addAll(_downloadUrlsNoVersion.values);
-    if (urls.isEmpty) return;
+    if (urls.isEmpty) {
+      _showSnackBar('No download URLs available.');
+      return;
+    }
     await _runJob('hub_download_all', {'urls': urls.toList()});
   }
 
