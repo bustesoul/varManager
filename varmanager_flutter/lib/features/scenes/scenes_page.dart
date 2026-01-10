@@ -8,6 +8,7 @@ import '../../core/backend/job_log_controller.dart';
 import '../../core/backend/query_params.dart';
 import '../../core/models/scene_models.dart';
 import '../../core/utils/debounce.dart';
+import '../../widgets/image_preview_dialog.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/lazy_dropdown_field.dart';
 import '../analysis/analysis_page.dart';
@@ -475,13 +476,10 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   Widget _sceneCard(BuildContext context, SceneListItem item) {
-    final header = _buildSceneHeader(context, item);
-    final feedback = _sceneCardContent(
-      context,
-      item,
-      _buildSceneHeader(context, item),
-    );
-    final draggableHeader = Draggable<SceneListItem>(
+    final feedbackHeader = _buildSceneHeader(context, item);
+    final feedback = _sceneCardContent(context, item, feedbackHeader);
+    final dragHandleIcon = _buildSceneDragHandleIcon(context);
+    final draggableHandle = Draggable<SceneListItem>(
       data: item,
       feedback: Material(
         elevation: 6,
@@ -494,42 +492,57 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         opacity: 0.4,
         child: MouseRegion(
           cursor: SystemMouseCursors.move,
-          child: header,
+          child: dragHandleIcon,
         ),
       ),
       child: MouseRegion(
         cursor: SystemMouseCursors.move,
-        child: header,
+        child: dragHandleIcon,
       ),
     );
-    return _sceneCardContent(context, item, draggableHeader);
+    final header = _buildSceneHeader(
+      context,
+      item,
+      dragHandle: draggableHandle,
+    );
+    return _sceneCardContent(context, item, header);
   }
 
-  Widget _buildSceneHeader(BuildContext context, SceneListItem item) {
+  Widget _buildSceneHeader(
+    BuildContext context,
+    SceneListItem item, {
+    Widget? dragHandle,
+  }) {
     final client = ref.read(backendClientProvider);
     final previewUrl = _previewUrl(client, item);
+    final canPreview = previewUrl != null && previewUrl.isNotEmpty;
     final title = p.basenameWithoutExtension(item.scenePath);
     final cacheSize =
         (72 * MediaQuery.of(context).devicePixelRatio).round();
+    final previewImage = ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: previewUrl == null
+          ? const PreviewPlaceholder(width: 72, height: 72)
+          : Image.network(
+              previewUrl,
+              width: 72,
+              height: 72,
+              fit: BoxFit.cover,
+              cacheWidth: cacheSize,
+              cacheHeight: cacheSize,
+              errorBuilder: (_, _, _) => const PreviewPlaceholder(
+                width: 72,
+                height: 72,
+                icon: Icons.broken_image,
+              ),
+            ),
+    );
     return Row(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: previewUrl == null
-              ? const PreviewPlaceholder(width: 72, height: 72)
-              : Image.network(
-                  previewUrl,
-                  width: 72,
-                  height: 72,
-                  fit: BoxFit.cover,
-                  cacheWidth: cacheSize,
-                  cacheHeight: cacheSize,
-                  errorBuilder: (_, _, _) => const PreviewPlaceholder(
-                    width: 72,
-                    height: 72,
-                    icon: Icons.broken_image,
-                  ),
-                ),
+        GestureDetector(
+          onDoubleTap:
+              canPreview ? () => _openScenePreview(context, item) : null,
+          child: previewImage,
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -561,13 +574,31 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
             ],
           ),
         ),
-        Icon(
+        dragHandle ?? _buildSceneDragHandleIcon(context),
+      ],
+    );
+  }
+
+  Widget _buildSceneDragHandleIcon(BuildContext context) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: Center(
+        child: Icon(
           Icons.drag_indicator,
           size: 18,
           color: Theme.of(context).colorScheme.outline,
         ),
-      ],
+      ),
     );
+  }
+
+  String _sceneTitle(SceneListItem item) {
+    final title = p.basenameWithoutExtension(item.scenePath);
+    if (title.isEmpty) {
+      return '${item.atomType}_${item.varName}';
+    }
+    return title;
   }
 
   Widget _sceneCardContent(
@@ -628,6 +659,38 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     final path =
         '___PreviewPics___/${item.atomType}/${item.varName}/${item.previewPic}';
     return client.previewUrl(root: 'varspath', path: path);
+  }
+
+  Future<void> _openScenePreview(
+    BuildContext context,
+    SceneListItem item,
+  ) async {
+    final client = ref.read(backendClientProvider);
+    final imageUrl = _previewUrl(client, item);
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return;
+    }
+    final previewItems = [
+      ImagePreviewItem(
+        title: _sceneTitle(item),
+        subtitle: item.atomType,
+        footer: item.varName,
+        imageUrl: imageUrl,
+      ),
+    ];
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return ImagePreviewDialog(
+          items: previewItems,
+          initialIndex: 0,
+          onIndexChanged: (_) {},
+          showFooter: false,
+          wrapNavigation: true,
+        );
+      },
+    );
   }
 
   Future<void> _loadScene(SceneListItem item) async {

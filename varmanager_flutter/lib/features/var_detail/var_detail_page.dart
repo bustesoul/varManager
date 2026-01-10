@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/providers.dart';
 import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/models/var_models.dart';
+import '../../widgets/image_preview_dialog.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../home/providers.dart';
 
@@ -247,6 +249,48 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
     return '___PreviewPics___/${scene.atomType}/${widget.varName}/$pic';
   }
 
+  String _sceneTitle(ScenePreviewItem item) {
+    final title = p.basenameWithoutExtension(item.scenePath);
+    if (title.isEmpty) {
+      return '${item.atomType}_${widget.varName}';
+    }
+    return title;
+  }
+
+  Future<void> _openPreviewDialog(
+    BuildContext context,
+    List<ScenePreviewItem> items,
+    int initialIndex,
+  ) async {
+    if (items.isEmpty) return;
+    final clampedIndex = initialIndex.clamp(0, items.length - 1);
+    final previewItems = items.map((item) {
+      final previewPath = _previewPath(item);
+      final imageUrl = previewPath == null
+          ? null
+          : widget.client.previewUrl(root: 'varspath', path: previewPath);
+      return ImagePreviewItem(
+        title: _sceneTitle(item),
+        subtitle: item.atomType,
+        footer: widget.varName,
+        imageUrl: imageUrl,
+      );
+    }).toList();
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return ImagePreviewDialog(
+          items: previewItems,
+          initialIndex: clampedIndex,
+          onIndexChanged: (_) {},
+          showFooter: false,
+          wrapNavigation: true,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = widget.scenes
@@ -342,7 +386,8 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
               itemBuilder: (context, index) {
                 final scene = pageItems[index];
                 final previewPath = _previewPath(scene);
-                return ClipRRect(
+                final canPreview = previewPath != null;
+                final previewImage = ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: previewPath == null
                       ? const PreviewPlaceholder()
@@ -356,6 +401,16 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                             icon: Icons.broken_image,
                           ),
                         ),
+                );
+                return GestureDetector(
+                  onDoubleTap: canPreview
+                      ? () => _openPreviewDialog(
+                            context,
+                            items,
+                            startIndex + index,
+                          )
+                      : null,
+                  child: previewImage,
                 );
               },
             );
