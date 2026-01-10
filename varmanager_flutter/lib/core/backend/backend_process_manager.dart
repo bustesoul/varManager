@@ -19,30 +19,38 @@ class BackendProcessManager {
   static const int defaultPort = 57123;
   static const String parentPidEnvKey = 'VARMANAGER_PARENT_PID';
 
-  static Future<String> resolveBaseUrl(Directory workDir) async {
+  /// Read config.json from exe directory or working directory
+  static Future<AppConfig?> _readLocalConfig(Directory workDir) async {
     final exeDir = p.dirname(Platform.resolvedExecutable);
     final exeDirConfig = File(p.join(exeDir, 'config.json'));
     if (await exeDirConfig.exists()) {
       try {
         final raw = await exeDirConfig.readAsString();
         final json = jsonDecode(raw) as Map<String, dynamic>;
-        final config = AppConfig.fromJson(json);
-        return config.baseUrl;
+        return AppConfig.fromJson(json);
       } catch (_) {}
     }
-    
+
     final configFile = File(p.join(workDir.path, 'config.json'));
-    if (!await configFile.exists()) {
-      return 'http://$defaultHost:$defaultPort';
+    if (await configFile.exists()) {
+      try {
+        final raw = await configFile.readAsString();
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        return AppConfig.fromJson(json);
+      } catch (_) {}
     }
-    try {
-      final raw = await configFile.readAsString();
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final config = AppConfig.fromJson(json);
-      return config.baseUrl;
-    } catch (_) {
-      return 'http://$defaultHost:$defaultPort';
-    }
+    return null;
+  }
+
+  static Future<String> resolveBaseUrl(Directory workDir) async {
+    final config = await _readLocalConfig(workDir);
+    return config?.baseUrl ?? 'http://$defaultHost:$defaultPort';
+  }
+
+  /// Resolve theme from local config.json (before backend starts)
+  static Future<String?> resolveTheme(Directory workDir) async {
+    final config = await _readLocalConfig(workDir);
+    return config?.uiTheme;
   }
 
   Future<void> start() async {

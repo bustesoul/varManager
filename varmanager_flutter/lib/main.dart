@@ -8,16 +8,26 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app/app.dart';
 import 'app/providers.dart';
+import 'app/theme.dart';
 import 'core/backend/backend_process_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _configureDesktopWindow();
-  final baseUrl = await BackendProcessManager.resolveBaseUrl(Directory.current);
+  final workDir = Directory.current;
+  final baseUrl = await BackendProcessManager.resolveBaseUrl(workDir);
+  final themeName = await BackendProcessManager.resolveTheme(workDir);
+  final initialTheme = themeName != null && themeName.isNotEmpty
+      ? AppThemeType.values.firstWhere(
+          (t) => t.name == themeName,
+          orElse: () => AppThemeType.defaultTheme,
+        )
+      : AppThemeType.defaultTheme;
   runApp(
     ProviderScope(
       overrides: [
         baseUrlProvider.overrideWithValue(baseUrl),
+        initialThemeProvider.overrideWithValue(initialTheme),
       ],
       child: const VarManagerApp(),
     ),

@@ -14,6 +14,11 @@ final baseUrlProvider = Provider<String>((ref) {
   return 'http://127.0.0.1:57123';
 });
 
+/// Initial theme provider - value is set via overrideWithValue in main.dart
+final initialThemeProvider = Provider<AppThemeType>((ref) {
+  return AppThemeType.defaultTheme;
+});
+
 class NavIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -30,9 +35,9 @@ final navIndexProvider = NotifierProvider<NavIndexNotifier, int>(
 /// Theme provider for managing app theme with persistence
 class ThemeNotifier extends Notifier<AppThemeType> {
   @override
-  AppThemeType build() => AppThemeType.defaultTheme;
+  AppThemeType build() => ref.read(initialThemeProvider);
 
-  /// Load theme from backend config
+  /// Load theme from backend config (called after backend starts)
   Future<void> loadFromConfig() async {
     try {
       final client = ref.read(backendClientProvider);
@@ -46,7 +51,7 @@ class ThemeNotifier extends Notifier<AppThemeType> {
         state = theme;
       }
     } catch (_) {
-      // Ignore errors, keep default theme
+      // Ignore errors, keep current theme
     }
   }
 
