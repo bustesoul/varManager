@@ -3,7 +3,7 @@ use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR};
 use crate::domain::var_logic::vars_dependencies;
-use crate::app::{exe_dir, AppState};
+use crate::app::{data_dir, AppState};
 use crate::infra::winfs;
 use crate::util;
 use regex::Regex;
@@ -1506,7 +1506,7 @@ fn cache_dir(var_name: &str, entry_name: &str) -> PathBuf {
     } else {
         var_name
     };
-    exe_dir()
+    data_dir()
         .join(CACHE_DIR)
         .join(util::valid_file_name(key))
         .join(util::valid_file_name(&util::normalize_entry_name(entry_name)))

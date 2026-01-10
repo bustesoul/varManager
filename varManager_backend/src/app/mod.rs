@@ -102,7 +102,8 @@ pub fn init_logging(
 ) {
     let base_level = config.log_level.as_str();
 
-    let log_dir = exe_dir();
+    let log_dir = data_dir();
+    let _ = std::fs::create_dir_all(&log_dir);
     let file_appender = tracing_appender::rolling::never(&log_dir, "backend.log");
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
 
@@ -368,4 +369,8 @@ pub fn exe_dir() -> PathBuf {
         }
     }
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+pub fn data_dir() -> PathBuf {
+    exe_dir().join("data")
 }

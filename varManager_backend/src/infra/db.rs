@@ -1,8 +1,9 @@
-use crate::app::exe_dir;
+use crate::app::data_dir;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, Sqlite, SqlitePool, Transaction,
 };
+use std::fs;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -42,11 +43,14 @@ pub struct SceneRecord {
 }
 
 pub fn default_path() -> PathBuf {
-    exe_dir().join("varManager.db")
+    data_dir().join("varManager.db")
 }
 
 pub async fn open_default_pool() -> Result<SqlitePool, String> {
     let path = default_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
     let options = SqliteConnectOptions::new()
         .filename(&path)
         .create_if_missing(true);

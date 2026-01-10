@@ -1,4 +1,4 @@
-use crate::app::{exe_dir, ImageCacheConfig};
+use crate::app::{data_dir, ImageCacheConfig};
 use bytes::Bytes;
 use dashmap::DashMap;
 use moka::future::Cache;
@@ -152,7 +152,7 @@ impl ImageCacheService {
 
         let metrics = Arc::new(CacheMetrics::default());
         let disk_cache = DiskCache::new(
-            exe_dir().join("ImageCache"),
+            data_dir().join("ImageCache"),
             disk_max_bytes,
             ttl,
             metrics.clone(),
