@@ -454,7 +454,7 @@ fn comply_var_name(name: &str) -> bool {
 }
 
 fn vars_for_install_path() -> PathBuf {
-    crate::app::exe_dir().join(VARS_FOR_INSTALL_FILE)
+    crate::app::data_dir().join(VARS_FOR_INSTALL_FILE)
 }
 
 fn load_vars_for_install() -> Vec<String> {

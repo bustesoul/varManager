@@ -53,7 +53,7 @@
 **发布包结构：**
 ```
 varManager_v2.0.0/
-├── varmanager_flutter.exe      # 主程序（Flutter）
+├── varManager.exe              # 主程序（Flutter）
 ├── data/                        # 运行时数据和后端
 │   ├── varManager_backend.exe  # 后端服务（Rust）
 │   ├── flutter_windows.dll     # Flutter 运行时
@@ -68,7 +68,7 @@ varManager_v2.0.0/
 
 **首次运行：**
 1. 解压所有文件到一个文件夹
-2. 运行 `varmanager_flutter.exe`
+2. 运行 `varManager.exe`
 3. 后端服务将自动启动
 4. 在设置页面配置 VaM 路径
 5. 点击 "Update DB" 扫描你的 var 文件

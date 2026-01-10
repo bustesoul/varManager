@@ -53,7 +53,7 @@ A modern var package manager for Virt-A-Mate. Manage your var files efficiently 
 **Package Structure:**
 ```
 varManager_v2.0.0/
-├── varmanager_flutter.exe      # Main application (Flutter)
+├── varManager.exe              # Main application (Flutter)
 ├── data/                        # Runtime data and backend
 │   ├── varManager_backend.exe  # Backend service (Rust)
 │   ├── flutter_windows.dll     # Flutter runtime
@@ -68,7 +68,7 @@ varManager_v2.0.0/
 
 **First Run:**
 1. Extract all files to a folder
-2. Run `varmanager_flutter.exe`
+2. Run `varManager.exe`
 3. The backend will start automatically
 4. Configure your VaM paths in Settings
 5. Click "Update DB" to scan your var files

@@ -346,7 +346,7 @@ function Assemble-ReleasePackage {
 ## Installation
 
 1. Extract all files to a folder
-2. Run varmanager_flutter.exe
+2. Run varManager.exe
 3. The backend service will start automatically
 4. Configure VaM paths in Settings
 5. Click "Update DB" to scan your var files
@@ -404,7 +404,7 @@ switch ($Action) {
         Assemble-ReleasePackage
         Write-Host "`nRelease package created at: release\varManager_$script:ProjectVersion"
         Write-Host "Package contents:"
-        Write-Host "  - Flutter frontend (varmanager_flutter.exe)"
+        Write-Host "  - Flutter frontend (varManager.exe)"
         Write-Host "  - Rust backend (varManager_backend.exe)"
         Write-Host "  - VaM plugins (VaM_Plugins\*.cs)"
         Write-Host "  - Documentation (README.md, README_CN.md, INSTALL.txt)"

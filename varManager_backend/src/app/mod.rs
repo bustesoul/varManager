@@ -359,7 +359,8 @@ pub fn load_or_write_config() -> Result<Config, Box<dyn std::error::Error>> {
 }
 
 fn config_path() -> PathBuf {
-    exe_dir().join("config.json")
+    // Config should be in app root (parent of data/ where exe lives)
+    app_root().join("config.json")
 }
 
 pub fn exe_dir() -> PathBuf {
@@ -371,6 +372,15 @@ pub fn exe_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
+/// Returns the application root directory (parent of exe_dir/data/)
+pub fn app_root() -> PathBuf {
+    exe_dir()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(exe_dir)
+}
+
 pub fn data_dir() -> PathBuf {
-    exe_dir().join("data")
+    // Backend exe is now in data/, so exe_dir is the data dir
+    exe_dir()
 }

@@ -53,7 +53,7 @@ varManager/
 ### Release Package Structure:
 ```
 varManager_v2.0.0/
-├── varmanager_flutter.exe      # Main application
+├── varManager.exe              # Main application
 ├── data/                        # Runtime data and backend
 │   ├── varManager_backend.exe  # Backend service
 │   ├── flutter_windows.dll     # Flutter runtime

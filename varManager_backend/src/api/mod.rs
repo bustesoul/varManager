@@ -20,7 +20,7 @@ use walkdir::WalkDir;
 use crate::jobs::job_channel::{
     min_job_log_level, JobLogsResponse, JobResultResponse, JobState, JobStatus, JobView,
 };
-use crate::app::{data_dir, exe_dir, AppState, APP_VERSION, Config};
+use crate::app::{app_root, data_dir, exe_dir, AppState, APP_VERSION, Config};
 use crate::infra::db;
 use crate::services::image_cache::{
     CacheStats, ImageCacheError, ImageSource, ResolvedImageSource,
@@ -548,7 +548,7 @@ fn read_config(state: &AppState) -> Result<Config, String> {
 }
 
 fn config_path() -> PathBuf {
-    exe_dir().join("config.json")
+    app_root().join("config.json")
 }
 
 fn normalize_optional(value: Option<String>) -> Option<String> {
@@ -929,7 +929,7 @@ pub async fn validate_output_dir(
     }
     let mut path = PathBuf::from(path_str);
     if !path.is_absolute() {
-        path = exe_dir().join(&path);
+        path = app_root().join(&path);
     }
     if !path.exists() {
         return Ok(Json(ValidateOutputResponse {
@@ -962,7 +962,7 @@ pub async fn save_missing_map(
     }
     let mut path = PathBuf::from(path_str);
     if !path.is_absolute() {
-        path = exe_dir().join(&path);
+        path = app_root().join(&path);
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(internal_error)?;
@@ -994,7 +994,7 @@ pub async fn load_missing_map(
     }
     let mut path = PathBuf::from(path_str);
     if !path.is_absolute() {
-        path = exe_dir().join(&path);
+        path = app_root().join(&path);
     }
     let contents = std::fs::read_to_string(&path).map_err(|err| ApiError::not_found(err.to_string()))?;
     let mut links = Vec::new();

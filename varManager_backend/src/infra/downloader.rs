@@ -1,4 +1,4 @@
-use crate::app::{exe_dir, AppState};
+use crate::app::{app_root, exe_dir, AppState};
 use crate::infra::paths::addon_packages_dir;
 use crate::jobs::job_channel::JobReporter;
 use http_downloader::{
@@ -487,7 +487,7 @@ fn resolve_download_save_path(state: &AppState) -> Result<PathBuf, String> {
         if let Some(vampath) = cfg.vampath.as_ref() {
             return Ok(PathBuf::from(vampath).join(candidate));
         }
-        return Ok(exe_dir().join(candidate));
+        return Ok(app_root().join(candidate));
     }
 
     let vampath = cfg
