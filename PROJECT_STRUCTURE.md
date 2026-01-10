@@ -54,8 +54,11 @@ varManager/
 ```
 varManager_v2.0.0/
 ├── varmanager_flutter.exe      # Main application
-├── varManager_backend.exe      # Backend service
-├── data/                        # Flutter runtime
+├── data/                        # Runtime data and backend
+│   ├── varManager_backend.exe  # Backend service
+│   ├── flutter_windows.dll     # Flutter runtime
+│   ├── *_plugin.dll            # Plugin DLLs
+│   └── flutter_assets/         # Flutter assets
 ├── VaM_Plugins/
 │   ├── loadscene.cs
 │   ├── MorphMerger.cs

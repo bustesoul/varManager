@@ -54,8 +54,11 @@ A modern var package manager for Virt-A-Mate. Manage your var files efficiently 
 ```
 varManager_v2.0.0/
 ├── varmanager_flutter.exe      # Main application (Flutter)
-├── varManager_backend.exe      # Backend service (Rust)
-├── data/                        # Flutter runtime data
+├── data/                        # Runtime data and backend
+│   ├── varManager_backend.exe  # Backend service (Rust)
+│   ├── flutter_windows.dll     # Flutter runtime
+│   ├── *_plugin.dll            # Plugin DLLs
+│   └── flutter_assets/         # Flutter assets
 ├── VaM_Plugins/                 # VaM game plugins (optional)
 │   ├── loadscene.cs            # MMD scene loader
 │   ├── MorphMerger.cs          # Morph merge utility

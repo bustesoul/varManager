@@ -305,10 +305,14 @@ function Assemble-ReleasePackage {
         Write-Warning "Flutter release folder not found: $flutterSrc"
     }
 
-    # Copy Rust backend
+    # Copy Rust backend to data/ subdirectory
     $backendSrc = Join-Path $releaseRoot "backend"
     if (Test-Path -LiteralPath $backendSrc) {
-        Copy-Item -Path (Join-Path $backendSrc "*") -Destination $target -Recurse -Force
+        $dataDir = Join-Path $target "data"
+        if (-not (Test-Path -LiteralPath $dataDir)) {
+            New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+        }
+        Copy-Item -Path (Join-Path $backendSrc "*") -Destination $dataDir -Recurse -Force
     }
     else {
         Write-Warning "Backend release folder not found: $backendSrc"

@@ -132,8 +132,9 @@ Notes:
 ## Deployment Rules
 - Bundle layout (zip):
   - `varManager_flutter.exe`
-  - `varManager_backend.exe`
-  - `plugin/vam_downloader.exe`
+  - `data/varManager_backend.exe`
+  - `data/flutter_windows.dll`
+  - `data/*_plugin.dll`
   - `config.json` (created if missing)
 - Working directory is the bundle root.
 

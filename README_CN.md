@@ -54,8 +54,11 @@
 ```
 varManager_v2.0.0/
 ├── varmanager_flutter.exe      # 主程序（Flutter）
-├── varManager_backend.exe      # 后端服务（Rust）
-├── data/                        # Flutter 运行时数据
+├── data/                        # 运行时数据和后端
+│   ├── varManager_backend.exe  # 后端服务（Rust）
+│   ├── flutter_windows.dll     # Flutter 运行时
+│   ├── *_plugin.dll            # 插件 DLL
+│   └── flutter_assets/         # Flutter 资源
 ├── VaM_Plugins/                 # VaM 游戏插件（可选）
 │   ├── loadscene.cs            # MMD 场景加载器
 │   ├── MorphMerger.cs          # 形态合并工具

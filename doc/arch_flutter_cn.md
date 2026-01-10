@@ -132,8 +132,9 @@ Notes（备注）:
 ## 部署规则（Deployment Rules）
 - 打包布局（zip）：
   - `varManager_flutter.exe`
-  - `varManager_backend.exe`
-  - `plugin/vam_downloader.exe`
+  - `data/varManager_backend.exe`
+  - `data/flutter_windows.dll`
+  - `data/*_plugin.dll`
   - `config.json`（缺失时创建）
 - 工作目录为打包根目录。
 

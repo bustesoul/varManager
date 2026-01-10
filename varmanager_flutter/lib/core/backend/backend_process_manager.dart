@@ -130,13 +130,23 @@ class BackendProcessManager {
 
   (String exePath, String workingDir)? _resolveBackendExe() {
     final name = Platform.isWindows ? 'varManager_backend.exe' : 'varManager_backend';
-    
+
     final exeDir = p.dirname(Platform.resolvedExecutable);
+
+    // Priority 1: data/ subdirectory (new structure)
+    final dataDir = p.join(exeDir, 'data');
+    final dataDirCandidate = File(p.join(dataDir, name));
+    if (dataDirCandidate.existsSync()) {
+      return (dataDirCandidate.path, exeDir);
+    }
+
+    // Priority 2: exe directory (legacy/backward compatibility)
     final exeDirCandidate = File(p.join(exeDir, name));
     if (exeDirCandidate.existsSync()) {
       return (exeDirCandidate.path, exeDir);
     }
-    
+
+    // Priority 3: working directory
     final candidate = File(p.join(workDir.path, name));
     if (candidate.existsSync()) {
       return (candidate.path, workDir.path);
