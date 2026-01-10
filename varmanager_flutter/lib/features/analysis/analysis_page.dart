@@ -424,7 +424,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
         height: 420,
         child: ListView.separated(
           itemCount: summary.personAtoms.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final person = summary.personAtoms[index];
             final selected = person.name == _selectedPersonName;
@@ -953,7 +953,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                   ? const Center(child: Text('No dependencies match'))
                   : ListView.separated(
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final dep = filtered[index];
                         final color = _dependencyColor(dep.status);

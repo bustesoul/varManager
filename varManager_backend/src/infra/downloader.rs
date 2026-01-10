@@ -1,4 +1,4 @@
-use crate::app::{app_root, exe_dir, AppState};
+use crate::app::{app_root, AppState};
 use crate::infra::paths::addon_packages_dir;
 use crate::jobs::job_channel::JobReporter;
 use http_downloader::{

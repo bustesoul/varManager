@@ -20,7 +20,7 @@ use walkdir::WalkDir;
 use crate::jobs::job_channel::{
     min_job_log_level, JobLogsResponse, JobResultResponse, JobState, JobStatus, JobView,
 };
-use crate::app::{app_root, data_dir, exe_dir, AppState, APP_VERSION, Config};
+use crate::app::{app_root, data_dir, AppState, APP_VERSION, Config};
 use crate::infra::db;
 use crate::services::image_cache::{
     CacheStats, ImageCacheError, ImageSource, ResolvedImageSource,

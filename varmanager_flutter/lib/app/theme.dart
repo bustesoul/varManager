@@ -261,7 +261,7 @@ class AppTheme {
       navigationBarTheme: navigationBarTheme,
       navigationRailTheme: navigationRailTheme,
       dividerColor: outlineVariant,
-      dialogBackgroundColor: surface,
+      dialogTheme: DialogThemeData(backgroundColor: surface),
       popupMenuTheme: PopupMenuThemeData(
         color: surface,
         surfaceTintColor: surface,

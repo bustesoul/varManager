@@ -1530,7 +1530,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                             backgroundColor: Theme.of(context)
                                 .colorScheme
                                 .tertiaryContainer
-                                .withOpacity(0.6),
+                                .withValues(alpha: 0.6),
                             visualDensity: VisualDensity.compact,
                             onPressed: payType == '-' ? null : () => _applyQuickFilter(payType: payType),
                           ),
@@ -1548,8 +1548,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                             avatar: const Icon(Icons.person, size: 14),
                             backgroundColor: Theme.of(context)
                                 .colorScheme
-                                .surfaceVariant
-                                .withOpacity(0.6),
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.6),
                             visualDensity: VisualDensity.compact,
                             onPressed: () => _applyQuickFilter(creator: username),
                           ),

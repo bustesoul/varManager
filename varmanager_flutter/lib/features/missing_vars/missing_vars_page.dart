@@ -174,8 +174,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
           bestVer = parsed;
           best = key;
         }
-      } else if (best == null) {
-        best = key;
+      } else {
+        best ??= key;
       }
     }
     return best;
@@ -726,18 +726,18 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     final brokenCount =
         _entries.where((entry) => _isBroken(entry.displayName)).length;
     final selectedVar = _selectedVar;
-    final appliedLink = selectedVar == null ? '' : _appliedLink(selectedVar!);
-    final draftLink = selectedVar == null ? '' : _draftLink(selectedVar!);
-    final hasDraft = selectedVar != null && _hasDraft(selectedVar!);
-    final isBroken = selectedVar != null && _isBroken(selectedVar!);
-    final suggestion = selectedVar == null ? null : _suggestedLink(selectedVar!);
+    final appliedLink = selectedVar == null ? '' : _appliedLink(selectedVar);
+    final draftLink = selectedVar == null ? '' : _draftLink(selectedVar);
+    final hasDraft = selectedVar != null && _hasDraft(selectedVar);
+    final isBroken = selectedVar != null && _isBroken(selectedVar);
+    final suggestion = selectedVar == null ? null : _suggestedLink(selectedVar);
     final suggestionLabel = suggestion == null
         ? '-'
-        : '${suggestion}${_suggestedIsClosest(selectedVar!) ? ' (closest)' : ''}';
+        : '$suggestion${_suggestedIsClosest(selectedVar!) ? ' (closest)' : ''}';
     final linkStatusLabel =
-        selectedVar == null ? '-' : _linkStatusLabel(selectedVar!);
+        selectedVar == null ? '-' : _linkStatusLabel(selectedVar);
     final linkStatusColor =
-        selectedVar == null ? Colors.grey : _linkStatusColor(selectedVar!);
+        selectedVar == null ? Colors.grey : _linkStatusColor(selectedVar);
     final hasPendingChanges = pendingCount > 0;
     final hasDrafts = _draftLinkMap.isNotEmpty;
 
@@ -986,9 +986,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           const SizedBox(height: 8),
                           Text('Selected: ${selectedVar ?? '-'}'),
                           const SizedBox(height: 4),
-                          Text('Resolved: ${selectedVar == null ? '-' : _resolvedDisplay(selectedVar!)}'),
+                          Text('Resolved: ${selectedVar == null ? '-' : _resolvedDisplay(selectedVar)}'),
                           const SizedBox(height: 4),
-                          Text('Download: ${selectedVar == null ? '-' : _downloadStatus(selectedVar!)}'),
+                          Text('Download: ${selectedVar == null ? '-' : _downloadStatus(selectedVar)}'),
                           const SizedBox(height: 4),
                           Text('Link status: $linkStatusLabel',
                               style: TextStyle(color: linkStatusColor)),
@@ -1078,7 +1078,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                     onPressed: selectedVar == null
                                         ? null
                                         : () {
-                                            _setDraftLink(selectedVar!, _linkController.text);
+                                            _setDraftLink(selectedVar, _linkController.text);
                                             setState(() {
                                               _pickerValue = _linkController.text.trim();
                                             });
@@ -1095,7 +1095,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                     onPressed: selectedVar == null
                                         ? null
                                         : () {
-                                            _clearDraftLink(selectedVar!);
+                                            _clearDraftLink(selectedVar);
                                             setState(() {
                                               _linkController.text = '';
                                               _pickerValue = '';
@@ -1116,7 +1116,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                   child: OutlinedButton(
                                     onPressed: selectedVar == null || !hasDraft
                                         ? null
-                                        : () => _revertDraft(selectedVar!),
+                                        : () => _revertDraft(selectedVar),
                                     child: const Text('Revert Draft'),
                                   ),
                                 ),
@@ -1201,7 +1201,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                   ? null
                                   : () async {
                                       final search =
-                                          selectedVar!.replaceAll('.latest', '.1');
+                                          selectedVar.replaceAll('.latest', '.1');
                                       await _runJob('open_url', {
                                         'url':
                                             'https://www.google.com/search?q=$search var',
