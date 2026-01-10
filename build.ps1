@@ -163,6 +163,9 @@ function Build-Backend {
     if ($Mode -eq "release") {
         $cargoArgs += "--release"
     }
+    if ($env:CI) { 
+        $cargoArgs += "--locked" 
+    }
     $previousVersion = $env:APP_VERSION
     $env:APP_VERSION = $script:ProjectVersion
     try {
