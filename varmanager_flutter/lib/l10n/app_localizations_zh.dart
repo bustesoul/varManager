@@ -118,6 +118,36 @@ class AppLocalizationsZh extends AppLocalizations {
   String get imagePreviewScroll => '滚轮';
 
   @override
+  String get paginationFirstPageTooltip => '第一页';
+
+  @override
+  String get paginationPreviousPageTooltip => '上一页';
+
+  @override
+  String get paginationNextPageTooltip => '下一页';
+
+  @override
+  String get paginationLastPageTooltip => '最后一页';
+
+  @override
+  String get previewFirstItemTooltip => '第一项';
+
+  @override
+  String get previewPreviousItemTooltip => '上一项';
+
+  @override
+  String get previewNextItemTooltip => '下一项';
+
+  @override
+  String get previewLastItemTooltip => '最后一项';
+
+  @override
+  String get jobLogExpandTooltip => '展开日志面板';
+
+  @override
+  String get jobLogCollapseTooltip => '折叠日志面板';
+
+  @override
   String get downloadManagerTitle => '下载管理器';
 
   @override
@@ -165,6 +195,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get downloadImportLabel => '导入';
+
+  @override
+  String get downloadImportTooltip => '从文本文件导入下载链接（支持 Hub 页面复制的格式）';
 
   @override
   String downloadImportSuccess(Object count) {
@@ -869,7 +902,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get downloadAllLabel => '全部下载';
 
   @override
-  String get downloadAllTooltip => '为所有有链接的缺失 Var 加入下载队列。';
+  String get downloadAllTooltip => '下载所有选中的资源';
 
   @override
   String get dependentsTitle => '依赖项';
@@ -1178,7 +1211,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get copyLinksLabel => '复制链接';
 
   @override
+  String get copyLinksTooltip => '复制下载链接到剪贴板（可在下载管理器中导入）';
+
+  @override
   String get clearListLabel => '清空列表';
+
+  @override
+  String get clearListTooltip => '清空下载列表';
 
   @override
   String resourcesCount(Object count) {

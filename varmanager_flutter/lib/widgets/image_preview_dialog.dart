@@ -373,12 +373,14 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                             onPressed:
                                 currentIndex > 0 ? () => _setIndex(0) : null,
                             icon: const Icon(Icons.first_page),
+                            tooltip: l10n.paginationFirstPageTooltip,
                           ),
                           IconButton(
                             onPressed: currentIndex > 0
                                 ? () => _setIndex(currentIndex - 1)
                                 : null,
                             icon: const Icon(Icons.chevron_left),
+                            tooltip: l10n.paginationPreviousPageTooltip,
                           ),
                           Text(
                             '${currentIndex + 1}/${widget.items.length}',
@@ -391,6 +393,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                 ? () => _setIndex(currentIndex + 1)
                                 : null,
                             icon: const Icon(Icons.chevron_right),
+                            tooltip: l10n.paginationNextPageTooltip,
                           ),
                           IconButton(
                             onPressed: currentIndex < widget.items.length - 1
@@ -398,6 +401,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                     _setIndex(widget.items.length - 1)
                                 : null,
                             icon: const Icon(Icons.last_page),
+                            tooltip: l10n.paginationLastPageTooltip,
                           ),
                           const SizedBox(width: 12),
                           Expanded(

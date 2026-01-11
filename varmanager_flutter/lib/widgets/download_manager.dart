@@ -244,10 +244,13 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const Spacer(),
-                TextButton.icon(
-                  onPressed: _importFromFile,
-                  icon: const Icon(Icons.file_open_outlined, size: 16),
-                  label: Text(l10n.downloadImportLabel),
+                Tooltip(
+                  message: l10n.downloadImportTooltip,
+                  child: TextButton.icon(
+                    onPressed: _importFromFile,
+                    icon: const Icon(Icons.file_open_outlined, size: 16),
+                    label: Text(l10n.downloadImportLabel),
+                  ),
                 ),
                 if (items.isNotEmpty)
                   TextButton(

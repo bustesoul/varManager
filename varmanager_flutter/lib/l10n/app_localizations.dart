@@ -308,6 +308,66 @@ abstract class AppLocalizations {
   /// **'Scroll'**
   String get imagePreviewScroll;
 
+  /// No description provided for @paginationFirstPageTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'First page'**
+  String get paginationFirstPageTooltip;
+
+  /// No description provided for @paginationPreviousPageTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get paginationPreviousPageTooltip;
+
+  /// No description provided for @paginationNextPageTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get paginationNextPageTooltip;
+
+  /// No description provided for @paginationLastPageTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Last page'**
+  String get paginationLastPageTooltip;
+
+  /// No description provided for @previewFirstItemTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'First item'**
+  String get previewFirstItemTooltip;
+
+  /// No description provided for @previewPreviousItemTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous item'**
+  String get previewPreviousItemTooltip;
+
+  /// No description provided for @previewNextItemTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Next item'**
+  String get previewNextItemTooltip;
+
+  /// No description provided for @previewLastItemTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Last item'**
+  String get previewLastItemTooltip;
+
+  /// No description provided for @jobLogExpandTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand log panel'**
+  String get jobLogExpandTooltip;
+
+  /// No description provided for @jobLogCollapseTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse log panel'**
+  String get jobLogCollapseTooltip;
+
   /// No description provided for @downloadManagerTitle.
   ///
   /// In en, this message translates to:
@@ -397,6 +457,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Import'**
   String get downloadImportLabel;
+
+  /// No description provided for @downloadImportTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Import download links from text file (supports format from Hub page)'**
+  String get downloadImportTooltip;
 
   /// No description provided for @downloadImportSuccess.
   ///
@@ -1715,7 +1781,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloadAllTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Queue downloads for all missing vars with links.'**
+  /// **'Download all selected resources'**
   String get downloadAllTooltip;
 
   /// No description provided for @dependentsTitle.
@@ -2269,11 +2335,23 @@ abstract class AppLocalizations {
   /// **'Copy Links'**
   String get copyLinksLabel;
 
+  /// No description provided for @copyLinksTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy download links to clipboard (can be imported in download manager)'**
+  String get copyLinksTooltip;
+
   /// No description provided for @clearListLabel.
   ///
   /// In en, this message translates to:
   /// **'Clear List'**
   String get clearListLabel;
+
+  /// No description provided for @clearListTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear download list'**
+  String get clearListTooltip;
 
   /// No description provided for @resourcesCount.
   ///

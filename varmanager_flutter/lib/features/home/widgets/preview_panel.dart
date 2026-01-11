@@ -451,12 +451,14 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
               ? null
               : () => _selectPreviewIndex(0, totalItems),
           icon: const Icon(Icons.first_page),
+          tooltip: l10n.previewFirstItemTooltip,
         ),
         IconButton(
           onPressed: totalItems == 0
               ? null
               : () => _selectPreviewIndex((selectedIndex ?? 0) - 1, totalItems),
           icon: const Icon(Icons.chevron_left),
+          tooltip: l10n.previewPreviousItemTooltip,
         ),
         Text(
           selectedIndex == null
@@ -468,12 +470,14 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
               ? null
               : () => _selectPreviewIndex((selectedIndex ?? 0) + 1, totalItems),
           icon: const Icon(Icons.chevron_right),
+          tooltip: l10n.previewNextItemTooltip,
         ),
         IconButton(
           onPressed: totalItems == 0
               ? null
               : () => _selectPreviewIndex(totalItems - 1, totalItems),
           icon: const Icon(Icons.last_page),
+          tooltip: l10n.previewLastItemTooltip,
         ),
         const Spacer(),
         Text(l10n.pageOf(currentPage, totalPages)),
@@ -482,24 +486,28 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
               ? () => _setPreviewPage(1, totalItems)
               : null,
           icon: const Icon(Icons.first_page),
+          tooltip: l10n.paginationFirstPageTooltip,
         ),
         IconButton(
           onPressed: currentPage > 1
               ? () => _setPreviewPage(currentPage - 1, totalItems)
               : null,
           icon: const Icon(Icons.chevron_left),
+          tooltip: l10n.paginationPreviousPageTooltip,
         ),
         IconButton(
           onPressed: currentPage < totalPages
               ? () => _setPreviewPage(currentPage + 1, totalItems)
               : null,
           icon: const Icon(Icons.chevron_right),
+          tooltip: l10n.paginationNextPageTooltip,
         ),
         IconButton(
           onPressed: currentPage < totalPages
               ? () => _setPreviewPage(totalPages, totalItems)
               : null,
           icon: const Icon(Icons.last_page),
+          tooltip: l10n.paginationLastPageTooltip,
         ),
       ],
     );

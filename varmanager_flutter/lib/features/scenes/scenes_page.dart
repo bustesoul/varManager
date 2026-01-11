@@ -397,6 +397,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   ? () => _updateQuery((state) => state.copyWith(page: 1))
                   : null,
               icon: const Icon(Icons.first_page),
+              tooltip: l10n.paginationFirstPageTooltip,
             ),
             IconButton(
               onPressed: data.page > 1
@@ -405,6 +406,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                       )
                   : null,
               icon: const Icon(Icons.chevron_left),
+              tooltip: l10n.paginationPreviousPageTooltip,
             ),
             IconButton(
               onPressed: data.page < totalPages
@@ -413,6 +415,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                       )
                   : null,
               icon: const Icon(Icons.chevron_right),
+              tooltip: l10n.paginationNextPageTooltip,
             ),
             IconButton(
               onPressed: data.page < totalPages
@@ -421,6 +424,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                       )
                   : null,
               icon: const Icon(Icons.last_page),
+              tooltip: l10n.paginationLastPageTooltip,
             ),
             TextButton(
               onPressed: () => ref.invalidate(scenesListProvider),

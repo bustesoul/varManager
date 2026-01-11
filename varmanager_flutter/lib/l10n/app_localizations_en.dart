@@ -118,6 +118,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imagePreviewScroll => 'Scroll';
 
   @override
+  String get paginationFirstPageTooltip => 'First page';
+
+  @override
+  String get paginationPreviousPageTooltip => 'Previous page';
+
+  @override
+  String get paginationNextPageTooltip => 'Next page';
+
+  @override
+  String get paginationLastPageTooltip => 'Last page';
+
+  @override
+  String get previewFirstItemTooltip => 'First item';
+
+  @override
+  String get previewPreviousItemTooltip => 'Previous item';
+
+  @override
+  String get previewNextItemTooltip => 'Next item';
+
+  @override
+  String get previewLastItemTooltip => 'Last item';
+
+  @override
+  String get jobLogExpandTooltip => 'Expand log panel';
+
+  @override
+  String get jobLogCollapseTooltip => 'Collapse log panel';
+
+  @override
   String get downloadManagerTitle => 'Download Manager';
 
   @override
@@ -165,6 +195,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloadImportLabel => 'Import';
+
+  @override
+  String get downloadImportTooltip =>
+      'Import download links from text file (supports format from Hub page)';
 
   @override
   String downloadImportSuccess(Object count) {
@@ -891,8 +925,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadAllLabel => 'Download All';
 
   @override
-  String get downloadAllTooltip =>
-      'Queue downloads for all missing vars with links.';
+  String get downloadAllTooltip => 'Download all selected resources';
 
   @override
   String get dependentsTitle => 'Dependents';
@@ -1203,7 +1236,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get copyLinksLabel => 'Copy Links';
 
   @override
+  String get copyLinksTooltip =>
+      'Copy download links to clipboard (can be imported in download manager)';
+
+  @override
   String get clearListLabel => 'Clear List';
+
+  @override
+  String get clearListTooltip => 'Clear download list';
 
   @override
   String resourcesCount(Object count) {

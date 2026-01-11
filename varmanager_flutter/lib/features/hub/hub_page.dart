@@ -1347,6 +1347,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.first_page),
+                          tooltip: l10n.paginationFirstPageTooltip,
                         ),
                         IconButton(
                           onPressed: _page <= 1
@@ -1358,6 +1359,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.chevron_left),
+                          tooltip: l10n.paginationPreviousPageTooltip,
                         ),
                         IconButton(
                           onPressed: _page >= _totalPages
@@ -1369,6 +1371,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.chevron_right),
+                          tooltip: l10n.paginationNextPageTooltip,
                         ),
                         IconButton(
                           onPressed: _page >= _totalPages
@@ -1380,6 +1383,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                   _triggerSearch(resetPage: false);
                                 },
                           icon: const Icon(Icons.last_page),
+                          tooltip: l10n.paginationLastPageTooltip,
                         ),
                       ],
                     ),
@@ -1406,61 +1410,70 @@ class _HubPageState extends ConsumerState<HubPage> {
                     const SizedBox(height: 8),
                     Text(l10n.totalLinksSize(downloadUrls.length, totalSizeLabel)),
                     const SizedBox(height: 8),
-                      OutlinedButton(
-                        key: BootstrapKeys.hubDownloadAllButton,
+                      Tooltip(
+                        message: l10n.downloadAllTooltip,
+                        child: OutlinedButton(
+                          key: BootstrapKeys.hubDownloadAllButton,
+                          onPressed: downloadUrls.isEmpty
+                            ? null
+                            : () async {
+                                final items = downloadUrls
+                                    .map((url) => {
+                                          'url': url,
+                                          'name': _downloadByUrl[url],
+                                          'size': _downloadSizeByUrl[url],
+                                        })
+                                    .toList();
+                                final messenger = ScaffoldMessenger.of(context);
+                                await _runJob('hub_download_all', {'items': items});
+                                if (!mounted) return;
+                                setState(() {
+                                  _downloadByVar.clear();
+                                  _downloadByUrl.clear();
+                                  _downloadSizeByUrl.clear();
+                                });
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text(l10n.addedDownloads(items.length)),
+                                  ),
+                                );
+                              },
+                        child: Text(l10n.downloadAllLabel),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Tooltip(
+                      message: l10n.copyLinksTooltip,
+                      child: OutlinedButton(
                         onPressed: downloadUrls.isEmpty
-                          ? null
-                          : () async {
-                              final items = downloadUrls
-                                  .map((url) => {
-                                        'url': url,
-                                        'name': _downloadByUrl[url],
-                                        'size': _downloadSizeByUrl[url],
-                                      })
-                                  .toList();
-                              final messenger = ScaffoldMessenger.of(context);
-                              await _runJob('hub_download_all', {'items': items});
-                              if (!mounted) return;
-                              setState(() {
-                                _downloadByVar.clear();
-                                _downloadByUrl.clear();
-                                _downloadSizeByUrl.clear();
-                              });
-                              messenger.showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text(l10n.addedDownloads(items.length)),
-                                ),
-                              );
-                            },
-                      child: Text(l10n.downloadAllLabel),
+                            ? null
+                            : () async {
+                                final lines = downloadUrls
+                                    .map((url) => '${_downloadByUrl[url]} $url')
+                                    .join('\n');
+                                await Clipboard.setData(
+                                  ClipboardData(text: lines),
+                                );
+                              },
+                        child: Text(l10n.copyLinksLabel),
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: downloadUrls.isEmpty
-                          ? null
-                          : () async {
-                              final lines = downloadUrls
-                                  .map((url) => '${_downloadByUrl[url]} $url')
-                                  .join('\n');
-                              await Clipboard.setData(
-                                ClipboardData(text: lines),
-                              );
-                            },
-                      child: Text(l10n.copyLinksLabel),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: downloadUrls.isEmpty
-                          ? null
-                          : () {
-                              setState(() {
-                                _downloadByVar.clear();
-                                _downloadByUrl.clear();
-                                _downloadSizeByUrl.clear();
-                              });
-                            },
-                      child: Text(l10n.clearListLabel),
+                    Tooltip(
+                      message: l10n.clearListTooltip,
+                      child: OutlinedButton(
+                        onPressed: downloadUrls.isEmpty
+                            ? null
+                            : () {
+                                setState(() {
+                                  _downloadByVar.clear();
+                                  _downloadByUrl.clear();
+                                  _downloadSizeByUrl.clear();
+                                });
+                              },
+                        child: Text(l10n.clearListLabel),
+                      ),
                     ),
                   ],
                 ),

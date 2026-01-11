@@ -44,9 +44,11 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
   }
 
   IconButton _buildToggleButton() {
+    final l10n = context.l10n;
     return IconButton(
       onPressed: _toggleExpanded,
       icon: Icon(_isExpanded ? Icons.expand_more : Icons.expand_less),
+      tooltip: _isExpanded ? l10n.jobLogCollapseTooltip : l10n.jobLogExpandTooltip,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints.tightFor(width: 32, height: 32),
       visualDensity: VisualDensity.compact,
