@@ -2670,6 +2670,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Page {current}/{total}'**
   String pageOf(Object current, Object total);
+
+  /// No description provided for @commonNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get commonNext;
+
+  /// No description provided for @commonBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get commonBack;
+
+  /// No description provided for @commonSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get commonSkip;
+
+  /// No description provided for @bootstrapWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to varManager'**
+  String get bootstrapWelcomeTitle;
+
+  /// No description provided for @bootstrapWelcomeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This guide will help you finish basic setup, run self-checks, and learn key workflows.'**
+  String get bootstrapWelcomeBody;
+
+  /// No description provided for @bootstrapWelcomeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced users can skip and configure everything later in Settings.'**
+  String get bootstrapWelcomeHint;
+
+  /// No description provided for @bootstrapWelcomeSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'I am an advanced user, skip guide'**
+  String get bootstrapWelcomeSkip;
+
+  /// No description provided for @bootstrapWelcomeStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start guide'**
+  String get bootstrapWelcomeStart;
+
+  /// No description provided for @bootstrapSkipConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip onboarding?'**
+  String get bootstrapSkipConfirmTitle;
+
+  /// No description provided for @bootstrapSkipConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipping will bypass configuration and self-checks. You can still configure everything later.'**
+  String get bootstrapSkipConfirmBody;
+
+  /// No description provided for @bootstrapSkipConfirmYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip now'**
+  String get bootstrapSkipConfirmYes;
+
+  /// No description provided for @bootstrapFeaturesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What you can do'**
+  String get bootstrapFeaturesTitle;
+
+  /// No description provided for @bootstrapFeatureVars.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage VAR packages: install, clean old versions, and rebuild links.'**
+  String get bootstrapFeatureVars;
+
+  /// No description provided for @bootstrapFeatureScenes.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse scenes and drag cards to favorite or hide.'**
+  String get bootstrapFeatureScenes;
+
+  /// No description provided for @bootstrapFeatureHub.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Hub by tags and build download lists.'**
+  String get bootstrapFeatureHub;
+
+  /// No description provided for @bootstrapFeaturePacks.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Pack Switch to toggle profiles quickly.'**
+  String get bootstrapFeaturePacks;
+
+  /// No description provided for @bootstrapConfigTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Basic configuration'**
+  String get bootstrapConfigTitle;
+
+  /// No description provided for @bootstrapConfigBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in key paths so varManager can index packages and launch VaM.'**
+  String get bootstrapConfigBody;
+
+  /// No description provided for @bootstrapConfigVarspathRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'varspath is required.'**
+  String get bootstrapConfigVarspathRequired;
+
+  /// No description provided for @bootstrapConfigVamExecHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended: VaM (Desktop Mode).bat'**
+  String get bootstrapConfigVamExecHint;
+
+  /// No description provided for @bootstrapChecksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Self-check'**
+  String get bootstrapChecksTitle;
+
+  /// No description provided for @bootstrapChecksBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We will test write access, file operations, and symlink support.'**
+  String get bootstrapChecksBody;
+
+  /// No description provided for @bootstrapRunChecks.
+  ///
+  /// In en, this message translates to:
+  /// **'Run checks'**
+  String get bootstrapRunChecks;
+
+  /// No description provided for @bootstrapChecksSkipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip self-check?'**
+  String get bootstrapChecksSkipTitle;
+
+  /// No description provided for @bootstrapChecksSkipBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can continue without checks, but some features may fail later.'**
+  String get bootstrapChecksSkipBody;
+
+  /// No description provided for @bootstrapCheckBackendLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Backend health'**
+  String get bootstrapCheckBackendLabel;
+
+  /// No description provided for @bootstrapCheckVarspathLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'varspath availability'**
+  String get bootstrapCheckVarspathLabel;
+
+  /// No description provided for @bootstrapCheckDownloaderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Download path write access'**
+  String get bootstrapCheckDownloaderLabel;
+
+  /// No description provided for @bootstrapCheckFileOpsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'File copy/move/rename'**
+  String get bootstrapCheckFileOpsLabel;
+
+  /// No description provided for @bootstrapCheckSymlinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Symlink create/read/move'**
+  String get bootstrapCheckSymlinkLabel;
+
+  /// No description provided for @bootstrapCheckVamExecLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'VaM executable path'**
+  String get bootstrapCheckVamExecLabel;
+
+  /// No description provided for @bootstrapCheckVarspathHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Set varspath in configuration.'**
+  String get bootstrapCheckVarspathHint;
+
+  /// No description provided for @bootstrapCheckDownloaderHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a writable download path.'**
+  String get bootstrapCheckDownloaderHint;
+
+  /// No description provided for @bootstrapCheckFileOpsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Possible reasons: read-only folder, missing permissions, or locked files.'**
+  String get bootstrapCheckFileOpsHint;
+
+  /// No description provided for @bootstrapCheckSymlinkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Possible reasons: admin/dev mode required, unsupported filesystem, or read-only drive.'**
+  String get bootstrapCheckSymlinkHint;
+
+  /// No description provided for @bootstrapCheckVamExecHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Set the correct VaM launch script in Settings.'**
+  String get bootstrapCheckVamExecHint;
+
+  /// No description provided for @bootstrapCheckStatusPass.
+  ///
+  /// In en, this message translates to:
+  /// **'Pass'**
+  String get bootstrapCheckStatusPass;
+
+  /// No description provided for @bootstrapCheckStatusWarn.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get bootstrapCheckStatusWarn;
+
+  /// No description provided for @bootstrapCheckStatusFail.
+  ///
+  /// In en, this message translates to:
+  /// **'Fail'**
+  String get bootstrapCheckStatusFail;
+
+  /// No description provided for @bootstrapCheckStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get bootstrapCheckStatusPending;
+
+  /// No description provided for @bootstrapTourHomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Home: Update database'**
+  String get bootstrapTourHomeTitle;
+
+  /// No description provided for @bootstrapTourHomeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'After adding new VARs under varspath, click Update DB to index them. VARs in vampath/AddonPackages are staged into varsForInstall before install.'**
+  String get bootstrapTourHomeBody;
+
+  /// No description provided for @bootstrapTourScenesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scenes: Drag to organize'**
+  String get bootstrapTourScenesTitle;
+
+  /// No description provided for @bootstrapTourScenesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag scene cards into Favorite or Hide columns for quick organization.'**
+  String get bootstrapTourScenesBody;
+
+  /// No description provided for @bootstrapTourHubTagsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: Tag search'**
+  String get bootstrapTourHubTagsTitle;
+
+  /// No description provided for @bootstrapTourHubTagsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Add tags and search to build a focused list. Use resource actions to generate download links.'**
+  String get bootstrapTourHubTagsBody;
+
+  /// No description provided for @bootstrapTourHubDownloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub: Download list'**
+  String get bootstrapTourHubDownloadsTitle;
+
+  /// No description provided for @bootstrapTourHubDownloadsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the download list and click Download All to enqueue.'**
+  String get bootstrapTourHubDownloadsBody;
+
+  /// No description provided for @bootstrapTourSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings: Theme'**
+  String get bootstrapTourSettingsTitle;
+
+  /// No description provided for @bootstrapTourSettingsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a theme to customize the app look and feel.'**
+  String get bootstrapTourSettingsBody;
+
+  /// No description provided for @bootstrapFinishTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'All set'**
+  String get bootstrapFinishTitle;
+
+  /// No description provided for @bootstrapFinishBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You are ready to use varManager.'**
+  String get bootstrapFinishBody;
+
+  /// No description provided for @bootstrapFinishHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can revisit this guide later from Settings (if enabled in future).'**
+  String get bootstrapFinishHint;
+
+  /// No description provided for @bootstrapFinishStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start using varManager'**
+  String get bootstrapFinishStart;
+
+  /// No description provided for @bootstrapFinishDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to remove INSTALL.txt. Please delete it manually.'**
+  String get bootstrapFinishDeleteFailed;
 }
 
 class _AppLocalizationsDelegate

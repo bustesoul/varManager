@@ -10,6 +10,7 @@ import '../../core/app_version.dart';
 import '../../core/models/config.dart';
 import '../../l10n/l10n.dart';
 import '../../l10n/locale_config.dart';
+import '../bootstrap/bootstrap_keys.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -270,11 +271,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     String? hintText,
     TextInputType keyboard = TextInputType.text,
     VoidCallback? onBrowse,
+    Key? anchorKey,
   }) {
     final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        key: anchorKey,
         children: [
           Expanded(
             child: TextFormField(
@@ -322,6 +325,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget _buildThemeSelector(AppLocalizations l10n) {
     final currentTheme = ref.watch(themeProvider);
     return Column(
+      key: BootstrapKeys.settingsThemeSelector,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(l10n.themeLabel, style: const TextStyle(fontSize: 14)),

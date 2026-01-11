@@ -10,6 +10,7 @@ import '../../core/models/var_models.dart';
 import '../../core/utils/debounce.dart';
 import '../../widgets/lazy_dropdown_field.dart';
 import '../../l10n/l10n.dart';
+import '../bootstrap/bootstrap_keys.dart';
 import '../missing_vars/missing_vars_page.dart';
 import '../prepare_saves/prepare_saves_page.dart';
 import '../uninstall_vars/uninstall_vars_page.dart';
@@ -722,10 +723,11 @@ class _HomePageState extends ConsumerState<HomePage> {
             _withTooltip(
               l10n.updateDbTooltip,
               FilledButton.icon(
+                key: BootstrapKeys.homeUpdateDbButton,
                 onPressed: isBusy
                     ? null
                     : () async {
-                        await _runJob('update_db');
+                      await _runJob('update_db');
                         ref.invalidate(varsListProvider);
                       },
                 icon: const Icon(Icons.sync),

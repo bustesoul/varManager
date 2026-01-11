@@ -1429,4 +1429,190 @@ class AppLocalizationsEn extends AppLocalizations {
   String pageOf(Object current, Object total) {
     return 'Page $current/$total';
   }
+
+  @override
+  String get commonNext => 'Next';
+
+  @override
+  String get commonBack => 'Back';
+
+  @override
+  String get commonSkip => 'Skip';
+
+  @override
+  String get bootstrapWelcomeTitle => 'Welcome to varManager';
+
+  @override
+  String get bootstrapWelcomeBody =>
+      'This guide will help you finish basic setup, run self-checks, and learn key workflows.';
+
+  @override
+  String get bootstrapWelcomeHint =>
+      'Advanced users can skip and configure everything later in Settings.';
+
+  @override
+  String get bootstrapWelcomeSkip => 'I am an advanced user, skip guide';
+
+  @override
+  String get bootstrapWelcomeStart => 'Start guide';
+
+  @override
+  String get bootstrapSkipConfirmTitle => 'Skip onboarding?';
+
+  @override
+  String get bootstrapSkipConfirmBody =>
+      'Skipping will bypass configuration and self-checks. You can still configure everything later.';
+
+  @override
+  String get bootstrapSkipConfirmYes => 'Skip now';
+
+  @override
+  String get bootstrapFeaturesTitle => 'What you can do';
+
+  @override
+  String get bootstrapFeatureVars =>
+      'Manage VAR packages: install, clean old versions, and rebuild links.';
+
+  @override
+  String get bootstrapFeatureScenes =>
+      'Browse scenes and drag cards to favorite or hide.';
+
+  @override
+  String get bootstrapFeatureHub =>
+      'Search Hub by tags and build download lists.';
+
+  @override
+  String get bootstrapFeaturePacks =>
+      'Use Pack Switch to toggle profiles quickly.';
+
+  @override
+  String get bootstrapConfigTitle => 'Basic configuration';
+
+  @override
+  String get bootstrapConfigBody =>
+      'Fill in key paths so varManager can index packages and launch VaM.';
+
+  @override
+  String get bootstrapConfigVarspathRequired => 'varspath is required.';
+
+  @override
+  String get bootstrapConfigVamExecHint =>
+      'Recommended: VaM (Desktop Mode).bat';
+
+  @override
+  String get bootstrapChecksTitle => 'Self-check';
+
+  @override
+  String get bootstrapChecksBody =>
+      'We will test write access, file operations, and symlink support.';
+
+  @override
+  String get bootstrapRunChecks => 'Run checks';
+
+  @override
+  String get bootstrapChecksSkipTitle => 'Skip self-check?';
+
+  @override
+  String get bootstrapChecksSkipBody =>
+      'You can continue without checks, but some features may fail later.';
+
+  @override
+  String get bootstrapCheckBackendLabel => 'Backend health';
+
+  @override
+  String get bootstrapCheckVarspathLabel => 'varspath availability';
+
+  @override
+  String get bootstrapCheckDownloaderLabel => 'Download path write access';
+
+  @override
+  String get bootstrapCheckFileOpsLabel => 'File copy/move/rename';
+
+  @override
+  String get bootstrapCheckSymlinkLabel => 'Symlink create/read/move';
+
+  @override
+  String get bootstrapCheckVamExecLabel => 'VaM executable path';
+
+  @override
+  String get bootstrapCheckVarspathHint => 'Set varspath in configuration.';
+
+  @override
+  String get bootstrapCheckDownloaderHint => 'Choose a writable download path.';
+
+  @override
+  String get bootstrapCheckFileOpsHint =>
+      'Possible reasons: read-only folder, missing permissions, or locked files.';
+
+  @override
+  String get bootstrapCheckSymlinkHint =>
+      'Possible reasons: admin/dev mode required, unsupported filesystem, or read-only drive.';
+
+  @override
+  String get bootstrapCheckVamExecHint =>
+      'Set the correct VaM launch script in Settings.';
+
+  @override
+  String get bootstrapCheckStatusPass => 'Pass';
+
+  @override
+  String get bootstrapCheckStatusWarn => 'Warning';
+
+  @override
+  String get bootstrapCheckStatusFail => 'Fail';
+
+  @override
+  String get bootstrapCheckStatusPending => 'Pending';
+
+  @override
+  String get bootstrapTourHomeTitle => 'Home: Update database';
+
+  @override
+  String get bootstrapTourHomeBody =>
+      'After adding new VARs under varspath, click Update DB to index them. VARs in vampath/AddonPackages are staged into varsForInstall before install.';
+
+  @override
+  String get bootstrapTourScenesTitle => 'Scenes: Drag to organize';
+
+  @override
+  String get bootstrapTourScenesBody =>
+      'Drag scene cards into Favorite or Hide columns for quick organization.';
+
+  @override
+  String get bootstrapTourHubTagsTitle => 'Hub: Tag search';
+
+  @override
+  String get bootstrapTourHubTagsBody =>
+      'Add tags and search to build a focused list. Use resource actions to generate download links.';
+
+  @override
+  String get bootstrapTourHubDownloadsTitle => 'Hub: Download list';
+
+  @override
+  String get bootstrapTourHubDownloadsBody =>
+      'Review the download list and click Download All to enqueue.';
+
+  @override
+  String get bootstrapTourSettingsTitle => 'Settings: Theme';
+
+  @override
+  String get bootstrapTourSettingsBody =>
+      'Pick a theme to customize the app look and feel.';
+
+  @override
+  String get bootstrapFinishTitle => 'All set';
+
+  @override
+  String get bootstrapFinishBody => 'You are ready to use varManager.';
+
+  @override
+  String get bootstrapFinishHint =>
+      'You can revisit this guide later from Settings (if enabled in future).';
+
+  @override
+  String get bootstrapFinishStart => 'Start using varManager';
+
+  @override
+  String get bootstrapFinishDeleteFailed =>
+      'Failed to remove INSTALL.txt. Please delete it manually.';
 }

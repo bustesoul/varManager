@@ -1403,4 +1403,170 @@ class AppLocalizationsZh extends AppLocalizations {
   String pageOf(Object current, Object total) {
     return '第 $current/$total 页';
   }
+
+  @override
+  String get commonNext => '下一步';
+
+  @override
+  String get commonBack => '返回';
+
+  @override
+  String get commonSkip => '跳过';
+
+  @override
+  String get bootstrapWelcomeTitle => '欢迎使用 varManager';
+
+  @override
+  String get bootstrapWelcomeBody => '本向导将帮助你完成基础配置、自检和关键功能的快速了解。';
+
+  @override
+  String get bootstrapWelcomeHint => '高级用户可以跳过引导，稍后在设置中完成配置。';
+
+  @override
+  String get bootstrapWelcomeSkip => '我是高级用户，跳过引导';
+
+  @override
+  String get bootstrapWelcomeStart => '开始引导';
+
+  @override
+  String get bootstrapSkipConfirmTitle => '确认跳过引导？';
+
+  @override
+  String get bootstrapSkipConfirmBody => '跳过将不执行配置与自检，你仍可在设置中完成。';
+
+  @override
+  String get bootstrapSkipConfirmYes => '确认跳过';
+
+  @override
+  String get bootstrapFeaturesTitle => '功能一览';
+
+  @override
+  String get bootstrapFeatureVars => '管理 VAR 包：安装、清理旧版本、重建链接。';
+
+  @override
+  String get bootstrapFeatureScenes => '浏览场景，拖拽卡片即可收藏或隐藏。';
+
+  @override
+  String get bootstrapFeatureHub => '按标签搜索 Hub，生成下载列表。';
+
+  @override
+  String get bootstrapFeaturePacks => 'Pack Switch 可快速切换配置。';
+
+  @override
+  String get bootstrapConfigTitle => '基础配置';
+
+  @override
+  String get bootstrapConfigBody => '填写关键路径，确保能够索引包并启动 VaM。';
+
+  @override
+  String get bootstrapConfigVarspathRequired => '必须填写 varspath。';
+
+  @override
+  String get bootstrapConfigVamExecHint => '推荐：VaM (Desktop Mode).bat';
+
+  @override
+  String get bootstrapChecksTitle => '功能自检';
+
+  @override
+  String get bootstrapChecksBody => '将测试写入权限、文件操作和软链接能力。';
+
+  @override
+  String get bootstrapRunChecks => '开始自检';
+
+  @override
+  String get bootstrapChecksSkipTitle => '跳过自检？';
+
+  @override
+  String get bootstrapChecksSkipBody => '可以继续，但部分功能可能无法正常工作。';
+
+  @override
+  String get bootstrapCheckBackendLabel => '后端健康检查';
+
+  @override
+  String get bootstrapCheckVarspathLabel => 'varspath 可用性';
+
+  @override
+  String get bootstrapCheckDownloaderLabel => '下载目录写入权限';
+
+  @override
+  String get bootstrapCheckFileOpsLabel => '文件复制/移动/重命名';
+
+  @override
+  String get bootstrapCheckSymlinkLabel => '软链接创建/读取/移动';
+
+  @override
+  String get bootstrapCheckVamExecLabel => 'VaM 启动脚本路径';
+
+  @override
+  String get bootstrapCheckVarspathHint => '请先在配置中设置 varspath。';
+
+  @override
+  String get bootstrapCheckDownloaderHint => '请选择可写的下载目录。';
+
+  @override
+  String get bootstrapCheckFileOpsHint => '可能原因：目录只读、权限不足或文件被占用。';
+
+  @override
+  String get bootstrapCheckSymlinkHint => '可能原因：需要管理员/开发者模式、文件系统不支持软链接或磁盘只读。';
+
+  @override
+  String get bootstrapCheckVamExecHint => '请在设置中填写正确的 VaM 启动脚本。';
+
+  @override
+  String get bootstrapCheckStatusPass => '通过';
+
+  @override
+  String get bootstrapCheckStatusWarn => '警告';
+
+  @override
+  String get bootstrapCheckStatusFail => '失败';
+
+  @override
+  String get bootstrapCheckStatusPending => '等待';
+
+  @override
+  String get bootstrapTourHomeTitle => '主页：更新数据库';
+
+  @override
+  String get bootstrapTourHomeBody =>
+      '当你在 varspath 新增 VAR 包后，点击“更新数据库”进行入库。位于 vampath/AddonPackages 的 VAR 会先进入 varsForInstall，再安装并入库。';
+
+  @override
+  String get bootstrapTourScenesTitle => 'Scenes：拖拽整理';
+
+  @override
+  String get bootstrapTourScenesBody => '将场景卡片拖入收藏或隐藏列，快速分类。';
+
+  @override
+  String get bootstrapTourHubTagsTitle => 'Hub：标签搜索';
+
+  @override
+  String get bootstrapTourHubTagsBody => '添加标签并搜索，缩小结果范围；资源动作可生成下载链接。';
+
+  @override
+  String get bootstrapTourHubDownloadsTitle => 'Hub：下载列表';
+
+  @override
+  String get bootstrapTourHubDownloadsBody => '检查下载列表，点击“全部下载”加入队列。';
+
+  @override
+  String get bootstrapTourSettingsTitle => '设置：主题外观';
+
+  @override
+  String get bootstrapTourSettingsBody => '在这里选择主题风格，调整应用的整体观感。';
+
+  @override
+  String get bootstrapFinishTitle => '完成';
+
+  @override
+  String get bootstrapFinishBody => '引导已完成，可以开始使用。';
+
+  @override
+  String get bootstrapFinishHint => '后续可在设置中检查配置。';
+
+  @override
+  String get bootstrapFinishStart => '开始使用 varManager';
+
+  @override
+  String get bootstrapFinishDeleteFailed => '删除 INSTALL.txt 失败，请手动删除。';
 }

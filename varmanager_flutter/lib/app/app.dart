@@ -9,6 +9,8 @@ import '../features/home/home_page.dart';
 import '../features/hub/hub_page.dart';
 import '../features/scenes/scenes_page.dart';
 import '../features/settings/settings_page.dart';
+import '../features/bootstrap/bootstrap_controller.dart';
+import '../features/bootstrap/bootstrap_gate.dart';
 import '../widgets/download_manager.dart';
 import '../widgets/job_log_panel.dart';
 import '../l10n/l10n.dart';
@@ -85,6 +87,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       setState(() {
         _ready = true;
       });
+      await ref.read(bootstrapProvider.notifier).loadIfNeeded();
     } catch (err) {
       if (!mounted) return;
       setState(() {
@@ -142,100 +145,109 @@ class _AppShellState extends ConsumerState<AppShell> {
         builder: (context) {
           final colorScheme = Theme.of(context).colorScheme;
           final isDark = colorScheme.brightness == Brightness.dark;
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [colorScheme.surface, colorScheme.surface.withValues(alpha: 0.95)]
-                    : [
-                        Theme.of(context).scaffoldBackgroundColor,
-                        HSLColor.fromColor(Theme.of(context).scaffoldBackgroundColor)
-                            .withLightness(0.88)
-                            .toColor(),
-                      ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: isCompact
-            ? Column(
-                children: [
-                  Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 350),
-                        child: _error != null
-                            ? _ErrorPane(message: _error!)
-                            : !_ready
-                                ? const _LoadingPane()
-                                : pages[index].page,
-                      ),
-                    ),
-                  const JobLogPanel(),
-                  NavigationBar(
-                    selectedIndex: index,
-                    onDestinationSelected: (value) {
-                      ref.read(navIndexProvider.notifier).setIndex(value);
-                    },
-                    destinations: pages
-                        .map(
-                          (entry) => NavigationDestination(
-                            icon: Icon(entry.icon),
-                            label: entry.label,
-                          ),
-                        )
-                        .toList(),
+          return Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [
+                            colorScheme.surface,
+                            colorScheme.surface.withValues(alpha: 0.95),
+                          ]
+                        : [
+                            Theme.of(context).scaffoldBackgroundColor,
+                            HSLColor.fromColor(Theme.of(context).scaffoldBackgroundColor)
+                                .withLightness(0.88)
+                                .toColor(),
+                          ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
-              )
-            : Row(
-                children: [
-                  SizedBox(
-                    width: 92,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: NavigationRail(
+                ),
+                child: isCompact
+                    ? Column(
+                        children: [
+                          Expanded(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 350),
+                              child: _error != null
+                                  ? _ErrorPane(message: _error!)
+                                  : !_ready
+                                      ? const _LoadingPane()
+                                      : pages[index].page,
+                            ),
+                          ),
+                          const JobLogPanel(),
+                          NavigationBar(
                             selectedIndex: index,
-                            labelType: NavigationRailLabelType.all,
                             onDestinationSelected: (value) {
                               ref.read(navIndexProvider.notifier).setIndex(value);
                             },
                             destinations: pages
                                 .map(
-                                  (entry) => NavigationRailDestination(
+                                  (entry) => NavigationDestination(
                                     icon: Icon(entry.icon),
-                                    label: Text(entry.label),
+                                    label: entry.label,
                                   ),
                                 )
                                 .toList(),
                           ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 16),
-                          child: DownloadManagerBubble(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 350),
-                            child: _error != null
-                                ? _ErrorPane(message: _error!)
-                                : !_ready
-                                    ? const _LoadingPane()
-                                    : pages[index].page,
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          SizedBox(
+                            width: 92,
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: NavigationRail(
+                                    selectedIndex: index,
+                                    labelType: NavigationRailLabelType.all,
+                                    onDestinationSelected: (value) {
+                                      ref.read(navIndexProvider.notifier)
+                                          .setIndex(value);
+                                    },
+                                    destinations: pages
+                                        .map(
+                                          (entry) => NavigationRailDestination(
+                                            icon: Icon(entry.icon),
+                                            label: Text(entry.label),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 16),
+                                  child: DownloadManagerBubble(),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const JobLogPanel(),
-                      ],
-                    ),
-                  ),
-                ],
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 350),
+                                    child: _error != null
+                                        ? _ErrorPane(message: _error!)
+                                        : !_ready
+                                            ? const _LoadingPane()
+                                            : pages[index].page,
+                                  ),
+                                ),
+                                const JobLogPanel(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
               ),
+              if (_ready && _error == null) const BootstrapGate(),
+            ],
           );
         },
       ),

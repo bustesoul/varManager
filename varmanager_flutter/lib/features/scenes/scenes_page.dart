@@ -13,6 +13,7 @@ import '../../widgets/image_preview_dialog.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/lazy_dropdown_field.dart';
 import '../../l10n/l10n.dart';
+import '../bootstrap/bootstrap_keys.dart';
 import '../analysis/analysis_page.dart';
 import '../var_detail/var_detail_page.dart';
 
@@ -452,23 +453,27 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }) {
     return DragTarget<SceneListItem>(
       onAcceptWithDetails: (details) => _moveScene(details.data, targetHideFav),
-      builder: (context, candidate, rejected) {
-        final l10n = context.l10n;
-        return Card(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Text(l10n.columnTitleWithCount(title, items.length)),
-                    if (candidate.isNotEmpty) ...[
-                      const Spacer(),
-                      const Icon(Icons.arrow_downward, size: 18),
+        builder: (context, candidate, rejected) {
+          final l10n = context.l10n;
+          final titleWidget = Text(l10n.columnTitleWithCount(title, items.length));
+          final headerTitle = targetHideFav == 0
+              ? KeyedSubtree(key: BootstrapKeys.scenesColumnHeader, child: titleWidget)
+              : titleWidget;
+          return Card(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      headerTitle,
+                      if (candidate.isNotEmpty) ...[
+                        const Spacer(),
+                        const Icon(Icons.arrow_downward, size: 18),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
               const Divider(height: 1),
               Expanded(
                 child: ListView.builder(

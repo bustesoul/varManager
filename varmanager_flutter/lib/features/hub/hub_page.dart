@@ -10,6 +10,7 @@ import '../../widgets/lazy_dropdown_field.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/image_preview_dialog.dart';
 import '../../l10n/l10n.dart';
+import '../bootstrap/bootstrap_keys.dart';
 import '../home/providers.dart';
 
 class HubInfo {
@@ -1192,8 +1193,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                 },
                               ),
                               const SizedBox(height: 8),
-                              LazyDropdownField(
-                                label: l10n.tagLabel,
+                                LazyDropdownField(
+                                  key: BootstrapKeys.hubTagFilter,
+                                  label: l10n.tagLabel,
                                 value: 'All',
                                 allValue: 'All',
                                 allLabel: l10n.allTagsLabel,
@@ -1404,8 +1406,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                     const SizedBox(height: 8),
                     Text(l10n.totalLinksSize(downloadUrls.length, totalSizeLabel)),
                     const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: downloadUrls.isEmpty
+                      OutlinedButton(
+                        key: BootstrapKeys.hubDownloadAllButton,
+                        onPressed: downloadUrls.isEmpty
                           ? null
                           : () async {
                               final items = downloadUrls
