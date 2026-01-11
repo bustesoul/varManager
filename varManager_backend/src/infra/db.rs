@@ -226,7 +226,7 @@ pub async fn list_var_versions(
     package_name: &str,
 ) -> Result<Vec<(String, String)>, String> {
     let rows = sqlx::query(
-        "SELECT varName, version FROM vars WHERE creatorName = ?1 AND packageName = ?2",
+        "SELECT varName, version FROM vars WHERE creatorName = ?1 COLLATE NOCASE AND packageName = ?2 COLLATE NOCASE",
     )
     .bind(creator_name)
     .bind(package_name)

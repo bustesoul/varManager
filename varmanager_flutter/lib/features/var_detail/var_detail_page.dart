@@ -12,7 +12,7 @@ import '../../l10n/l10n.dart';
 import '../missing_vars/missing_vars_page.dart';
 import '../home/providers.dart';
 
-final varDetailProvider = FutureProvider.family<VarDetailResponse, String>((ref, name) async {
+final varDetailProvider = FutureProvider.autoDispose.family<VarDetailResponse, String>((ref, name) async {
   final client = ref.watch(backendClientProvider);
   return client.getVarDetail(name);
 });
