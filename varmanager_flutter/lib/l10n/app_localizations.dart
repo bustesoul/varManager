@@ -2842,7 +2842,7 @@ abstract class AppLocalizations {
   /// No description provided for @commonSkip.
   ///
   /// In en, this message translates to:
-  /// **'Skip'**
+  /// **'Skip tutorial'**
   String get commonSkip;
 
   /// No description provided for @bootstrapWelcomeTitle.

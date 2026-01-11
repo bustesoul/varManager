@@ -732,7 +732,7 @@
   },
   "commonNext": "Next",
   "commonBack": "Back",
-  "commonSkip": "Skip",
+  "commonSkip": "Skip tutorial",
   "bootstrapWelcomeTitle": "Welcome to {app}",
   "bootstrapWelcomeBody": "This guide will help you finish basic setup, run self-checks, and learn key workflows.",
   "bootstrapWelcomeHint": "Advanced users can skip and configure everything later in Settings.",

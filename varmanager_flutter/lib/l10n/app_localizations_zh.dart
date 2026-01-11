@@ -1491,7 +1491,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonBack => '返回';
 
   @override
-  String get commonSkip => '跳过';
+  String get commonSkip => '跳过教程';
 
   @override
   String bootstrapWelcomeTitle(Object app) {

@@ -457,7 +457,7 @@
   "pageOf": "第 {current}/{total} 页",
   "commonNext": "下一步",
   "commonBack": "返回",
-  "commonSkip": "跳过",
+  "commonSkip": "跳过教程",
   "bootstrapWelcomeTitle": "欢迎使用 {app}",
   "bootstrapWelcomeBody": "本向导将帮助你完成基础配置、自检和关键功能的快速了解。",
   "bootstrapWelcomeHint": "高级用户可以跳过引导，稍后在设置中完成配置。",

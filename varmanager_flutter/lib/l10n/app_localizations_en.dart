@@ -1519,7 +1519,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonBack => 'Back';
 
   @override
-  String get commonSkip => 'Skip';
+  String get commonSkip => 'Skip tutorial';
 
   @override
   String bootstrapWelcomeTitle(Object app) {
