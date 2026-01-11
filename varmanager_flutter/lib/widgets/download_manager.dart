@@ -80,7 +80,6 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final downloads = ref.watch(downloadListProvider);
     final data = downloads.value ?? DownloadListResponse.empty();
     final total = data.items.length;
@@ -102,59 +101,56 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
           setState(() => _hoverBubble = false);
           _updateOverlay();
         },
-        child: Tooltip(
-          message: l10n.downloadManagerTitle,
-          child: GestureDetector(
-            onTap: () {
-              setState(() => _pinned = !_pinned);
-              _updateOverlay();
-            },
-            child: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: colorScheme.surface,
-                border: Border.all(
-                  color: colorScheme.primary.withValues(alpha: 0.35),
+        child: GestureDetector(
+          onTap: () {
+            setState(() => _pinned = !_pinned);
+            _updateOverlay();
+          },
+          child: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: colorScheme.surface,
+              border: Border.all(
+                color: colorScheme.primary.withValues(alpha: 0.35),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 4,
+                    backgroundColor:
+                        colorScheme.primary.withValues(alpha: 0.15),
+                    valueColor: AlwaysStoppedAnimation(colorScheme.primary),
                   ),
-                ],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 4,
-                      backgroundColor:
-                          colorScheme.primary.withValues(alpha: 0.15),
-                      valueColor: AlwaysStoppedAnimation(colorScheme.primary),
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.download_rounded, size: 16),
-                      Text(
-                        total == 0 ? '0' : '$completed/$total',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.download_rounded, size: 16),
+                    Text(
+                      total == 0 ? '0' : '$completed/$total',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),

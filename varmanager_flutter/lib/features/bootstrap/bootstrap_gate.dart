@@ -36,7 +36,7 @@ class _BootstrapGateState extends ConsumerState<BootstrapGate> {
         fit: StackFit.expand,
         children: [
           Container(
-            color: Colors.black.withOpacity(0.35),
+            color: Colors.black.withValues(alpha: 0.35),
           ),
           Positioned.fill(
             child: AnimatedSwitcher(
@@ -394,6 +394,7 @@ class _BootstrapTourCoachState extends ConsumerState<BootstrapTourCoach> {
       final targetContext = key.currentContext;
       if (targetContext != null) {
         await Scrollable.ensureVisible(
+          // ignore: use_build_context_synchronously
           targetContext,
           alignment: 0.5,
           duration: const Duration(milliseconds: 220),
@@ -547,6 +548,16 @@ class _WelcomeStepState extends ConsumerState<_WelcomeStep> {
         return BootstrapDialogFrame(
           key: const ValueKey('welcome'),
           title: l10n.bootstrapWelcomeTitle(appLabel),
+          actions: [
+            TextButton(
+              onPressed: widget.onSkip,
+              child: Text(l10n.bootstrapWelcomeSkip),
+            ),
+            FilledButton(
+              onPressed: widget.onNext,
+              child: Text(l10n.bootstrapWelcomeStart),
+            ),
+          ],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -558,16 +569,6 @@ class _WelcomeStepState extends ConsumerState<_WelcomeStep> {
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: widget.onSkip,
-              child: Text(l10n.bootstrapWelcomeSkip),
-            ),
-            FilledButton(
-              onPressed: widget.onNext,
-              child: Text(l10n.bootstrapWelcomeStart),
-            ),
-          ],
         );
       },
     );
@@ -596,14 +597,6 @@ class _FeaturesStep extends ConsumerWidget {
     return BootstrapDialogFrame(
       key: const ValueKey('features'),
       title: l10n.bootstrapFeaturesTitle,
-      child: Column(
-        children: [
-          for (final item in items) ...[
-            _FeatureRow(item: item),
-            const SizedBox(height: 12),
-          ],
-        ],
-      ),
       actions: [
         TextButton(
           onPressed: onBack,
@@ -614,6 +607,14 @@ class _FeaturesStep extends ConsumerWidget {
           child: Text(l10n.commonNext),
         ),
       ],
+      child: Column(
+        children: [
+          for (final item in items) ...[
+            _FeatureRow(item: item),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -748,6 +749,26 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     return BootstrapDialogFrame(
       key: const ValueKey('config'),
       title: l10n.bootstrapConfigTitle,
+      actions: [
+        TextButton(
+          onPressed: () => ref.read(bootstrapProvider.notifier).previousStep(),
+          child: Text(l10n.commonBack),
+        ),
+        FilledButton(
+          onPressed: state.savingConfig
+              ? null
+              : () async {
+                  if (!_formKey.currentState!.validate()) return;
+                  final ok = await ref
+                      .read(bootstrapProvider.notifier)
+                      .saveConfig(_currentConfig());
+                  if (ok) {
+                    ref.read(bootstrapProvider.notifier).nextStep();
+                  }
+                },
+          child: Text(l10n.commonNext),
+        ),
+      ],
       child: Form(
         key: _formKey,
         child: Column(
@@ -790,7 +811,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _proxyMode,
+              initialValue: _proxyMode,
               decoration: InputDecoration(
                 labelText: l10n.proxyModeLabel,
                 border: const OutlineInputBorder(),
@@ -845,26 +866,6 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => ref.read(bootstrapProvider.notifier).previousStep(),
-          child: Text(l10n.commonBack),
-        ),
-        FilledButton(
-          onPressed: state.savingConfig
-              ? null
-              : () async {
-                  if (!_formKey.currentState!.validate()) return;
-                  final ok = await ref
-                      .read(bootstrapProvider.notifier)
-                      .saveConfig(_currentConfig());
-                  if (ok) {
-                    ref.read(bootstrapProvider.notifier).nextStep();
-                  }
-                },
-          child: Text(l10n.commonNext),
-        ),
-      ],
     );
   }
 
@@ -968,6 +969,24 @@ class _ChecksStep extends ConsumerWidget {
     return BootstrapDialogFrame(
       key: const ValueKey('checks'),
       title: l10n.bootstrapChecksTitle,
+      actions: [
+        TextButton(
+          onPressed: () => ref.read(bootstrapProvider.notifier).previousStep(),
+          child: Text(l10n.commonBack),
+        ),
+        FilledButton(
+          onPressed: state.checksRunning
+              ? null
+              : () async {
+                  if (!state.checksRan) {
+                    final ok = await _confirmSkipChecks(context, l10n);
+                    if (!ok) return;
+                  }
+                  ref.read(bootstrapProvider.notifier).nextStep();
+                },
+          child: Text(l10n.commonNext),
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1014,24 +1033,6 @@ class _ChecksStep extends ConsumerWidget {
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => ref.read(bootstrapProvider.notifier).previousStep(),
-          child: Text(l10n.commonBack),
-        ),
-        FilledButton(
-          onPressed: state.checksRunning
-              ? null
-              : () async {
-                  if (!state.checksRan) {
-                    final ok = await _confirmSkipChecks(context, l10n);
-                    if (!ok) return;
-                  }
-                  ref.read(bootstrapProvider.notifier).nextStep();
-                },
-          child: Text(l10n.commonNext),
-        ),
-      ],
     );
   }
 }
@@ -1120,6 +1121,16 @@ class _FinishStep extends ConsumerWidget {
     return BootstrapDialogFrame(
       key: const ValueKey('finish'),
       title: l10n.bootstrapFinishTitle,
+      actions: [
+        TextButton(
+          onPressed: onBack,
+          child: Text(l10n.commonBack),
+        ),
+        FilledButton(
+          onPressed: onFinish,
+          child: Text(l10n.bootstrapFinishStart),
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1131,16 +1142,6 @@ class _FinishStep extends ConsumerWidget {
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: onBack,
-          child: Text(l10n.commonBack),
-        ),
-        FilledButton(
-          onPressed: onFinish,
-          child: Text(l10n.bootstrapFinishStart),
-        ),
-      ],
     );
   }
 }

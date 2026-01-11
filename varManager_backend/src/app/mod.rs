@@ -26,20 +26,15 @@ pub const APP_VERSION: &str = match option_env!("APP_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProxyMode {
+    #[default]
     System,
     Manual,
 }
 
-impl Default for ProxyMode {
-    fn default() -> Self {
-        ProxyMode::System
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ProxyConfig {
     #[serde(default)]
     pub host: String,
@@ -49,17 +44,6 @@ pub struct ProxyConfig {
     pub username: Option<String>,
     #[serde(default)]
     pub password: Option<String>,
-}
-
-impl Default for ProxyConfig {
-    fn default() -> Self {
-        Self {
-            host: String::new(),
-            port: 0,
-            username: None,
-            password: None,
-        }
-    }
 }
 
 impl ProxyConfig {

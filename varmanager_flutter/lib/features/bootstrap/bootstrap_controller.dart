@@ -391,8 +391,8 @@ class BootstrapController extends Notifier<BootstrapState> {
       if (readBack != content) {
         throw Exception('content mismatch');
       }
-      await fileA.delete().catchError((_) {});
-      await fileD.delete().catchError((_) {});
+      await fileA.delete().onError((_, _) => fileA);
+      await fileD.delete().onError((_, _) => fileD);
       return BootstrapCheckItem(
         id: 'fileops',
         label: label,
@@ -450,8 +450,8 @@ class BootstrapController extends Notifier<BootstrapState> {
       if (readMoved != content) {
         throw Exception('symlink moved content mismatch');
       }
-      await moved.delete().catchError((_) {});
-      await target.delete().catchError((_) {});
+      await moved.delete().onError((_, _) => moved);
+      await target.delete().onError((_, _) => target);
       return BootstrapCheckItem(
         id: 'symlink',
         label: label,

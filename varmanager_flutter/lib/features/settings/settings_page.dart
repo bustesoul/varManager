@@ -203,7 +203,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<ProxyMode>(
-                    value: _proxyMode,
+                    initialValue: _proxyMode,
                     decoration: InputDecoration(
                       labelText: l10n.proxyModeLabel,
                       border: const OutlineInputBorder(),
