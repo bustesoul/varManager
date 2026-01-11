@@ -164,6 +164,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get downloadStatusCompleted => '已完成';
 
   @override
+  String get downloadImportLabel => '导入';
+
+  @override
+  String downloadImportSuccess(Object count) {
+    return '已导入 $count 个链接';
+  }
+
+  @override
+  String get downloadImportEmpty => '未找到有效链接';
+
+  @override
   String get confirmDeleteTitle => '确认删除';
 
   @override

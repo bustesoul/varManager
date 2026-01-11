@@ -392,6 +392,24 @@ abstract class AppLocalizations {
   /// **'Completed'**
   String get downloadStatusCompleted;
 
+  /// No description provided for @downloadImportLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get downloadImportLabel;
+
+  /// No description provided for @downloadImportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} links'**
+  String downloadImportSuccess(Object count);
+
+  /// No description provided for @downloadImportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No valid links found'**
+  String get downloadImportEmpty;
+
   /// No description provided for @confirmDeleteTitle.
   ///
   /// In en, this message translates to:

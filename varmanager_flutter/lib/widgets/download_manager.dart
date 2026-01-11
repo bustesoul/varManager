@@ -1,9 +1,11 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:varmanager_flutter/l10n/app_localizations.dart';
 
 import '../app/providers.dart';
 import '../core/backend/download_controller.dart';
+import '../core/backend/job_log_controller.dart';
 import '../core/models/download_models.dart';
 import '../l10n/l10n.dart';
 
@@ -242,6 +244,11 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const Spacer(),
+                TextButton.icon(
+                  onPressed: _importFromFile,
+                  icon: const Icon(Icons.file_open_outlined, size: 16),
+                  label: Text(l10n.downloadImportLabel),
+                ),
                 if (items.isNotEmpty)
                   TextButton(
                     onPressed: () {
@@ -324,8 +331,52 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
     if (ids.isEmpty) {
       return;
     }
+    if (!mounted) return;
     final client = ref.read(backendClientProvider);
     await client.downloadAction(action, ids);
+  }
+
+  Future<void> _importFromFile() async {
+    final l10n = context.l10n;
+    final file = await openFile(acceptedTypeGroups: [
+      XTypeGroup(label: l10n.textFileTypeLabel, extensions: const ['txt'])
+    ]);
+    if (file == null) return;
+
+    final content = await file.readAsString();
+    final items = <Map<String, String>>[];
+    for (final line in content.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      // 格式: "名字 链接" 或纯链接
+      final lastSpace = trimmed.lastIndexOf(' ');
+      if (lastSpace > 0 && trimmed.substring(lastSpace + 1).startsWith('http')) {
+        items.add({
+          'name': trimmed.substring(0, lastSpace),
+          'url': trimmed.substring(lastSpace + 1),
+        });
+      } else if (trimmed.startsWith('http')) {
+        items.add({'url': trimmed});
+      }
+    }
+
+    if (!mounted) return;
+
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.downloadImportEmpty)),
+      );
+      return;
+    }
+
+    final runner = ref.read(jobRunnerProvider);
+    final log = ref.read(jobLogProvider.notifier);
+    await runner.runJob('hub_download_all', args: {'items': items}, onLog: log.addEntry);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.downloadImportSuccess(items.length))),
+    );
   }
 }
 

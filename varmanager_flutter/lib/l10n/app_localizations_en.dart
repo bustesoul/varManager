@@ -164,6 +164,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadStatusCompleted => 'Completed';
 
   @override
+  String get downloadImportLabel => 'Import';
+
+  @override
+  String downloadImportSuccess(Object count) {
+    return 'Imported $count links';
+  }
+
+  @override
+  String get downloadImportEmpty => 'No valid links found';
+
+  @override
   String get confirmDeleteTitle => 'Confirm Delete';
 
   @override

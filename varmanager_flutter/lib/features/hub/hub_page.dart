@@ -1437,8 +1437,11 @@ class _HubPageState extends ConsumerState<HubPage> {
                       onPressed: downloadUrls.isEmpty
                           ? null
                           : () async {
+                              final lines = downloadUrls
+                                  .map((url) => '${_downloadByUrl[url]} $url')
+                                  .join('\n');
                               await Clipboard.setData(
-                                ClipboardData(text: downloadUrls.join('\n')),
+                                ClipboardData(text: lines),
                               );
                             },
                       child: Text(l10n.copyLinksLabel),
