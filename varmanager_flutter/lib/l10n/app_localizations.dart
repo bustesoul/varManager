@@ -716,6 +716,12 @@ abstract class AppLocalizations {
   /// **'Backend version'**
   String get backendVersionLabel;
 
+  /// No description provided for @configSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Config saved'**
+  String get configSaved;
+
   /// No description provided for @configSavedRestartHint.
   ///
   /// In en, this message translates to:

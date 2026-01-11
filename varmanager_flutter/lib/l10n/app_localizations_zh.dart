@@ -330,6 +330,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backendVersionLabel => '后端版本';
 
   @override
+  String get configSaved => '配置已保存';
+
+  @override
   String get configSavedRestartHint => '配置已保存；listen_host/port 与代理需重启生效。';
 
   @override

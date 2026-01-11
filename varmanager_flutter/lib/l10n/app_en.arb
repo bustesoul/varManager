@@ -103,6 +103,7 @@
   "chooseAddonPackagesHint": "Recommended: choose AddonPackages",
   "appVersionLabel": "App version",
   "backendVersionLabel": "Backend version",
+  "configSaved": "Config saved",
   "configSavedRestartHint": "Config saved; listen_host/port and proxy apply after restart.",
   "searchVarPackageLabel": "Search var/package",
   "creatorLabel": "Creator",

@@ -41,8 +41,9 @@ pub async fn run_update_db_job(state: AppState, reporter: JobReporter) -> Result
 }
 
 fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
+    let overall_start = std::time::Instant::now();
     let (varspath, vampath) = config_paths(state)?;
-    reporter.log(format!("UpdateDB start: varspath={}", varspath.display()));
+    reporter.log(format!("UpdateDB started: varspath={}", varspath.display()));
     reporter.progress(1);
 
     let addon_vars = match vampath.as_ref() {
@@ -64,6 +65,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     vars_for_install = dedup_strings(vars_for_install);
     save_vars_for_install(&vars_for_install)?;
 
+    reporter.log("Phase 1/5: Tidying VAR files...".to_string());
     tidy_vars(
         &varspath,
         if vampath.is_some() { Some(&addon_vars) } else { None },
@@ -94,6 +96,8 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         return Ok(());
     }
 
+    reporter.log(format!("Phase 2/5: Processing {} VAR files into database...", var_files.len()));
+
     let dependency_regex = Regex::new(
         r#"\x22(([^\r\n\x22\x3A\x2E]{1,60})\x2E([^\r\n\x22\x3A\x2E]{1,80})\x2E(\d+|latest))(\x22?\s*)\x3A"#,
     )
@@ -108,6 +112,9 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     handle.block_on(async move {
         let mut exist_vars: HashSet<String> = HashSet::new();
         let mut tx = pool_for_tx.begin().await.map_err(|err| err.to_string())?;
+        let total_vars = var_files.len();
+        let start_time = std::time::Instant::now();
+
         for (idx, var_file) in var_files.iter().enumerate() {
             let basename = match var_file.file_stem() {
                 Some(stem) => stem.to_string_lossy().to_string(),
@@ -150,13 +157,27 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                 Err(ProcessError::Io(err)) => return Err(err),
             }
 
-            let progress = 10 + ((idx + 1) * 80 / var_files.len()) as u8;
-            if idx % 200 == 0 || idx + 1 == var_files.len() {
+            let progress = 10 + ((idx + 1) * 80 / total_vars) as u8;
+            // Report progress every 50 VARs or at completion, with detailed info
+            if idx % 50 == 0 || idx + 1 == total_vars {
+                let elapsed = start_time.elapsed().as_secs_f64();
+                let speed = if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
+                let remaining = if speed > 0.0 { (total_vars - idx - 1) as f64 / speed } else { 0.0 };
+
                 reporter_async.progress(progress.min(90));
+                reporter_async.log(format!(
+                    "Processing VARs: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s | Current: {}",
+                    idx + 1, total_vars,
+                    (idx + 1) as f64 / total_vars as f64 * 100.0,
+                    speed,
+                    remaining,
+                    basename
+                ));
             }
         }
 
         cleanup_missing_vars(&mut tx, &exist_vars, &varspath_async, &reporter_async).await?;
+        reporter_async.log("Phase 3/5: Committing database changes...".to_string());
         tx.commit().await.map_err(|err| err.to_string())?;
         Ok::<(), String>(())
     })?;
@@ -165,12 +186,15 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
 
     if !vars_for_install.is_empty() {
         if let Some(vampath) = vampath.as_ref() {
+            reporter.log("Phase 4/5: Installing pending VARs...".to_string());
             reporter.log(format!(
                 "Install pending vars (varsForInstall): {}",
                 vars_for_install.len()
             ));
             let pending = handle.block_on(vars_dependencies(&pool, vars_for_install))?;
             let total = pending.len();
+            let start_time = std::time::Instant::now();
+
             for (idx, var_name) in pending.iter().enumerate() {
                 match handle.block_on(install_var(&pool, &varspath, vampath, var_name)) {
                     Ok(InstallOutcome::Installed) => {
@@ -181,9 +205,20 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                         reporter.log(format!("install pending failed {} ({})", var_name, err));
                     }
                 }
-                if total > 0 && (idx % 50 == 0 || idx + 1 == total) {
+                if total > 0 && (idx % 20 == 0 || idx + 1 == total) {
                     let progress = 90 + ((idx + 1) * 5 / total) as u8;
+                    let elapsed = start_time.elapsed().as_secs_f64();
+                    let speed = if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
+                    let remaining = if speed > 0.0 { (total - idx - 1) as f64 / speed } else { 0.0 };
+
                     reporter.progress(progress.min(95));
+                    reporter.log(format!(
+                        "Installing VARs: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s",
+                        idx + 1, total,
+                        (idx + 1) as f64 / total as f64 * 100.0,
+                        speed,
+                        remaining
+                    ));
                 }
             }
             let _ = clear_vars_for_install();
@@ -195,6 +230,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     reporter.progress(95);
 
     if let Some(vampath) = vampath.as_ref() {
+        reporter.log("Phase 5/5: Refreshing installation status...".to_string());
         handle.block_on(refresh_install_status(&pool, vampath, reporter))?;
         reporter.progress(97);
         match system_ops::rescan_packages(state) {
@@ -207,7 +243,13 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     }
 
     reporter.progress(100);
-    reporter.log("UpdateDB completed".to_string());
+    let total_elapsed = overall_start.elapsed();
+    reporter.log(format!(
+        "UpdateDB completed in {:.1}s ({:.0}m {:.0}s)",
+        total_elapsed.as_secs_f64(),
+        total_elapsed.as_secs() / 60,
+        total_elapsed.as_secs() % 60
+    ));
     Ok(())
 }
 
@@ -305,6 +347,8 @@ fn tidy_vars(
     }
 
     let total = vars.len();
+    let start_time = std::time::Instant::now();
+
     for (idx, varfile) in vars.into_iter().enumerate() {
         if !varfile.exists() {
             continue;
@@ -345,11 +389,20 @@ fn tidy_vars(
             move_file(&varfile, &dest)?;
         }
 
-        if idx % 500 == 0 && total > 0 {
-            reporter.log(format!("TidyVars progress: {}/{}", idx + 1, total));
+        if idx % 200 == 0 && total > 0 {
+            let elapsed = start_time.elapsed().as_secs_f64();
+            let speed = if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
+            let remaining = if speed > 0.0 { (total - idx - 1) as f64 / speed } else { 0.0 };
+            reporter.log(format!(
+                "TidyVars: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s",
+                idx + 1, total,
+                (idx + 1) as f64 / total as f64 * 100.0,
+                speed,
+                remaining
+            ));
         }
     }
-    reporter.log("TidyVars completed".to_string());
+    reporter.log(format!("TidyVars completed: {} files processed", total));
     Ok(())
 }
 

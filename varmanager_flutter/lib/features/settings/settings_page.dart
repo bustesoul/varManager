@@ -102,22 +102,44 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _downloaderSavePath.text = next;
       }
     }
+    final previous = _config;
+    if (previous == null) return;
+    final listenHost = _listenHost.text.trim();
+    final listenPort = int.tryParse(_listenPort.text.trim()) ?? 57123;
+    final logLevel = _logLevel.text.trim();
+    final jobConcurrency = int.tryParse(_jobConcurrency.text.trim()) ?? 10;
+    final varspath = _varspath.text.trim();
+    final vampath = _vampath.text.trim();
+    final vamExec = _vamExec.text.trim();
+    final downloaderSavePath = _downloaderSavePath.text.trim();
+    final proxyMode = _proxyMode;
+    final proxyHost = _proxyHost.text.trim();
+    final proxyPort = int.tryParse(_proxyPort.text.trim()) ?? 0;
+    final proxyUsername = _proxyUsername.text.trim();
+    final proxyPassword = _proxyPassword.text.trim();
+    final needsRestartHint = previous.listenHost != listenHost ||
+        previous.listenPort != listenPort ||
+        previous.proxyMode != proxyMode ||
+        previous.proxy.host != proxyHost ||
+        previous.proxy.port != proxyPort ||
+        (previous.proxy.username ?? '') != proxyUsername ||
+        (previous.proxy.password ?? '') != proxyPassword;
     final client = ref.read(backendClientProvider);
     final update = <String, dynamic>{
-      'listen_host': _listenHost.text.trim(),
-      'listen_port': int.tryParse(_listenPort.text.trim()) ?? 57123,
-      'log_level': _logLevel.text.trim(),
-      'job_concurrency': int.tryParse(_jobConcurrency.text.trim()) ?? 10,
-      'varspath': _varspath.text.trim(),
-      'vampath': _vampath.text.trim(),
-      'vam_exec': _vamExec.text.trim(),
-      'downloader_save_path': _downloaderSavePath.text.trim(),
-      'proxy_mode': _proxyMode.name,
+      'listen_host': listenHost,
+      'listen_port': listenPort,
+      'log_level': logLevel,
+      'job_concurrency': jobConcurrency,
+      'varspath': varspath,
+      'vampath': vampath,
+      'vam_exec': vamExec,
+      'downloader_save_path': downloaderSavePath,
+      'proxy_mode': proxyMode.name,
       'proxy': {
-        'host': _proxyHost.text.trim(),
-        'port': int.tryParse(_proxyPort.text.trim()) ?? 0,
-        'username': _proxyUsername.text.trim(),
-        'password': _proxyPassword.text.trim(),
+        'host': proxyHost,
+        'port': proxyPort,
+        'username': proxyUsername,
+        'password': proxyPassword,
       },
     };
     final cfg = await client.updateConfig(update);
@@ -126,7 +148,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _config = cfg;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.configSavedRestartHint)),
+      SnackBar(
+        content: Text(needsRestartHint
+            ? context.l10n.configSavedRestartHint
+            : context.l10n.configSaved),
+      ),
     );
   }
 

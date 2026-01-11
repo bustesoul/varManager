@@ -654,6 +654,23 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
     })
 }
 
+/// Normalize vam_exec: if user provides a full path, extract just the filename.
+/// The system always combines vampath + vam_exec, so only the filename is needed.
+fn normalize_vam_exec(value: Option<String>) -> Option<String> {
+    normalize_optional(value).map(|s| {
+        let path = std::path::Path::new(&s);
+        if path.is_absolute() || s.contains('\\') || s.contains('/') {
+            // Extract filename from path
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.to_string())
+                .unwrap_or(s)
+        } else {
+            s
+        }
+    })
+}
+
 fn normalize_proxy(mut proxy: crate::app::ProxyConfig) -> crate::app::ProxyConfig {
     proxy.host = proxy.host.trim().to_string();
     proxy.username = normalize_optional(proxy.username);
@@ -702,7 +719,7 @@ fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Con
         next.vampath = normalize_optional(req.vampath);
     }
     if req.vam_exec.is_some() {
-        next.vam_exec = normalize_optional(req.vam_exec);
+        next.vam_exec = normalize_vam_exec(req.vam_exec);
     }
     if req.downloader_save_path.is_some() {
         next.downloader_save_path = normalize_optional(req.downloader_save_path);

@@ -333,6 +333,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backendVersionLabel => 'Backend version';
 
   @override
+  String get configSaved => 'Config saved';
+
+  @override
   String get configSavedRestartHint =>
       'Config saved; listen_host/port and proxy apply after restart.';
 
