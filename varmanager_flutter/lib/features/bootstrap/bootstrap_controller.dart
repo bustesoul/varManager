@@ -154,6 +154,7 @@ class BootstrapController extends Notifier<BootstrapState> {
     final path = state.installMarkerPath;
     if (path == null) {
       state = state.copyWith(active: false, errorMessage: null);
+      ref.read(navIndexProvider.notifier).setIndex(0);
       return true;
     }
     String? error;
@@ -166,6 +167,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       error = err.toString();
     }
     state = state.copyWith(active: false, errorMessage: error);
+    ref.read(navIndexProvider.notifier).setIndex(0);
     return error == null;
   }
 
