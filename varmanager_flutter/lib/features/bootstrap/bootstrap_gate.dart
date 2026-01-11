@@ -387,7 +387,7 @@ class _BootstrapTourCoachState extends ConsumerState<BootstrapTourCoach> {
       if (targetContext != null) {
         await Scrollable.ensureVisible(
           targetContext,
-          alignment: 1.0,
+          alignment: 0.5,
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
         );
