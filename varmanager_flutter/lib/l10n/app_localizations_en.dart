@@ -1635,7 +1635,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bootstrapTourHomeBody =>
-      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs.';
+      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)';
 
   @override
   String get bootstrapTourScenesTitle => 'Scenes: 3-column board';

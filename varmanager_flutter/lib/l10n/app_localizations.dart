@@ -3046,7 +3046,7 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapTourHomeBody.
   ///
   /// In en, this message translates to:
-  /// **'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs.'**
+  /// **'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)'**
   String get bootstrapTourHomeBody;
 
   /// No description provided for @bootstrapTourScenesTitle.
