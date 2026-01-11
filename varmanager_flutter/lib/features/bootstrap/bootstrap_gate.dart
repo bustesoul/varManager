@@ -630,6 +630,10 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
   final _vampath = TextEditingController();
   final _vamExec = TextEditingController();
   final _downloaderSavePath = TextEditingController();
+  final _proxyHost = TextEditingController();
+  final _proxyPort = TextEditingController();
+  final _proxyUsername = TextEditingController();
+  final _proxyPassword = TextEditingController();
   bool _loaded = false;
 
   @override
@@ -638,6 +642,10 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     _vampath.dispose();
     _vamExec.dispose();
     _downloaderSavePath.dispose();
+    _proxyHost.dispose();
+    _proxyPort.dispose();
+    _proxyUsername.dispose();
+    _proxyPassword.dispose();
     super.dispose();
   }
 
@@ -648,6 +656,10 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     _vampath.text = config.vampath;
     _vamExec.text = config.vamExec;
     _downloaderSavePath.text = config.downloaderSavePath;
+    _proxyHost.text = config.proxyHost;
+    _proxyPort.text = config.proxyPort;
+    _proxyUsername.text = config.proxyUsername;
+    _proxyPassword.text = config.proxyPassword;
   }
 
   void _applyVarspathDefaults(String path) {
@@ -691,6 +703,10 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
       vampath: _vampath.text.trim(),
       vamExec: _vamExec.text.trim(),
       downloaderSavePath: _downloaderSavePath.text.trim(),
+      proxyHost: _proxyHost.text.trim(),
+      proxyPort: _proxyPort.text.trim(),
+      proxyUsername: _proxyUsername.text.trim(),
+      proxyPassword: _proxyPassword.text.trim(),
     );
   }
 
@@ -739,6 +755,30 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
               label: l10n.downloaderSavePathLabel,
               hint: l10n.chooseAddonPackagesHint,
               onBrowse: () => _pickDirectory(_downloaderSavePath),
+            ),
+            const SizedBox(height: 4),
+            Text(l10n.proxySectionLabel,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            _textField(
+              controller: _proxyHost,
+              label: l10n.proxyHostLabel,
+            ),
+            _textField(
+              controller: _proxyPort,
+              label: l10n.proxyPortLabel,
+              keyboard: TextInputType.number,
+            ),
+            _textField(
+              controller: _proxyUsername,
+              label: l10n.proxyUserLabel,
+            ),
+            _textField(
+              controller: _proxyPassword,
+              label: l10n.proxyPasswordLabel,
+              obscureText: true,
+              enableSuggestions: false,
+              autocorrect: false,
             ),
             if (state.errorMessage != null) ...[
               const SizedBox(height: 8),
@@ -805,6 +845,30 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
             child: Text(l10n.commonBrowse),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _textField({
+    required TextEditingController controller,
+    required String label,
+    TextInputType keyboard = TextInputType.text,
+    bool obscureText = false,
+    bool enableSuggestions = true,
+    bool autocorrect = true,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboard,
+        obscureText: obscureText,
+        enableSuggestions: enableSuggestions,
+        autocorrect: autocorrect,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
       ),
     );
   }

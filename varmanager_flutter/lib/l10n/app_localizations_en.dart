@@ -233,6 +233,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jobConcurrencyLabel => 'Job concurrency';
 
   @override
+  String get proxySectionLabel => 'Proxy';
+
+  @override
+  String get proxyHostLabel => 'Proxy host';
+
+  @override
+  String get proxyPortLabel => 'Proxy port';
+
+  @override
+  String get proxyUserLabel => 'Proxy username';
+
+  @override
+  String get proxyPasswordLabel => 'Proxy password';
+
+  @override
   String get varspathLabel => 'varspath';
 
   @override
@@ -245,10 +260,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloaderSavePathLabel => 'Downloader save path';
 
   @override
-  String get chooseVamHint => 'choose virt_a_mate';
+  String get chooseVamHint => 'Recommended: choose virt_a_mate directory';
 
   @override
-  String get chooseAddonPackagesHint => 'choose AddonPackages';
+  String get chooseAddonPackagesHint => 'Recommended: choose AddonPackages';
 
   @override
   String get appVersionLabel => 'App version';
@@ -258,7 +273,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get configSavedRestartHint =>
-      'Config saved; listen_host/port applies after restart.';
+      'Config saved; listen_host/port and proxy apply after restart.';
 
   @override
   String get searchVarPackageLabel => 'Search var/package';

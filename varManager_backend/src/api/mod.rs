@@ -219,6 +219,7 @@ pub(crate) struct UpdateConfigRequest {
     vam_exec: Option<String>,
     downloader_save_path: Option<String>,
     image_cache: Option<crate::app::ImageCacheConfig>,
+    proxy: Option<crate::app::ProxyConfig>,
     ui_theme: Option<String>,
     ui_language: Option<String>,
 }
@@ -652,6 +653,19 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
     })
 }
 
+fn normalize_proxy(mut proxy: crate::app::ProxyConfig) -> crate::app::ProxyConfig {
+    proxy.host = proxy.host.trim().to_string();
+    proxy.username = normalize_optional(proxy.username);
+    proxy.password = normalize_optional(proxy.password);
+    if proxy.host.is_empty() || proxy.port == 0 {
+        proxy.host.clear();
+        proxy.port = 0;
+        proxy.username = None;
+        proxy.password = None;
+    }
+    proxy
+}
+
 fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Config, String> {
     let mut next = current.clone();
     if let Some(host) = req.listen_host {
@@ -694,6 +708,9 @@ fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Con
     }
     if let Some(image_cache) = req.image_cache {
         next.image_cache = image_cache;
+    }
+    if let Some(proxy) = req.proxy {
+        next.proxy = normalize_proxy(proxy);
     }
     if req.ui_theme.is_some() {
         next.ui_theme = normalize_optional(req.ui_theme);

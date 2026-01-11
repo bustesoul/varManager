@@ -79,6 +79,12 @@ class BootstrapController extends Notifier<BootstrapState> {
         'vampath': config.vampath.trim(),
         'vam_exec': config.vamExec.trim(),
         'downloader_save_path': config.downloaderSavePath.trim(),
+        'proxy': {
+          'host': config.proxyHost.trim(),
+          'port': int.tryParse(config.proxyPort.trim()) ?? 0,
+          'username': config.proxyUsername.trim(),
+          'password': config.proxyPassword.trim(),
+        },
       });
       state = state.copyWith(config: config, savingConfig: false);
       return true;
@@ -175,6 +181,7 @@ class BootstrapController extends Notifier<BootstrapState> {
     final vampath = config?.vampath ?? '';
     final downloader = config?.downloaderSavePath ?? '';
     var vamExec = config?.vamExec ?? '';
+    final proxy = config?.proxy ?? ProxyConfig.empty;
 
     if (vamExec.trim().isEmpty) {
       vamExec = _vamDesktopBat;
@@ -190,6 +197,10 @@ class BootstrapController extends Notifier<BootstrapState> {
       vampath: vampath,
       vamExec: vamExec,
       downloaderSavePath: resolvedDownloader,
+      proxyHost: proxy.host,
+      proxyPort: proxy.port > 0 ? proxy.port.toString() : '',
+      proxyUsername: proxy.username ?? '',
+      proxyPassword: proxy.password ?? '',
     );
   }
 

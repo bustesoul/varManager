@@ -27,6 +27,55 @@ pub const APP_VERSION: &str = match option_env!("APP_VERSION") {
 };
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ProxyConfig {
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub port: u16,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            host: String::new(),
+            port: 0,
+            username: None,
+            password: None,
+        }
+    }
+}
+
+impl ProxyConfig {
+    pub fn to_url(&self) -> Option<String> {
+        let host = self.host.trim();
+        if host.is_empty() || self.port == 0 {
+            return None;
+        }
+        let host = if host.contains(':') && !host.starts_with('[') && !host.ends_with(']') {
+            format!("[{}]", host)
+        } else {
+            host.to_string()
+        };
+        let username = self.username.as_ref().map(|v| v.trim()).filter(|v| !v.is_empty());
+        let password = self.password.as_ref().map(|v| v.trim()).filter(|v| !v.is_empty());
+        let mut auth = String::new();
+        if let Some(user) = username {
+            auth.push_str(user);
+            if let Some(pass) = password {
+                auth.push(':');
+                auth.push_str(pass);
+            }
+            auth.push('@');
+        }
+        Some(format!("http://{}{}:{}", auth, host, self.port))
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ImageCacheConfig {
     pub disk_cache_size_mb: u32,
     pub memory_cache_size_mb: u32,
@@ -93,6 +142,8 @@ pub struct Config {
     #[serde(default)]
     pub(crate) download: DownloadConfig,
     #[serde(default)]
+    pub(crate) proxy: ProxyConfig,
+    #[serde(default)]
     pub(crate) ui_theme: Option<String>,
     #[serde(default)]
     pub(crate) ui_language: Option<String>,
@@ -111,6 +162,7 @@ impl Default for Config {
             downloader_save_path: None,
             image_cache: ImageCacheConfig::default(),
             download: DownloadConfig::default(),
+            proxy: ProxyConfig::default(),
             ui_theme: None,
             ui_language: None,
         }
@@ -378,6 +430,16 @@ pub async fn shutdown_signal(mut rx: oneshot::Receiver<()>) {
         _ = &mut rx => {},
         _ = ctrl_c => {},
     }
+}
+
+pub fn apply_proxy_env(config: &Config) {
+    let Some(proxy_url) = config.proxy.to_url() else {
+        return;
+    };
+    env::set_var("HTTP_PROXY", &proxy_url);
+    env::set_var("HTTPS_PROXY", &proxy_url);
+    env::set_var("http_proxy", &proxy_url);
+    env::set_var("https_proxy", &proxy_url);
 }
 
 pub fn load_or_write_config() -> Result<Config, Box<dyn std::error::Error>> {

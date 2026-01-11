@@ -524,6 +524,36 @@ abstract class AppLocalizations {
   /// **'Job concurrency'**
   String get jobConcurrencyLabel;
 
+  /// No description provided for @proxySectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy'**
+  String get proxySectionLabel;
+
+  /// No description provided for @proxyHostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy host'**
+  String get proxyHostLabel;
+
+  /// No description provided for @proxyPortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy port'**
+  String get proxyPortLabel;
+
+  /// No description provided for @proxyUserLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy username'**
+  String get proxyUserLabel;
+
+  /// No description provided for @proxyPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy password'**
+  String get proxyPasswordLabel;
+
   /// No description provided for @varspathLabel.
   ///
   /// In en, this message translates to:
@@ -575,7 +605,7 @@ abstract class AppLocalizations {
   /// No description provided for @configSavedRestartHint.
   ///
   /// In en, this message translates to:
-  /// **'Config saved; listen_host/port applies after restart.'**
+  /// **'Config saved; listen_host/port and proxy apply after restart.'**
   String get configSavedRestartHint;
 
   /// No description provided for @searchVarPackageLabel.

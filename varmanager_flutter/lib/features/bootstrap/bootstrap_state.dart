@@ -24,24 +24,40 @@ class BootstrapConfig {
     required this.vampath,
     required this.vamExec,
     required this.downloaderSavePath,
+    required this.proxyHost,
+    required this.proxyPort,
+    required this.proxyUsername,
+    required this.proxyPassword,
   });
 
   final String varspath;
   final String vampath;
   final String vamExec;
   final String downloaderSavePath;
+  final String proxyHost;
+  final String proxyPort;
+  final String proxyUsername;
+  final String proxyPassword;
 
   BootstrapConfig copyWith({
     String? varspath,
     String? vampath,
     String? vamExec,
     String? downloaderSavePath,
+    String? proxyHost,
+    String? proxyPort,
+    String? proxyUsername,
+    String? proxyPassword,
   }) {
     return BootstrapConfig(
       varspath: varspath ?? this.varspath,
       vampath: vampath ?? this.vampath,
       vamExec: vamExec ?? this.vamExec,
       downloaderSavePath: downloaderSavePath ?? this.downloaderSavePath,
+      proxyHost: proxyHost ?? this.proxyHost,
+      proxyPort: proxyPort ?? this.proxyPort,
+      proxyUsername: proxyUsername ?? this.proxyUsername,
+      proxyPassword: proxyPassword ?? this.proxyPassword,
     );
   }
 }
@@ -149,6 +165,10 @@ class BootstrapState {
         vampath: '',
         vamExec: '',
         downloaderSavePath: '',
+        proxyHost: '',
+        proxyPort: '',
+        proxyUsername: '',
+        proxyPassword: '',
       ),
       checks: const [],
       checksRunning: false,

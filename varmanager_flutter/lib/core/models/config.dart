@@ -1,3 +1,41 @@
+class ProxyConfig {
+  const ProxyConfig({
+    required this.host,
+    required this.port,
+    this.username,
+    this.password,
+  });
+
+  static const ProxyConfig empty =
+      ProxyConfig(host: '', port: 0, username: null, password: null);
+
+  final String host;
+  final int port;
+  final String? username;
+  final String? password;
+
+  bool get enabled => host.trim().isNotEmpty && port > 0;
+
+  factory ProxyConfig.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return ProxyConfig.empty;
+    return ProxyConfig(
+      host: (json['host'] as String?) ?? '',
+      port: (json['port'] as num?)?.toInt() ?? 0,
+      username: json['username'] as String?,
+      password: json['password'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'host': host,
+      'port': port,
+      'username': username,
+      'password': password,
+    };
+  }
+}
+
 class AppConfig {
   AppConfig({
     required this.listenHost,
@@ -8,6 +46,7 @@ class AppConfig {
     this.vampath,
     this.vamExec,
     this.downloaderSavePath,
+    required this.proxy,
     this.uiTheme,
     this.uiLanguage,
   });
@@ -20,12 +59,14 @@ class AppConfig {
   final String? vampath;
   final String? vamExec;
   final String? downloaderSavePath;
+  final ProxyConfig proxy;
   final String? uiTheme;
   final String? uiLanguage;
 
   String get baseUrl => 'http://$listenHost:$listenPort';
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
+    final proxyJson = json['proxy'];
     return AppConfig(
       listenHost: (json['listen_host'] as String?) ?? '127.0.0.1',
       listenPort: (json['listen_port'] as num?)?.toInt() ?? 57123,
@@ -35,6 +76,9 @@ class AppConfig {
       vampath: json['vampath'] as String?,
       vamExec: json['vam_exec'] as String?,
       downloaderSavePath: json['downloader_save_path'] as String?,
+      proxy: proxyJson is Map<String, dynamic>
+          ? ProxyConfig.fromJson(proxyJson)
+          : ProxyConfig.empty,
       uiTheme: json['ui_theme'] as String?,
       uiLanguage: json['ui_language'] as String?,
     );
@@ -50,6 +94,7 @@ class AppConfig {
       'vampath': vampath,
       'vam_exec': vamExec,
       'downloader_save_path': downloaderSavePath,
+      'proxy': proxy.toJson(),
       'ui_theme': uiTheme,
       'ui_language': uiLanguage,
     };
@@ -64,6 +109,7 @@ class AppConfig {
     String? vampath,
     String? vamExec,
     String? downloaderSavePath,
+    ProxyConfig? proxy,
     String? uiTheme,
     String? uiLanguage,
   }) {
@@ -76,6 +122,7 @@ class AppConfig {
       vampath: vampath ?? this.vampath,
       vamExec: vamExec ?? this.vamExec,
       downloaderSavePath: downloaderSavePath ?? this.downloaderSavePath,
+      proxy: proxy ?? this.proxy,
       uiTheme: uiTheme ?? this.uiTheme,
       uiLanguage: uiLanguage ?? this.uiLanguage,
     );

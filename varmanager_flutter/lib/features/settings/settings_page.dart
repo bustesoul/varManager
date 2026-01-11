@@ -29,6 +29,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _vampath = TextEditingController();
   final _vamExec = TextEditingController();
   final _downloaderSavePath = TextEditingController();
+  final _proxyHost = TextEditingController();
+  final _proxyPort = TextEditingController();
+  final _proxyUsername = TextEditingController();
+  final _proxyPassword = TextEditingController();
 
   AppConfig? _config;
   String? _backendVersion;
@@ -64,6 +68,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _vampath.text = cfg.vampath ?? '';
       _vamExec.text = cfg.vamExec ?? '';
       _downloaderSavePath.text = cfg.downloaderSavePath ?? '';
+      _proxyHost.text = cfg.proxy.host;
+      _proxyPort.text = cfg.proxy.port > 0 ? cfg.proxy.port.toString() : '';
+      _proxyUsername.text = cfg.proxy.username ?? '';
+      _proxyPassword.text = cfg.proxy.password ?? '';
     });
   }
 
@@ -77,6 +85,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _vampath.dispose();
     _vamExec.dispose();
     _downloaderSavePath.dispose();
+    _proxyHost.dispose();
+    _proxyPort.dispose();
+    _proxyUsername.dispose();
+    _proxyPassword.dispose();
     super.dispose();
   }
 
@@ -98,6 +110,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       'vampath': _vampath.text.trim(),
       'vam_exec': _vamExec.text.trim(),
       'downloader_save_path': _downloaderSavePath.text.trim(),
+      'proxy': {
+        'host': _proxyHost.text.trim(),
+        'port': int.tryParse(_proxyPort.text.trim()) ?? 0,
+        'username': _proxyUsername.text.trim(),
+        'password': _proxyPassword.text.trim(),
+      },
     };
     final cfg = await client.updateConfig(update);
     if (!mounted) return;
@@ -176,6 +194,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   _field(_logLevel, l10n.logLevelLabel),
                   _field(_jobConcurrency, l10n.jobConcurrencyLabel,
                       keyboard: TextInputType.number),
+                  const SizedBox(height: 4),
+                  Text(l10n.proxySectionLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  _field(_proxyHost, l10n.proxyHostLabel),
+                  _field(_proxyPort, l10n.proxyPortLabel,
+                      keyboard: TextInputType.number),
+                  _field(_proxyUsername, l10n.proxyUserLabel),
+                  _field(
+                    _proxyPassword,
+                    l10n.proxyPasswordLabel,
+                    obscureText: true,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                  ),
                 ],
               ),
             ),
@@ -251,12 +284,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _field(TextEditingController controller, String label,
-      {TextInputType keyboard = TextInputType.text}) {
+      {TextInputType keyboard = TextInputType.text,
+      bool obscureText = false,
+      bool enableSuggestions = true,
+      bool autocorrect = true}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboard,
+        obscureText: obscureText,
+        enableSuggestions: enableSuggestions,
+        autocorrect: autocorrect,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

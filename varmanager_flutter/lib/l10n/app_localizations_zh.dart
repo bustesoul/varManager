@@ -232,6 +232,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get jobConcurrencyLabel => '任务并发数';
 
   @override
+  String get proxySectionLabel => '代理';
+
+  @override
+  String get proxyHostLabel => '代理主机';
+
+  @override
+  String get proxyPortLabel => '代理端口';
+
+  @override
+  String get proxyUserLabel => '代理用户';
+
+  @override
+  String get proxyPasswordLabel => '代理密码';
+
+  @override
   String get varspathLabel => 'varspath';
 
   @override
@@ -244,10 +259,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get downloaderSavePathLabel => '下载保存路径';
 
   @override
-  String get chooseVamHint => '选择 Virt-A-Mate 目录';
+  String get chooseVamHint => '推荐: 选择 Virt-A-Mate 目录';
 
   @override
-  String get chooseAddonPackagesHint => '选择 AddonPackages 目录';
+  String get chooseAddonPackagesHint => '推荐: 选择 AddonPackages 目录';
 
   @override
   String get appVersionLabel => '应用版本';
@@ -256,7 +271,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backendVersionLabel => '后端版本';
 
   @override
-  String get configSavedRestartHint => '配置已保存；listen_host/port 需重启生效。';
+  String get configSavedRestartHint => '配置已保存；listen_host/port 与代理需重启生效。';
 
   @override
   String get searchVarPackageLabel => '搜索 Var/包';
