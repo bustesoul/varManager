@@ -103,6 +103,7 @@
   "chooseAddonPackagesHint": "推荐: 选择 AddonPackages 目录",
   "appVersionLabel": "应用版本",
   "backendVersionLabel": "后端版本",
+  "configSaved": "配置已保存",
   "configSavedRestartHint": "配置已保存；listen_host/port 与代理需重启生效。",
   "searchVarPackageLabel": "搜索 Var/包",
   "creatorLabel": "作者",

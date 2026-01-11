@@ -3,8 +3,16 @@ use crate::app::AppState;
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use sysinfo::{ProcessesToUpdate, System};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 const DEFAULT_VAM_EXEC: &str = "VaM (Desktop Mode).bat";
 
@@ -31,19 +39,7 @@ pub fn start_vam(state: &AppState) -> Result<(), String> {
         return Err(format!("vam executable not found: {}", exec_path.display()));
     }
 
-    if is_cmd_script(&exec_path) {
-        let exec = format!("\"{}\"", exec_path.to_string_lossy());
-        Command::new("cmd")
-            .args(["/C", exec.as_str()])
-            .current_dir(&vampath)
-            .spawn()
-            .map_err(|err| err.to_string())?;
-    } else {
-        Command::new(&exec_path)
-            .current_dir(&vampath)
-            .spawn()
-            .map_err(|err| err.to_string())?;
-    }
+    spawn_detached(&exec_path, &vampath)?;
     Ok(())
 }
 
@@ -107,4 +103,49 @@ fn is_cmd_script(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.eq_ignore_ascii_case("bat") || ext.eq_ignore_ascii_case("cmd"))
         .unwrap_or(false)
+}
+
+/// Spawn a process fully detached from the parent.
+/// This prevents the child from blocking on inherited stdin/stdout/stderr handles.
+#[cfg(windows)]
+fn spawn_detached(exec_path: &Path, working_dir: &Path) -> Result<(), String> {
+    if is_cmd_script(exec_path) {
+        // For bat/cmd files: use "start" to launch in a new console window.
+        // Use /B and CREATE_NO_WINDOW to keep it hidden while preserving START behavior.
+        let exec = exec_path.to_string_lossy();
+        let workdir = working_dir.to_string_lossy();
+        Command::new("cmd")
+            .args(["/C", "start", "", "/B", "/D", &workdir, &*exec])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP)
+            .spawn()
+            .map_err(|err| err.to_string())?;
+    } else {
+        // For exe files: launch directly with detached flags
+        Command::new(exec_path)
+            .current_dir(working_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP)
+            .spawn()
+            .map_err(|err| err.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn spawn_detached(exec_path: &Path, working_dir: &Path) -> Result<(), String> {
+    Command::new(exec_path)
+        .current_dir(working_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|err| err.to_string())?;
+
+    Ok(())
 }

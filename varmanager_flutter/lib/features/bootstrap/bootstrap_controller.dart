@@ -188,6 +188,10 @@ class BootstrapController extends Notifier<BootstrapState> {
     final proxy = config?.proxy ?? ProxyConfig.empty;
     final proxyMode = config?.proxyMode ?? ProxyMode.system;
 
+    // Normalize vam_exec: extract filename if full path provided
+    if (vamExec.trim().isNotEmpty) {
+      vamExec = p.basename(vamExec.trim());
+    }
     if (vamExec.trim().isEmpty) {
       vamExec = _vamDesktopBat;
     }
