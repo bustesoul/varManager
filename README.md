@@ -24,28 +24,35 @@ A modern var package manager for Virt-A-Mate. Manage your var files efficiently 
 
 **1. Modern UI & Workflows**
 - Material Design 3 with responsive layouts and navigation rail
-- Theme + language switching
+- Interactive onboarding wizard for first-time path setup
+- Theme + language switching (Ocean/Forest/Rose/Dark; English/Chinese)
 - Advanced VAR filters (size/deps/content types) and batch actions
 - PackSwitch integrated into the Home sidebar
+- Export/Import installed var lists for sharing or backup
 - Missing Vars detail panel with dependents, map I/O, and Hub actions
 
 **2. Scenes & Analysis**
 - Hide/Normal/Fav 3-column board with drag-and-drop organization
+- Atom tree view with dependency tracking and person details
 - Scene analysis cache with clear-cache actions
 - Quick actions for load/analyze/locate
 
 **3. Hub & Downloads**
 - Tag search + quick filter chips; card view with ratings/version/deps
 - Detail dialog for extra fields (file size, program version, license)
-- Download list with total size, copy links, and Download All
-- Built-in download manager with queue/concurrency/retries
+- Download list builder with total size, copy links for external tools, and Download All
+- Built-in download manager with pause/resume/cancel/retry and configurable concurrency
 - Hub result caching to reduce redundant requests
 
-**4. Performance & Deployment**
+**4. Dependency & Link Management**
+- Missing dependency scan from installed packages, Saves folder, and VaM log
+- Link substitution workflow with draft/apply mappings in the detail panel
+- Native symlink support (no admin required)
+
+**5. Performance & Deployment**
 - Rust backend with async job queue and live log streaming
 - Unified preview pipeline with memory + disk image cache
 - Runtime config editing with validation and file pickers
-- Native symlink support (no admin required)
 - Self-contained bundle with backend auto-start/health/shutdown
 - Windows-first Flutter app (cross-platform ready)
 
@@ -104,6 +111,19 @@ The varManager backend has built-in support for downloading var packages directl
 - ✅ Self-contained executables
 - ✅ Portable - run from any folder
 
+**System Requirements:**
+- **OS:** Windows 10/11 (64-bit)
+- **Runtime:** None (Self-contained)
+- **Permissions:** Standard User (No admin required)
+
+**Configuration Tips:**
+- Proxy support: configure HTTP proxy in Settings (system auto-detect or manual) for Hub downloads
+- Paths: `varspath` is your VaM `AddonPackages` directory; `vampath` is your main VaM install path
+
+**Known Issues:**
+- Windows first: macOS and Linux builds are not yet available in this release
+- Hub limits: some Hub resources may encounter rate limiting during heavy bulk downloads
+
 #### What Happened to the C# Version?
 
 The legacy C# WinForms application (v1.0.4.x) has been **archived** to the `_archived/` folder for reference. All functionality has been migrated to the new Flutter + Rust architecture with feature parity and improvements.
@@ -115,13 +135,15 @@ The legacy C# WinForms application (v1.0.4.x) has been **archived** to the `_arc
 
 #### Migration from v1.0.4.x
 
-Your data is safe! The new version uses the same SQLite database format:
+Your data is safe! varManager will not delete your var packages. The new version uses the same SQLite database format:
 - ✅ Your var repository configuration is preserved
 - ✅ All package install states are retained
 - ✅ Scene favorites and hide lists are kept
 - ✅ Missing var link mappings are maintained
 
-Simply run the new version in the same folder and everything will work.
+Simply run the new version in the same folder and click "Update DB" to rebuild the database.
+
+**Full Changelog:** [View on GitHub](https://github.com/bustesoul/varManager/compare/v1.0.4.13...v2.0.0)
 
 ---
 

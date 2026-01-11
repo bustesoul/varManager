@@ -739,7 +739,7 @@
   "bootstrapWelcomeSkip": "I am an advanced user, skip guide",
   "bootstrapWelcomeStart": "Start guide",
   "bootstrapSkipConfirmTitle": "Skip onboarding?",
-  "bootstrapSkipConfirmBody": "Skipping will bypass configuration and self-checks. You can still configure everything later.",
+  "bootstrapSkipConfirmBody": "Skipping will bypass configuration and self-checks. You can still configure everything later. To re-enter the tour, create an empty INSTALL.txt in the app root directory.",
   "bootstrapSkipConfirmYes": "Skip now",
   "bootstrapFeaturesTitle": "What you can do",
   "bootstrapFeatureVars": "Manage VARs with advanced filters, batch actions, and PackSwitch integration.",
@@ -783,7 +783,7 @@
   "bootstrapTourSettingsTitle": "Settings: Live config",
   "bootstrapTourSettingsBody": "Edit paths and backend config at runtime, plus theme/language switching.",
   "bootstrapFinishTitle": "All set",
-  "bootstrapFinishBody": "You are ready to use varManager.",
+  "bootstrapFinishBody": "You are ready to use varManager. To re-enter the tour, create an empty INSTALL.txt in the app root directory.",
   "bootstrapFinishHint": "You can revisit this guide later from Settings (if enabled in future).",
   "bootstrapFinishStart": "Start using varManager",
   "bootstrapFinishDeleteFailed": "Failed to remove INSTALL.txt. Please delete it manually."

@@ -1545,7 +1545,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bootstrapSkipConfirmBody =>
-      'Skipping will bypass configuration and self-checks. You can still configure everything later.';
+      'Skipping will bypass configuration and self-checks. You can still configure everything later. To re-enter the tour, create an empty INSTALL.txt in the app root directory.';
 
   @override
   String get bootstrapSkipConfirmYes => 'Skip now';
@@ -1695,7 +1695,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bootstrapFinishTitle => 'All set';
 
   @override
-  String get bootstrapFinishBody => 'You are ready to use varManager.';
+  String get bootstrapFinishBody =>
+      'You are ready to use varManager. To re-enter the tour, create an empty INSTALL.txt in the app root directory.';
 
   @override
   String get bootstrapFinishHint =>

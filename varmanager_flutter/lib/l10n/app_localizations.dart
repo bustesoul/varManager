@@ -2884,7 +2884,7 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapSkipConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'Skipping will bypass configuration and self-checks. You can still configure everything later.'**
+  /// **'Skipping will bypass configuration and self-checks. You can still configure everything later. To re-enter the tour, create an empty INSTALL.txt in the app root directory.'**
   String get bootstrapSkipConfirmBody;
 
   /// No description provided for @bootstrapSkipConfirmYes.
@@ -3148,7 +3148,7 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapFinishBody.
   ///
   /// In en, this message translates to:
-  /// **'You are ready to use varManager.'**
+  /// **'You are ready to use varManager. To re-enter the tour, create an empty INSTALL.txt in the app root directory.'**
   String get bootstrapFinishBody;
 
   /// No description provided for @bootstrapFinishHint.

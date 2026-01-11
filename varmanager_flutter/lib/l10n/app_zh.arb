@@ -464,7 +464,7 @@
   "bootstrapWelcomeSkip": "我是高级用户，跳过引导",
   "bootstrapWelcomeStart": "开始引导",
   "bootstrapSkipConfirmTitle": "确认跳过引导？",
-  "bootstrapSkipConfirmBody": "跳过将不执行配置与自检，你仍可在设置中完成。",
+  "bootstrapSkipConfirmBody": "跳过将不执行配置与自检，你仍可在设置中完成。若需重新进入引导，可在根目录创建空的 INSTALL.txt。",
   "bootstrapSkipConfirmYes": "确认跳过",
   "bootstrapFeaturesTitle": "功能一览",
   "bootstrapFeatureVars": "管理 VAR：高级筛选、批量操作，并集成 PackSwitch。",
@@ -508,7 +508,7 @@
   "bootstrapTourSettingsTitle": "设置：实时配置",
   "bootstrapTourSettingsBody": "运行中编辑路径和后端配置，切换主题与语言。",
   "bootstrapFinishTitle": "完成",
-  "bootstrapFinishBody": "引导已完成，可以开始使用。",
+  "bootstrapFinishBody": "引导已完成，可以开始使用。若需重新进入引导，可在根目录创建空的 INSTALL.txt。",
   "bootstrapFinishHint": "后续可在设置中检查配置。",
   "bootstrapFinishStart": "开始使用 varManager",
   "bootstrapFinishDeleteFailed": "删除 INSTALL.txt 失败，请手动删除。"

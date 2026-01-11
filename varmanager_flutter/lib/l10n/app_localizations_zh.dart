@@ -1514,7 +1514,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapSkipConfirmTitle => '确认跳过引导？';
 
   @override
-  String get bootstrapSkipConfirmBody => '跳过将不执行配置与自检，你仍可在设置中完成。';
+  String get bootstrapSkipConfirmBody =>
+      '跳过将不执行配置与自检，你仍可在设置中完成。若需重新进入引导，可在根目录创建空的 INSTALL.txt。';
 
   @override
   String get bootstrapSkipConfirmYes => '确认跳过';
@@ -1648,7 +1649,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapFinishTitle => '完成';
 
   @override
-  String get bootstrapFinishBody => '引导已完成，可以开始使用。';
+  String get bootstrapFinishBody =>
+      '引导已完成，可以开始使用。若需重新进入引导，可在根目录创建空的 INSTALL.txt。';
 
   @override
   String get bootstrapFinishHint => '后续可在设置中检查配置。';

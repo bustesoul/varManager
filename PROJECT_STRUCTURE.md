@@ -4,20 +4,38 @@
 
 ```
 varManager/
+├── .github/workflows/build.yml  # GitHub Actions CI
+├── build.ps1                    # Build/release script
+├── VERSION                      # Version source of truth
+├── README.md                    # Main documentation
+├── README_CN.md                 # 中文文档
+├── PROJECT_STRUCTURE.md         # This file
 ├── varmanager_flutter/          # Flutter frontend (Dart)
 │   ├── lib/
 │   │   ├── app/                 # App shell, theme, routing
 │   │   ├── core/                # Backend client, models, utils
-│   │   ├── features/            # 10 feature pages
+│   │   ├── features/            # Feature pages
+│   │   ├── l10n/                # Localization resources
 │   │   └── widgets/             # Shared UI components
+│   ├── windows/                 # Windows runner
+│   ├── linux/                   # Linux runner
+│   ├── macos/                   # macOS runner
+│   ├── ios/                     # iOS runner
+│   ├── android/                 # Android runner
+│   ├── web/                     # Web runner
 │   └── pubspec.yaml             # Flutter dependencies
 │
 ├── varManager_backend/          # Rust backend (HTTP service)
 │   ├── src/
-│   │   ├── main.rs              # Axum server
-│   │   ├── db.rs                # SQLite database
-│   │   ├── *_jobs.rs            # Job handlers
-│   │   └── *.rs                 # Business logic modules
+│   │   ├── main.rs              # Axum server entry
+│   │   ├── api/                 # HTTP API
+│   │   ├── app/                 # App wiring
+│   │   ├── domain/              # Domain logic
+│   │   ├── infra/               # IO, FS, download, DB helpers
+│   │   ├── jobs/                # Job handlers
+│   │   ├── scenes/              # Scene analysis pipeline
+│   │   ├── services/            # Shared services
+│   │   └── util/                # Utilities
 │   └── Cargo.toml               # Rust dependencies
 │
 ├── Custom/Scripts/              # VaM plugin scripts (C#)
@@ -44,8 +62,8 @@ varManager/
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
 | **Frontend** | Flutter 3.10+ (Dart) | Cross-platform UI (Windows/macOS/Linux) |
-| **Backend** | Rust + Axum | HTTP service, async job system, Hub downloads |
-| **Database** | SQLite (rusqlite) | Lightweight data storage |
+| **Backend** | Rust + Axum + Tokio | HTTP service, async job system, Hub downloads |
+| **Database** | SQLite (sqlx) | Lightweight data storage |
 | **VaM Plugins** | C# (Unity scripting) | In-game scripts for VaM |
 
 ## Build Artifacts
@@ -67,7 +85,7 @@ varManager_v2.0.0/
 ├── VERSION
 ├── README.md
 ├── README_CN.md
-└── INSTALL.txt
+└── INSTALL.txt                  # Auto-generated
 ```
 
 ## Development Workflow
@@ -85,10 +103,10 @@ varManager_v2.0.0/
 ```
 
 ### 2. CI/CD (GitHub Actions)
-- Automatic build on push to master
-- Builds Flutter frontend and Rust backend
-- Creates release artifacts
-- Uploads to GitHub Artifacts
+- Workflow: `.github/workflows/build.yml`
+- Trigger: push/PR to `master`, and manual dispatch
+- Builds Flutter frontend and Rust backend via `.\build.ps1 -Action release`
+- Uploads `release/varManager_<version>` as a GitHub artifact
 
 ### 3. VaM Plugin Development
 ```bash
@@ -106,14 +124,12 @@ varManager_v2.0.0/
 | `Custom/Scripts/` | ✅ Active | Yes | VaM plugins |
 | `LoadScene/` | ✅ Active | Yes | Plugin library source |
 | `MMDLoader/` | ⚠️ Optional | Yes | Standalone tool |
-| `_archived/` | 📦 Legacy | **No** | Old C# code |
+| `_archived/` | 📦 Legacy | Yes | Old C# code |
 
 ## Documentation
 
 - **README.md** - Main documentation (English)
 - **README_CN.md** - 中文文档
-- **arch.md** - Backend architecture (17KB)
-- **arch_flutter.md** - Flutter architecture (25KB)
 - **PROJECT_STRUCTURE.md** - This file
 - **Custom/Scripts/README.md** - VaM plugin guide
 - **_archived/README.md** - Legacy code reference
@@ -121,5 +137,6 @@ varManager_v2.0.0/
 ## Notes
 
 1. **VaM Plugins:** Source files committed to Git, no compilation needed
-2. **_archived/:** Historical reference, not part of active development
-3. **LoadScene/MMDLoader:** Source available for manual building if needed
+2. **config.json:** Generated on first run, not stored in the repository
+3. **_archived/:** Historical reference, not part of active development
+4. **LoadScene/MMDLoader:** Source available for manual building if needed

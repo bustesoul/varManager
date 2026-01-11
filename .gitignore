@@ -8,6 +8,7 @@
 CAsign
 ./.idea
 
+doc/
 
 # Plugin directory (vam_downloader.exe is built externally)
 plugin/
