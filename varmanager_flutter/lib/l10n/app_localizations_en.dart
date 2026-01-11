@@ -236,6 +236,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get proxySectionLabel => 'Proxy';
 
   @override
+  String get proxyModeLabel => 'Proxy mode';
+
+  @override
+  String get proxyModeSystem => 'System';
+
+  @override
+  String get proxyModeManual => 'Manual';
+
+  @override
   String get proxyHostLabel => 'Proxy host';
 
   @override

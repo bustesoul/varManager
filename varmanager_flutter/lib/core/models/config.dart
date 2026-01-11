@@ -36,6 +36,15 @@ class ProxyConfig {
   }
 }
 
+enum ProxyMode {
+  system,
+  manual;
+
+  static ProxyMode fromJson(String? value) {
+    return value == 'manual' ? ProxyMode.manual : ProxyMode.system;
+  }
+}
+
 class AppConfig {
   AppConfig({
     required this.listenHost,
@@ -46,6 +55,7 @@ class AppConfig {
     this.vampath,
     this.vamExec,
     this.downloaderSavePath,
+    required this.proxyMode,
     required this.proxy,
     this.uiTheme,
     this.uiLanguage,
@@ -59,6 +69,7 @@ class AppConfig {
   final String? vampath;
   final String? vamExec;
   final String? downloaderSavePath;
+  final ProxyMode proxyMode;
   final ProxyConfig proxy;
   final String? uiTheme;
   final String? uiLanguage;
@@ -76,6 +87,7 @@ class AppConfig {
       vampath: json['vampath'] as String?,
       vamExec: json['vam_exec'] as String?,
       downloaderSavePath: json['downloader_save_path'] as String?,
+      proxyMode: ProxyMode.fromJson(json['proxy_mode'] as String?),
       proxy: proxyJson is Map<String, dynamic>
           ? ProxyConfig.fromJson(proxyJson)
           : ProxyConfig.empty,
@@ -94,6 +106,7 @@ class AppConfig {
       'vampath': vampath,
       'vam_exec': vamExec,
       'downloader_save_path': downloaderSavePath,
+      'proxy_mode': proxyMode.name,
       'proxy': proxy.toJson(),
       'ui_theme': uiTheme,
       'ui_language': uiLanguage,
@@ -109,6 +122,7 @@ class AppConfig {
     String? vampath,
     String? vamExec,
     String? downloaderSavePath,
+    ProxyMode? proxyMode,
     ProxyConfig? proxy,
     String? uiTheme,
     String? uiLanguage,
@@ -122,6 +136,7 @@ class AppConfig {
       vampath: vampath ?? this.vampath,
       vamExec: vamExec ?? this.vamExec,
       downloaderSavePath: downloaderSavePath ?? this.downloaderSavePath,
+      proxyMode: proxyMode ?? this.proxyMode,
       proxy: proxy ?? this.proxy,
       uiTheme: uiTheme ?? this.uiTheme,
       uiLanguage: uiLanguage ?? this.uiLanguage,

@@ -235,6 +235,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get proxySectionLabel => '代理';
 
   @override
+  String get proxyModeLabel => '代理模式';
+
+  @override
+  String get proxyModeSystem => '系统';
+
+  @override
+  String get proxyModeManual => '手动';
+
+  @override
   String get proxyHostLabel => '代理主机';
 
   @override

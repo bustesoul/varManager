@@ -79,6 +79,7 @@ class BootstrapController extends Notifier<BootstrapState> {
         'vampath': config.vampath.trim(),
         'vam_exec': config.vamExec.trim(),
         'downloader_save_path': config.downloaderSavePath.trim(),
+        'proxy_mode': config.proxyMode.trim(),
         'proxy': {
           'host': config.proxyHost.trim(),
           'port': int.tryParse(config.proxyPort.trim()) ?? 0,
@@ -182,6 +183,7 @@ class BootstrapController extends Notifier<BootstrapState> {
     final downloader = config?.downloaderSavePath ?? '';
     var vamExec = config?.vamExec ?? '';
     final proxy = config?.proxy ?? ProxyConfig.empty;
+    final proxyMode = config?.proxyMode ?? ProxyMode.system;
 
     if (vamExec.trim().isEmpty) {
       vamExec = _vamDesktopBat;
@@ -197,6 +199,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       vampath: vampath,
       vamExec: vamExec,
       downloaderSavePath: resolvedDownloader,
+      proxyMode: proxyMode.name,
       proxyHost: proxy.host,
       proxyPort: proxy.port > 0 ? proxy.port.toString() : '',
       proxyUsername: proxy.username ?? '',

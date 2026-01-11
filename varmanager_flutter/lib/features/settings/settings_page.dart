@@ -33,6 +33,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _proxyPort = TextEditingController();
   final _proxyUsername = TextEditingController();
   final _proxyPassword = TextEditingController();
+  ProxyMode _proxyMode = ProxyMode.system;
 
   AppConfig? _config;
   String? _backendVersion;
@@ -72,6 +73,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _proxyPort.text = cfg.proxy.port > 0 ? cfg.proxy.port.toString() : '';
       _proxyUsername.text = cfg.proxy.username ?? '';
       _proxyPassword.text = cfg.proxy.password ?? '';
+      _proxyMode = cfg.proxyMode;
     });
   }
 
@@ -110,6 +112,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       'vampath': _vampath.text.trim(),
       'vam_exec': _vamExec.text.trim(),
       'downloader_save_path': _downloaderSavePath.text.trim(),
+      'proxy_mode': _proxyMode.name,
       'proxy': {
         'host': _proxyHost.text.trim(),
         'port': int.tryParse(_proxyPort.text.trim()) ?? 0,
@@ -166,6 +169,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       return const Center(child: CircularProgressIndicator());
     }
     final l10n = context.l10n;
+    final manualProxy = _proxyMode == ProxyMode.manual;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Form(
@@ -198,16 +202,43 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   Text(l10n.proxySectionLabel,
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  _field(_proxyHost, l10n.proxyHostLabel),
+                  DropdownButtonFormField<ProxyMode>(
+                    value: _proxyMode,
+                    decoration: InputDecoration(
+                      labelText: l10n.proxyModeLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: ProxyMode.system,
+                        child: Text(l10n.proxyModeSystem),
+                      ),
+                      DropdownMenuItem(
+                        value: ProxyMode.manual,
+                        child: Text(l10n.proxyModeManual),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _proxyMode = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _field(_proxyHost, l10n.proxyHostLabel,
+                      enabled: manualProxy),
                   _field(_proxyPort, l10n.proxyPortLabel,
-                      keyboard: TextInputType.number),
-                  _field(_proxyUsername, l10n.proxyUserLabel),
+                      keyboard: TextInputType.number, enabled: manualProxy),
+                  _field(_proxyUsername, l10n.proxyUserLabel,
+                      enabled: manualProxy),
                   _field(
                     _proxyPassword,
                     l10n.proxyPasswordLabel,
                     obscureText: true,
                     enableSuggestions: false,
                     autocorrect: false,
+                    enabled: manualProxy,
                   ),
                 ],
               ),
@@ -287,7 +318,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       {TextInputType keyboard = TextInputType.text,
       bool obscureText = false,
       bool enableSuggestions = true,
-      bool autocorrect = true}) {
+      bool autocorrect = true,
+      bool enabled = true}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
@@ -296,6 +328,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         obscureText: obscureText,
         enableSuggestions: enableSuggestions,
         autocorrect: autocorrect,
+        enabled: enabled,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

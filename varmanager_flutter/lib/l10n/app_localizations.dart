@@ -530,6 +530,24 @@ abstract class AppLocalizations {
   /// **'Proxy'**
   String get proxySectionLabel;
 
+  /// No description provided for @proxyModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy mode'**
+  String get proxyModeLabel;
+
+  /// No description provided for @proxyModeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get proxyModeSystem;
+
+  /// No description provided for @proxyModeManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get proxyModeManual;
+
   /// No description provided for @proxyHostLabel.
   ///
   /// In en, this message translates to:
@@ -581,13 +599,13 @@ abstract class AppLocalizations {
   /// No description provided for @chooseVamHint.
   ///
   /// In en, this message translates to:
-  /// **'choose virt_a_mate'**
+  /// **'Recommended: choose virt_a_mate directory'**
   String get chooseVamHint;
 
   /// No description provided for @chooseAddonPackagesHint.
   ///
   /// In en, this message translates to:
-  /// **'choose AddonPackages'**
+  /// **'Recommended: choose AddonPackages'**
   String get chooseAddonPackagesHint;
 
   /// No description provided for @appVersionLabel.
@@ -2776,25 +2794,25 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapFeatureVars.
   ///
   /// In en, this message translates to:
-  /// **'Manage VAR packages: install, clean old versions, and rebuild links.'**
+  /// **'Manage VARs with advanced filters, batch actions, and PackSwitch integration.'**
   String get bootstrapFeatureVars;
 
   /// No description provided for @bootstrapFeatureScenes.
   ///
   /// In en, this message translates to:
-  /// **'Browse scenes and drag cards to favorite or hide.'**
+  /// **'Scenes board with Hide/Normal/Fav columns, drag-and-drop, and quick actions.'**
   String get bootstrapFeatureScenes;
 
   /// No description provided for @bootstrapFeatureHub.
   ///
   /// In en, this message translates to:
-  /// **'Search Hub by tags and build download lists.'**
+  /// **'Hub cards with tag search, detail info, and download lists.'**
   String get bootstrapFeatureHub;
 
   /// No description provided for @bootstrapFeaturePacks.
   ///
   /// In en, this message translates to:
-  /// **'Use Pack Switch to toggle profiles quickly.'**
+  /// **'Switch pack profiles fast from the Home sidebar.'**
   String get bootstrapFeaturePacks;
 
   /// No description provided for @bootstrapConfigTitle.
@@ -2944,37 +2962,37 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapTourHomeTitle.
   ///
   /// In en, this message translates to:
-  /// **'Home: Update database'**
+  /// **'Home: Filters + PackSwitch'**
   String get bootstrapTourHomeTitle;
 
   /// No description provided for @bootstrapTourHomeBody.
   ///
   /// In en, this message translates to:
-  /// **'After adding new VARs under varspath, click Update DB to index them. VARs in vampath/AddonPackages are staged into varsForInstall before install.'**
+  /// **'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs.'**
   String get bootstrapTourHomeBody;
 
   /// No description provided for @bootstrapTourScenesTitle.
   ///
   /// In en, this message translates to:
-  /// **'Scenes: Drag to organize'**
+  /// **'Scenes: 3-column board'**
   String get bootstrapTourScenesTitle;
 
   /// No description provided for @bootstrapTourScenesBody.
   ///
   /// In en, this message translates to:
-  /// **'Drag scene cards into Favorite or Hide columns for quick organization.'**
+  /// **'Scenes are split into Hide/Normal/Fav; drag cards to organize, filter by location, and clear cache when needed.'**
   String get bootstrapTourScenesBody;
 
   /// No description provided for @bootstrapTourHubTagsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Hub: Tag search'**
+  /// **'Hub: Tags + quick filters'**
   String get bootstrapTourHubTagsTitle;
 
   /// No description provided for @bootstrapTourHubTagsBody.
   ///
   /// In en, this message translates to:
-  /// **'Add tags and search to build a focused list. Use resource actions to generate download links.'**
+  /// **'Search by tags/creator and use quick chips; open details for version and dependency info.'**
   String get bootstrapTourHubTagsBody;
 
   /// No description provided for @bootstrapTourHubDownloadsTitle.
@@ -2986,19 +3004,19 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapTourHubDownloadsBody.
   ///
   /// In en, this message translates to:
-  /// **'Review the download list and click Download All to enqueue.'**
+  /// **'Build a download list, see total size, copy links, or Download All to enqueue.'**
   String get bootstrapTourHubDownloadsBody;
 
   /// No description provided for @bootstrapTourSettingsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Settings: Theme'**
+  /// **'Settings: Live config'**
   String get bootstrapTourSettingsTitle;
 
   /// No description provided for @bootstrapTourSettingsBody.
   ///
   /// In en, this message translates to:
-  /// **'Pick a theme to customize the app look and feel.'**
+  /// **'Edit paths and backend config at runtime, plus theme/language switching.'**
   String get bootstrapTourSettingsBody;
 
   /// No description provided for @bootstrapFinishTitle.

@@ -219,6 +219,7 @@ pub(crate) struct UpdateConfigRequest {
     vam_exec: Option<String>,
     downloader_save_path: Option<String>,
     image_cache: Option<crate::app::ImageCacheConfig>,
+    proxy_mode: Option<crate::app::ProxyMode>,
     proxy: Option<crate::app::ProxyConfig>,
     ui_theme: Option<String>,
     ui_language: Option<String>,
@@ -708,6 +709,9 @@ fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Con
     }
     if let Some(image_cache) = req.image_cache {
         next.image_cache = image_cache;
+    }
+    if let Some(proxy_mode) = req.proxy_mode {
+        next.proxy_mode = proxy_mode;
     }
     if let Some(proxy) = req.proxy {
         next.proxy = normalize_proxy(proxy);

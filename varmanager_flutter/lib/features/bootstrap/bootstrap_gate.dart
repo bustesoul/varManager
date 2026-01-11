@@ -634,6 +634,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
   final _proxyPort = TextEditingController();
   final _proxyUsername = TextEditingController();
   final _proxyPassword = TextEditingController();
+  String _proxyMode = 'system';
   bool _loaded = false;
 
   @override
@@ -656,6 +657,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     _vampath.text = config.vampath;
     _vamExec.text = config.vamExec;
     _downloaderSavePath.text = config.downloaderSavePath;
+    _proxyMode = config.proxyMode;
     _proxyHost.text = config.proxyHost;
     _proxyPort.text = config.proxyPort;
     _proxyUsername.text = config.proxyUsername;
@@ -703,6 +705,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
       vampath: _vampath.text.trim(),
       vamExec: _vamExec.text.trim(),
       downloaderSavePath: _downloaderSavePath.text.trim(),
+      proxyMode: _proxyMode.trim(),
       proxyHost: _proxyHost.text.trim(),
       proxyPort: _proxyPort.text.trim(),
       proxyUsername: _proxyUsername.text.trim(),
@@ -715,6 +718,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     final state = ref.watch(bootstrapProvider);
     final l10n = context.l10n;
     _loadConfigIfNeeded(state.config);
+    final manualProxy = _proxyMode == 'manual';
 
     return BootstrapDialogFrame(
       key: const ValueKey('config'),
@@ -760,18 +764,45 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
             Text(l10n.proxySectionLabel,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _proxyMode,
+              decoration: InputDecoration(
+                labelText: l10n.proxyModeLabel,
+                border: const OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem(
+                  value: 'system',
+                  child: Text(l10n.proxyModeSystem),
+                ),
+                DropdownMenuItem(
+                  value: 'manual',
+                  child: Text(l10n.proxyModeManual),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _proxyMode = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
             _textField(
               controller: _proxyHost,
               label: l10n.proxyHostLabel,
+              enabled: manualProxy,
             ),
             _textField(
               controller: _proxyPort,
               label: l10n.proxyPortLabel,
               keyboard: TextInputType.number,
+              enabled: manualProxy,
             ),
             _textField(
               controller: _proxyUsername,
               label: l10n.proxyUserLabel,
+              enabled: manualProxy,
             ),
             _textField(
               controller: _proxyPassword,
@@ -779,6 +810,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
               obscureText: true,
               enableSuggestions: false,
               autocorrect: false,
+              enabled: manualProxy,
             ),
             if (state.errorMessage != null) ...[
               const SizedBox(height: 8),
@@ -856,6 +888,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     bool obscureText = false,
     bool enableSuggestions = true,
     bool autocorrect = true,
+    bool enabled = true,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -865,6 +898,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
         obscureText: obscureText,
         enableSuggestions: enableSuggestions,
         autocorrect: autocorrect,
+        enabled: enabled,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

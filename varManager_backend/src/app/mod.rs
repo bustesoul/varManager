@@ -27,6 +27,19 @@ pub const APP_VERSION: &str = match option_env!("APP_VERSION") {
 };
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyMode {
+    System,
+    Manual,
+}
+
+impl Default for ProxyMode {
+    fn default() -> Self {
+        ProxyMode::System
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ProxyConfig {
     #[serde(default)]
     pub host: String,
@@ -142,6 +155,8 @@ pub struct Config {
     #[serde(default)]
     pub(crate) download: DownloadConfig,
     #[serde(default)]
+    pub(crate) proxy_mode: ProxyMode,
+    #[serde(default)]
     pub(crate) proxy: ProxyConfig,
     #[serde(default)]
     pub(crate) ui_theme: Option<String>,
@@ -162,6 +177,7 @@ impl Default for Config {
             downloader_save_path: None,
             image_cache: ImageCacheConfig::default(),
             download: DownloadConfig::default(),
+            proxy_mode: ProxyMode::System,
             proxy: ProxyConfig::default(),
             ui_theme: None,
             ui_language: None,
@@ -432,14 +448,43 @@ pub async fn shutdown_signal(mut rx: oneshot::Receiver<()>) {
     }
 }
 
+fn clear_proxy_env() {
+    env::remove_var("HTTP_PROXY");
+    env::remove_var("HTTPS_PROXY");
+    env::remove_var("http_proxy");
+    env::remove_var("https_proxy");
+}
+
+fn clear_no_proxy_if_star() {
+    for key in ["NO_PROXY", "no_proxy"] {
+        if let Ok(value) = env::var(key) {
+            if value.trim() == "*" {
+                env::remove_var(key);
+            }
+        }
+    }
+}
+
 pub fn apply_proxy_env(config: &Config) {
-    let Some(proxy_url) = config.proxy.to_url() else {
-        return;
-    };
-    env::set_var("HTTP_PROXY", &proxy_url);
-    env::set_var("HTTPS_PROXY", &proxy_url);
-    env::set_var("http_proxy", &proxy_url);
-    env::set_var("https_proxy", &proxy_url);
+    match config.proxy_mode {
+        ProxyMode::System => {
+            clear_proxy_env();
+            clear_no_proxy_if_star();
+        }
+        ProxyMode::Manual => {
+            if let Some(proxy_url) = config.proxy.to_url() {
+                clear_no_proxy_if_star();
+                env::set_var("HTTP_PROXY", &proxy_url);
+                env::set_var("HTTPS_PROXY", &proxy_url);
+                env::set_var("http_proxy", &proxy_url);
+                env::set_var("https_proxy", &proxy_url);
+            } else {
+                clear_proxy_env();
+                env::set_var("NO_PROXY", "*");
+                env::set_var("no_proxy", "*");
+            }
+        }
+    }
 }
 
 pub fn load_or_write_config() -> Result<Config, Box<dyn std::error::Error>> {

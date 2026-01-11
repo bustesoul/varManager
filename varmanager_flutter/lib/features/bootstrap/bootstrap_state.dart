@@ -24,6 +24,7 @@ class BootstrapConfig {
     required this.vampath,
     required this.vamExec,
     required this.downloaderSavePath,
+    required this.proxyMode,
     required this.proxyHost,
     required this.proxyPort,
     required this.proxyUsername,
@@ -34,6 +35,7 @@ class BootstrapConfig {
   final String vampath;
   final String vamExec;
   final String downloaderSavePath;
+  final String proxyMode;
   final String proxyHost;
   final String proxyPort;
   final String proxyUsername;
@@ -44,6 +46,7 @@ class BootstrapConfig {
     String? vampath,
     String? vamExec,
     String? downloaderSavePath,
+    String? proxyMode,
     String? proxyHost,
     String? proxyPort,
     String? proxyUsername,
@@ -54,6 +57,7 @@ class BootstrapConfig {
       vampath: vampath ?? this.vampath,
       vamExec: vamExec ?? this.vamExec,
       downloaderSavePath: downloaderSavePath ?? this.downloaderSavePath,
+      proxyMode: proxyMode ?? this.proxyMode,
       proxyHost: proxyHost ?? this.proxyHost,
       proxyPort: proxyPort ?? this.proxyPort,
       proxyUsername: proxyUsername ?? this.proxyUsername,
@@ -165,6 +169,7 @@ class BootstrapState {
         vampath: '',
         vamExec: '',
         downloaderSavePath: '',
+        proxyMode: 'system',
         proxyHost: '',
         proxyPort: '',
         proxyUsername: '',
