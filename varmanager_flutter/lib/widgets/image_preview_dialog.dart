@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 
 import 'preview_placeholder.dart';
+import '../l10n/l10n.dart';
 
 class ImagePreviewItem {
   const ImagePreviewItem({
@@ -169,6 +170,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final item = widget.items[currentIndex];
     final imageUrl = item.imageUrl;
     final size = MediaQuery.of(context).size;
@@ -239,7 +241,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(Icons.close),
-                          tooltip: 'Close',
+                          tooltip: l10n.commonClose,
                         ),
                       ],
                     ),
@@ -314,7 +316,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                         Icons.keyboard_arrow_up,
                                         color: Colors.white70,
                                       ),
-                                      tooltip: 'Previous',
+                                      tooltip: l10n.imagePreviewPrevious,
                                     ),
                                   Icon(
                                     _ctrlPressed ? Icons.swap_vert : Icons.zoom_in,
@@ -332,7 +334,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Scroll',
+                                    l10n.imagePreviewScroll,
                                     style: TextStyle(
                                       color: _ctrlPressed ? Colors.white70 : Colors.white54,
                                       fontSize: 10,
@@ -347,7 +349,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                         Icons.keyboard_arrow_down,
                                         color: Colors.white70,
                                       ),
-                                      tooltip: 'Next',
+                                      tooltip: l10n.imagePreviewNext,
                                     ),
                                 ],
                               ),

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/models/extra_models.dart';
+import '../../l10n/l10n.dart';
 
 class PrepareSavesPage extends ConsumerStatefulWidget {
   const PrepareSavesPage({super.key});
@@ -86,11 +87,12 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
     final client = ref.read(backendClientProvider);
     final response = await client.validateOutputDir(path);
     if (!mounted) return;
+    final l10n = context.l10n;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(response.ok
-            ? 'Output folder is ready.'
-            : response.reason ?? 'Output folder validation failed.'),
+            ? l10n.outputFolderReady
+            : response.reason ?? l10n.outputFolderValidationFailed),
       ),
     );
   }
@@ -110,8 +112,9 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('Prepare Saves')),
+      appBar: AppBar(title: Text(l10n.prepareSavesTitle)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -124,31 +127,31 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
                     Expanded(
                       child: TextField(
                         controller: _outputController,
-                        decoration: const InputDecoration(
-                          labelText: 'Output folder',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l10n.outputFolderLabel,
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
                       onPressed: _pickOutputDir,
-                      child: const Text('Browse'),
+                      child: Text(l10n.commonBrowse),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
                       onPressed: _validateOutput,
-                      child: const Text('Validate Output'),
+                      child: Text(l10n.validateOutputLabel),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
                       onPressed: _analyze,
-                      child: const Text('Analyze'),
+                      child: Text(l10n.commonAnalyze),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
                       onPressed: _copyMissing,
-                      child: const Text('Copy Missing'),
+                      child: Text(l10n.copyMissingLabel),
                     ),
                   ],
                 ),
@@ -164,11 +167,11 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _listPanel('Missing Dependencies', _missing),
+                    child: _listPanel(l10n.missingDependenciesTitle, _missing),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _listPanel('Installed', _installed),
+                    child: _listPanel(l10n.statusInstalled, _installed),
                   ),
                 ],
               ),
@@ -180,25 +183,27 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
   }
 
   Widget _buildTreePanel() {
+    final l10n = context.l10n;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Saves Tree', style: TextStyle(fontWeight: FontWeight.w600)),
+            Text(l10n.savesTreeTitle,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             if (_loadingTree) const LinearProgressIndicator(minHeight: 2),
             const SizedBox(height: 8),
             Expanded(
               child: _groups.isEmpty
-                  ? const Center(child: Text('No saves found'))
+                  ? Center(child: Text(l10n.noSavesFound))
                   : ListView(
                       children: _groups.map(_buildGroupNode).toList(),
                     ),
             ),
             const SizedBox(height: 8),
-            Text('Selected ${_selectedPaths.length} files'),
+            Text(l10n.selectedFilesCount(_selectedPaths.length)),
           ],
         ),
       ),
@@ -263,6 +268,7 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
   }
 
   Widget _listPanel(String title, List<String> items) {
+    final l10n = context.l10n;
     return Card(
       child: Column(
         children: [
@@ -272,7 +278,7 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
               children: [
                 Text(title),
                 const Spacer(),
-                Text('${items.length} items'),
+                Text(l10n.itemsCount(items.length)),
               ],
             ),
           ),

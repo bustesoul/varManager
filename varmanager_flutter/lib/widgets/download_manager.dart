@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:varmanager_flutter/l10n/app_localizations.dart';
 
 import '../app/providers.dart';
 import '../core/backend/download_controller.dart';
 import '../core/models/download_models.dart';
+import '../l10n/l10n.dart';
 
 class DownloadManagerBubble extends ConsumerStatefulWidget {
   const DownloadManagerBubble({super.key});
@@ -201,6 +203,7 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final downloads = ref.watch(downloadListProvider);
     final data = downloads.value ?? DownloadListResponse.empty();
     final items = _sortedItems(data.items);
@@ -234,9 +237,9 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
               children: [
                 const Icon(Icons.downloading_rounded, size: 18),
                 const SizedBox(width: 6),
-                const Text(
-                  'Download Manager',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                Text(
+                  l10n.downloadManagerTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const Spacer(),
                 if (items.isNotEmpty)
@@ -253,7 +256,9 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
                       });
                     },
                     child: Text(
-                      _selected.length == items.length ? 'Clear' : 'Select All',
+                      _selected.length == items.length
+                          ? l10n.commonClear
+                          : l10n.commonSelectAll,
                     ),
                   ),
               ],
@@ -267,14 +272,16 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
               onResume: () => _applyAction('resume', _selected.toList()),
               onRemove: () => _applyAction('remove', _selected.toList()),
               onDelete: () => _applyAction('delete', _selected.toList()),
-              selectionLabel: hasSelection ? '$selectedCount selected' : 'No selection',
+              selectionLabel: hasSelection
+                  ? l10n.downloadSelectionCount(selectedCount)
+                  : l10n.downloadNoSelection,
             ),
             const SizedBox(height: 8),
             Expanded(
               child: items.isEmpty
                   ? Center(
                       child: Text(
-                        'No active downloads',
+                        l10n.downloadNoActive,
                         style: TextStyle(
                           color:
                               colorScheme.onSurface.withValues(alpha: 0.6),
@@ -329,6 +336,7 @@ class _SummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final total = summary.total;
     final completed = summary.completed;
     final percent = total == 0 ? 0.0 : completed / total;
@@ -340,7 +348,7 @@ class _SummaryRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('Items $completed/$total',
+            Text(l10n.downloadItemsProgress(completed, total),
                 style: const TextStyle(fontSize: 12)),
             const Spacer(),
             Text(sizeLabel, style: const TextStyle(fontSize: 12)),
@@ -372,6 +380,7 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
     return Row(
       children: [
@@ -380,22 +389,22 @@ class _ActionRow extends StatelessWidget {
         IconButton(
           onPressed: enabled ? onPause : null,
           icon: const Icon(Icons.pause_circle_filled, size: 20),
-          tooltip: 'Pause',
+          tooltip: l10n.downloadActionPause,
         ),
         IconButton(
           onPressed: enabled ? onResume : null,
           icon: const Icon(Icons.play_circle_filled, size: 20),
-          tooltip: 'Resume',
+          tooltip: l10n.downloadActionResume,
         ),
         IconButton(
           onPressed: enabled ? onRemove : null,
           icon: const Icon(Icons.clear, size: 20),
-          tooltip: 'Remove Record',
+          tooltip: l10n.downloadActionRemoveRecord,
         ),
         _DeleteIconButton(
           onConfirmed: onDelete,
           icon: Icons.delete,
-          tooltip: 'Delete File',
+          tooltip: l10n.downloadActionDeleteFile,
           enabled: enabled,
           size: 20,
         ),
@@ -425,10 +434,12 @@ class _DownloadRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colorScheme = Theme.of(context).colorScheme;
     final total = item.totalBytes ?? 0;
     final progress = total > 0 ? item.downloadedBytes / total : null;
     final statusColor = _statusColor(item.status, colorScheme);
+    final statusLabel = _statusLabel(l10n, item.status);
     final name = item.name?.trim().isNotEmpty == true
         ? item.name!.trim()
         : _nameFromUrl(item.url);
@@ -464,7 +475,7 @@ class _DownloadRow extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      item.status,
+                      statusLabel,
                       style: TextStyle(
                         fontSize: 10,
                         color: statusColor,
@@ -493,22 +504,22 @@ class _DownloadRow extends StatelessWidget {
             IconButton(
               onPressed: _canPause(item.status) ? onPause : null,
               icon: const Icon(Icons.pause, size: 18),
-              tooltip: 'Pause',
+              tooltip: l10n.downloadActionPause,
             ),
             IconButton(
               onPressed: _canResume(item.status) ? onResume : null,
               icon: const Icon(Icons.play_arrow, size: 18),
-              tooltip: 'Resume',
+              tooltip: l10n.downloadActionResume,
             ),
             IconButton(
               onPressed: onRemove,
               icon: const Icon(Icons.clear, size: 18),
-              tooltip: 'Remove Record',
+              tooltip: l10n.downloadActionRemoveRecord,
             ),
             _DeleteIconButton(
               onConfirmed: onDelete,
               icon: Icons.delete_outline,
-              tooltip: 'Delete File',
+              tooltip: l10n.downloadActionDeleteFile,
             ),
           ],
         ),
@@ -537,6 +548,23 @@ Color _statusColor(String status, ColorScheme scheme) {
       return scheme.primary;
     default:
       return scheme.onSurface.withValues(alpha: 0.6);
+  }
+}
+
+String _statusLabel(AppLocalizations l10n, String status) {
+  switch (status) {
+    case 'paused':
+      return l10n.downloadStatusPaused;
+    case 'downloading':
+      return l10n.downloadStatusDownloading;
+    case 'queued':
+      return l10n.downloadStatusQueued;
+    case 'failed':
+      return l10n.downloadStatusFailed;
+    case 'completed':
+      return l10n.downloadStatusCompleted;
+    default:
+      return status;
   }
 }
 
@@ -582,20 +610,21 @@ class _DeleteIconButtonState extends State<_DeleteIconButton> {
   bool _hovering = false;
 
   Future<void> _handleTap() async {
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirm Delete'),
-        content: const Text('This will permanently delete the file. Are you sure?'),
+        title: Text(l10n.confirmDeleteTitle),
+        content: Text(l10n.confirmDeleteMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.commonDelete),
           ),
         ],
       ),

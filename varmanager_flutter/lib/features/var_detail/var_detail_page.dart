@@ -8,6 +8,7 @@ import '../../core/backend/job_log_controller.dart';
 import '../../core/models/var_models.dart';
 import '../../widgets/image_preview_dialog.dart';
 import '../../widgets/preview_placeholder.dart';
+import '../../l10n/l10n.dart';
 import '../missing_vars/missing_vars_page.dart';
 import '../home/providers.dart';
 
@@ -65,19 +66,21 @@ class VarDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final detailAsync = ref.watch(varDetailProvider(varName));
     return Scaffold(
-      appBar: AppBar(title: Text('Details: $varName')),
+      appBar: AppBar(title: Text(l10n.varDetailsTitle(varName))),
       body: detailAsync.when(
         data: (detail) => _buildDetail(context, ref, detail),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Load failed: $err')),
+        error: (err, _) => Center(child: Text(l10n.loadFailed(err.toString()))),
       ),
     );
   }
 
   Widget _buildDetail(
       BuildContext context, WidgetRef ref, VarDetailResponse detail) {
+    final l10n = context.l10n;
     final client = ref.read(backendClientProvider);
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -94,7 +97,7 @@ class VarDetailPage extends ConsumerWidget {
                 children: [
                   TextButton(
                     onPressed: () => _runLocate(ref),
-                    child: const Text('Locate'),
+                    child: Text(l10n.commonLocate),
                   ),
                   TextButton(
                     onPressed: () {
@@ -105,11 +108,11 @@ class VarDetailPage extends ConsumerWidget {
                           .update((state) => state.copyWith(creator: creator));
                       Navigator.pop(context);
                     },
-                    child: const Text('Filter by Creator'),
+                    child: Text(l10n.filterByCreator),
                   ),
                   TextButton(
                     onPressed: () => _runMissingDeps(context, ref),
-                    child: const Text('Missing Deps'),
+                    child: Text(l10n.missingDeps),
                   ),
                 ],
               ),
@@ -120,7 +123,7 @@ class VarDetailPage extends ConsumerWidget {
             child: ListView(
               children: [
                 _buildSection(
-                  title: 'Dependencies',
+                  title: l10n.dependenciesTitle,
                   child: Column(
                     children: detail.dependencies
                         .map((dep) {
@@ -145,7 +148,7 @@ class VarDetailPage extends ConsumerWidget {
                                         'https://www.google.com/search?q=$search var',
                                   });
                                 },
-                                child: const Text('Search'),
+                                child: Text(l10n.commonSearch),
                               )
                             else
                               TextButton(
@@ -158,7 +161,7 @@ class VarDetailPage extends ConsumerWidget {
                                       );
                                   Navigator.pop(context);
                                 },
-                                child: const Text('Select'),
+                                child: Text(l10n.commonSelect),
                               ),
                           ],
                         ),
@@ -169,7 +172,7 @@ class VarDetailPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 _buildSection(
-                  title: 'Dependents',
+                  title: l10n.dependentsTitle,
                   child: Column(
                     children: detail.dependents
                         .map(
@@ -185,7 +188,7 @@ class VarDetailPage extends ConsumerWidget {
                                     );
                                 Navigator.pop(context);
                               },
-                              child: const Text('Select'),
+                              child: Text(l10n.commonSelect),
                             ),
                           ),
                         )
@@ -194,7 +197,7 @@ class VarDetailPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 _buildSection(
-                  title: 'Save Dependencies',
+                  title: l10n.saveDependenciesTitle,
                   child: Column(
                     children: detail.dependentSaves
                         .map(
@@ -209,7 +212,7 @@ class VarDetailPage extends ConsumerWidget {
                                   'path': path.replaceAll('/', '\\'),
                                 });
                               },
-                              child: const Text('Locate'),
+                              child: Text(l10n.commonLocate),
                             ),
                           ),
                         )
@@ -218,7 +221,7 @@ class VarDetailPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 _buildSection(
-                  title: 'Previews',
+                  title: l10n.previewsTitle,
                   child: _VarPreviewGrid(
                     client: client,
                     varName: detail.varInfo.varName,
@@ -327,11 +330,12 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final items = widget.scenes
         .where((scene) => scene.previewPic != null && scene.previewPic!.isNotEmpty)
         .toList();
     if (items.isEmpty) {
-      return const Text('No previews');
+      return Text(l10n.noPreviews);
     }
     final totalPages = (items.length + _perPage - 1) ~/ _perPage;
     final currentPage = _page.clamp(1, totalPages);
@@ -351,9 +355,9 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
       children: [
         Row(
           children: [
-            Text('Total ${items.length}'),
+            Text(l10n.totalCount(items.length)),
             const Spacer(),
-            Text('Page $currentPage/$totalPages'),
+            Text(l10n.pageOf(currentPage, totalPages)),
             IconButton(
               onPressed: currentPage > 1
                   ? () {

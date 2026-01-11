@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:varmanager_flutter/l10n/app_localizations.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app/providers.dart';
@@ -11,6 +12,7 @@ import '../../core/utils/debounce.dart';
 import '../../widgets/image_preview_dialog.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/lazy_dropdown_field.dart';
+import '../../l10n/l10n.dart';
 import '../analysis/analysis_page.dart';
 import '../var_detail/var_detail_page.dart';
 
@@ -128,6 +130,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final scenesAsync = ref.watch(scenesListProvider);
     final query = ref.watch(scenesQueryProvider);
     return Padding(
@@ -145,7 +148,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                 children: [
                   DropdownButton<String>(
                     value: query.category,
-                    items: const [
+                    items: [
                       'scenes',
                       'looks',
                       'clothing',
@@ -157,7 +160,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                     ]
                         .map((item) => DropdownMenuItem(
                               value: item,
-                              child: Text(item),
+                              child: Text(_categoryLabel(l10n, item)),
                             ))
                         .toList(),
                     onChanged: (value) {
@@ -170,9 +173,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   SizedBox(
                     width: 220,
                     child: TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Name filter',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l10n.nameFilterLabel,
+                        border: const OutlineInputBorder(),
                       ),
                       onChanged: (value) {
                         _searchDebounce.run(() {
@@ -186,10 +189,10 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   SizedBox(
                     width: 220,
                     child: LazyDropdownField(
-                      label: 'Creator',
+                      label: l10n.creatorLabel,
                       value: query.creator.isEmpty ? 'ALL' : query.creator,
                       allValue: 'ALL',
-                      allLabel: 'All creators',
+                      allLabel: l10n.allCreators,
                       optionsLoader: (queryText, offset, limit) async {
                         final client = ref.read(backendClientProvider);
                         return client.listCreators(
@@ -207,11 +210,15 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   ),
                   DropdownButton<String>(
                     value: query.sort,
-                    items: const [
-                      DropdownMenuItem(value: 'var_date', child: Text('New to Old')),
-                      DropdownMenuItem(value: 'meta_date', child: Text('Meta Date')),
-                      DropdownMenuItem(value: 'var_name', child: Text('VarName')),
-                      DropdownMenuItem(value: 'scene_name', child: Text('SceneName')),
+                    items: [
+                      DropdownMenuItem(
+                          value: 'var_date', child: Text(l10n.sortNewToOld)),
+                      DropdownMenuItem(
+                          value: 'meta_date', child: Text(l10n.sortMetaDate)),
+                      DropdownMenuItem(
+                          value: 'var_name', child: Text(l10n.sortVarName)),
+                      DropdownMenuItem(
+                          value: 'scene_name', child: Text(l10n.sortSceneName)),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -225,7 +232,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                     items: const [24, 48, 96, 200]
                         .map((value) => DropdownMenuItem(
                               value: value,
-                              child: Text('Per page $value'),
+                              child: Text(l10n.perPageLabel(value)),
                             ))
                         .toList(),
                     onChanged: (value) {
@@ -237,50 +244,50 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   ),
                   TextButton(
                     onPressed: _resetFilters,
-                    child: const Text('Reset filters'),
+                    child: Text(l10n.resetFiltersLabel),
                   ),
                   const SizedBox(width: 8),
-                  const Text('Location:'),
+                  Text(l10n.locationLabel),
                   FilterChip(
-                    label: const Text('Installed'),
+                    label: Text(l10n.locationInstalled),
                     selected: _locationFilter.contains('installed'),
                     onSelected: (value) => _toggleLocation('installed', value),
                   ),
                   FilterChip(
-                    label: const Text('Not installed'),
+                    label: Text(l10n.locationNotInstalled),
                     selected: _locationFilter.contains('not_installed'),
                     onSelected: (value) => _toggleLocation('not_installed', value),
                   ),
                   FilterChip(
-                    label: const Text('MissingLink'),
+                    label: Text(l10n.locationMissingLink),
                     selected: _locationFilter.contains('missinglink'),
                     onSelected: (value) => _toggleLocation('missinglink', value),
                   ),
                   FilterChip(
-                    label: const Text('Save'),
+                    label: Text(l10n.locationSave),
                     selected: _locationFilter.contains('save'),
                     onSelected: (value) => _toggleLocation('save', value),
                   ),
                   const SizedBox(width: 8),
-                  const Text('Columns:'),
+                  Text(l10n.columnsLabel),
                   FilterChip(
-                    label: const Text('Hide'),
+                    label: Text(l10n.columnHide),
                     selected: _hideFavFilter.contains(-1),
                     onSelected: (value) => _toggleHideFav(-1, value),
                   ),
                   FilterChip(
-                    label: const Text('Normal'),
+                    label: Text(l10n.columnNormal),
                     selected: _hideFavFilter.contains(0),
                     onSelected: (value) => _toggleHideFav(0, value),
                   ),
                   FilterChip(
-                    label: const Text('Fav'),
+                    label: Text(l10n.columnFav),
                     selected: _hideFavFilter.contains(1),
                     onSelected: (value) => _toggleHideFav(1, value),
                   ),
                   const SizedBox(width: 12),
                   FilterChip(
-                    label: const Text('Merge'),
+                    label: Text(l10n.mergeLabel),
                     selected: _merge,
                     onSelected: (value) {
                       setState(() {
@@ -289,7 +296,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                     },
                   ),
                   FilterChip(
-                    label: const Text('Ignore Gender'),
+                    label: Text(l10n.ignoreGenderLabel),
                     selected: _ignoreGender,
                     onSelected: (value) {
                       setState(() {
@@ -298,7 +305,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                     },
                   ),
                   FilterChip(
-                    label: const Text('For Male'),
+                    label: Text(l10n.forMaleLabel),
                     selected: _forMale,
                     onSelected: (value) {
                       setState(() {
@@ -311,7 +318,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                     items: [1, 2, 3, 4, 5, 6, 7, 8]
                         .map((value) => DropdownMenuItem(
                               value: value,
-                              child: Text('Person $value'),
+                              child: Text(l10n.personLabel(value)),
                             ))
                         .toList(),
                     onChanged: (value) {
@@ -330,7 +337,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
             child: scenesAsync.when(
               data: (data) => _buildColumns(context, data, query),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(child: Text('Load failed: $err')),
+              error: (err, _) =>
+                  Center(child: Text(l10n.loadFailed(err.toString()))),
             ),
           ),
         ],
@@ -340,6 +348,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
 
   Widget _buildColumns(
       BuildContext context, ScenesListResponse data, ScenesQueryParams query) {
+    final l10n = context.l10n;
     final totalPages = data.total == 0
         ? 1
         : (data.total + query.perPage - 1) ~/ query.perPage;
@@ -351,7 +360,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         Expanded(
           child: _sceneColumn(
             context,
-            title: 'Hide',
+            title: l10n.columnHide,
             items: hideItems,
             targetHideFav: -1,
           ),
@@ -360,7 +369,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         Expanded(
           child: _sceneColumn(
             context,
-            title: 'Normal',
+            title: l10n.columnNormal,
             items: normalItems,
             targetHideFav: 0,
           ),
@@ -369,7 +378,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         Expanded(
           child: _sceneColumn(
             context,
-            title: 'Fav',
+            title: l10n.columnFav,
             items: favItems,
             targetHideFav: 1,
           ),
@@ -379,9 +388,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
       children: [
         Row(
           children: [
-            Text('Total ${data.total} items'),
+            Text(l10n.totalItems(data.total)),
             const Spacer(),
-            Text('Page ${data.page}/$totalPages'),
+            Text(l10n.pageOf(data.page, totalPages)),
             IconButton(
               onPressed: data.page > 1
                   ? () => _updateQuery((state) => state.copyWith(page: 1))
@@ -414,7 +423,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
             ),
             TextButton(
               onPressed: () => ref.invalidate(scenesListProvider),
-              child: const Text('Refresh'),
+              child: Text(l10n.commonRefresh),
             ),
           ],
         ),
@@ -444,6 +453,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     return DragTarget<SceneListItem>(
       onAcceptWithDetails: (details) => _moveScene(details.data, targetHideFav),
       builder: (context, candidate, rejected) {
+        final l10n = context.l10n;
         return Card(
           child: Column(
             children: [
@@ -451,7 +461,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    Text('$title (${items.length})'),
+                    Text(l10n.columnTitleWithCount(title, items.length)),
                     if (candidate.isNotEmpty) ...[
                       const Spacer(),
                       const Icon(Icons.arrow_downward, size: 18),
@@ -514,6 +524,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     SceneListItem item, {
     Widget? dragHandle,
   }) {
+    final l10n = context.l10n;
     final client = ref.read(backendClientProvider);
     final previewUrl = _previewUrl(client, item);
     final canPreview = previewUrl != null && previewUrl.isNotEmpty;
@@ -567,7 +578,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                 spacing: 6,
                 children: [
                   Chip(
-                    label: Text(item.location),
+                    label: Text(_locationLabel(l10n, item.location)),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
@@ -602,8 +613,47 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     return title;
   }
 
+  String _categoryLabel(AppLocalizations l10n, String value) {
+    switch (value) {
+      case 'scenes':
+        return l10n.categoryScenes;
+      case 'looks':
+        return l10n.categoryLooks;
+      case 'clothing':
+        return l10n.categoryClothing;
+      case 'hairstyle':
+        return l10n.categoryHairstyle;
+      case 'assets':
+        return l10n.categoryAssets;
+      case 'morphs':
+        return l10n.categoryMorphs;
+      case 'pose':
+        return l10n.categoryPose;
+      case 'skin':
+        return l10n.categorySkin;
+      default:
+        return value;
+    }
+  }
+
+  String _locationLabel(AppLocalizations l10n, String value) {
+    switch (value) {
+      case 'installed':
+        return l10n.locationInstalled;
+      case 'not_installed':
+        return l10n.locationNotInstalled;
+      case 'missinglink':
+        return l10n.locationMissingLink;
+      case 'save':
+        return l10n.locationSave;
+      default:
+        return value;
+    }
+  }
+
   Widget _sceneCardContent(
       BuildContext context, SceneListItem item, Widget header) {
+    final l10n = context.l10n;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Padding(
@@ -619,20 +669,20 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
               children: [
                 TextButton(
                   onPressed: () => _loadScene(item),
-                  child: const Text('Load'),
+                  child: Text(l10n.commonLoad),
                 ),
                 if (item.atomType == 'scenes' || item.atomType == 'looks')
                   TextButton(
                     onPressed: () => _analyzeScene(context, item),
-                    child: const Text('Analyze'),
+                    child: Text(l10n.commonAnalyze),
                   ),
                 TextButton(
                   onPressed: () => _locateScene(item),
-                  child: const Text('Locate'),
+                  child: Text(l10n.commonLocate),
                 ),
                 TextButton(
                   onPressed: () => _clearCache(item),
-                  child: const Text('Clear cache'),
+                  child: Text(l10n.clearCacheLabel),
                 ),
                 TextButton(
                   onPressed: () {
@@ -642,15 +692,15 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                       ),
                     );
                   },
-                  child: const Text('Details'),
+                  child: Text(l10n.commonDetails),
                 ),
                 TextButton(
                   onPressed: () => _toggleHide(item),
-                  child: Text(item.hide ? 'Unhide' : 'Hide'),
+                  child: Text(item.hide ? l10n.unhideLabel : l10n.hideLabel),
                 ),
                 TextButton(
                   onPressed: () => _toggleFav(item),
-                  child: Text(item.fav ? 'Unfav' : 'Fav'),
+                  child: Text(item.fav ? l10n.unfavLabel : l10n.favLabel),
                 ),
               ],
             ),

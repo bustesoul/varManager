@@ -8,6 +8,7 @@ import '../../core/backend/query_params.dart';
 import '../../core/models/extra_models.dart';
 import '../home/providers.dart';
 import '../../widgets/lazy_dropdown_field.dart';
+import '../../l10n/l10n.dart';
 
 class MissingEntry {
   MissingEntry({
@@ -19,6 +20,12 @@ class MissingEntry {
   final String rawName;
   final String displayName;
   final bool versionMismatch;
+}
+
+enum _DownloadStatus {
+  direct,
+  noVersion,
+  none,
 }
 
 class MissingVarsPage extends ConsumerStatefulWidget {
@@ -274,22 +281,23 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   }
 
   String _linkStatusLabel(String name) {
+    final l10n = context.l10n;
     final applied = _appliedLink(name);
     final draft = _draftLink(name);
     final hasDraft = _hasDraft(name);
     final broken = _isBroken(name);
     if (broken && !hasDraft) {
-      return 'Broken link';
+      return l10n.linkStatusBroken;
     }
     if (hasDraft) {
-      if (draft.isEmpty && applied.isNotEmpty) return 'Remove link';
-      if (draft.isEmpty && applied.isEmpty) return 'Clear link';
-      if (applied.isEmpty) return 'New link';
-      if (draft == applied) return 'Linked';
-      return 'Link changed';
+      if (draft.isEmpty && applied.isNotEmpty) return l10n.linkStatusRemove;
+      if (draft.isEmpty && applied.isEmpty) return l10n.linkStatusClear;
+      if (applied.isEmpty) return l10n.linkStatusNew;
+      if (draft == applied) return l10n.linkStatusLinked;
+      return l10n.linkStatusChanged;
     }
-    if (applied.isNotEmpty) return 'Linked';
-    return 'Not linked';
+    if (applied.isNotEmpty) return l10n.linkStatusLinked;
+    return l10n.linkStatusNotLinked;
   }
 
   Color _linkStatusColor(String name) {
@@ -426,18 +434,32 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     return name.substring(0, index);
   }
 
-  String _downloadStatus(String name) {
-    if (_downloadUrls.containsKey(name)) return 'Direct';
-    if (_downloadUrlsNoVersion.containsKey(_noVersionKey(name))) return 'No Version';
-    return 'None';
+  _DownloadStatus _downloadStatus(String name) {
+    if (_downloadUrls.containsKey(name)) return _DownloadStatus.direct;
+    if (_downloadUrlsNoVersion.containsKey(_noVersionKey(name))) {
+      return _DownloadStatus.noVersion;
+    }
+    return _DownloadStatus.none;
+  }
+
+  String _downloadStatusLabel(_DownloadStatus status) {
+    final l10n = context.l10n;
+    switch (status) {
+      case _DownloadStatus.direct:
+        return l10n.downloadStatusDirect;
+      case _DownloadStatus.noVersion:
+        return l10n.downloadStatusNoVersion;
+      case _DownloadStatus.none:
+        return l10n.downloadStatusNone;
+    }
   }
 
   IconData _downloadIcon(String name) {
     final status = _downloadStatus(name);
     switch (status) {
-      case 'Direct':
+      case _DownloadStatus.direct:
         return Icons.cloud_done;
-      case 'No Version':
+      case _DownloadStatus.noVersion:
         return Icons.cloud_download;
       default:
         return Icons.block;
@@ -447,9 +469,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   Color _downloadColor(String name) {
     final status = _downloadStatus(name);
     switch (status) {
-      case 'Direct':
+      case _DownloadStatus.direct:
         return Colors.green;
-      case 'No Version':
+      case _DownloadStatus.noVersion:
         return Colors.orange;
       default:
         return Colors.grey;
@@ -457,10 +479,11 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   }
 
   String _resolvedDisplay(String name) {
+    final l10n = context.l10n;
     final resolved = _resolved[name];
-    if (resolved == null || resolved == 'missing') return 'missing';
+    if (resolved == null || resolved == 'missing') return l10n.missingStatus;
     if (resolved.endsWith(r'$')) {
-      return '${resolved.substring(0, resolved.length - 1)} (closest)';
+      return l10n.closestMatch(resolved.substring(0, resolved.length - 1));
     }
     return resolved;
   }
@@ -513,18 +536,19 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   }
 
   Future<void> _downloadSelected() async {
+    final l10n = context.l10n;
     final name = _selectedVar;
     if (name == null) {
-      _showSnackBar('Please select a missing var first.');
+      _showSnackBar(l10n.missingSelectFirst);
       return;
     }
     if (!_hasHubLinks) {
-      _showSnackBar('Please click "Fetch Hub Links" first to get download URLs.');
+      _showSnackBar(l10n.missingFetchHubLinksFirst);
       return;
     }
     final url = _downloadUrls[name] ?? _downloadUrlsNoVersion[_noVersionKey(name)];
     if (url == null || url.isEmpty) {
-      _showSnackBar('No download URL available for the selected var.');
+      _showSnackBar(l10n.missingNoDownloadUrlForSelected);
       return;
     }
     await _runJob('hub_download_all', {
@@ -532,12 +556,13 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
         {'url': url, 'name': name},
       ],
     });
-    _showSnackBar('Added 1 download.');
+    _showSnackBar(l10n.missingAddedDownload);
   }
 
   Future<void> _downloadAll() async {
+    final l10n = context.l10n;
     if (!_hasHubLinks) {
-      _showSnackBar('Please click "Fetch Hub Links" first to get download URLs.');
+      _showSnackBar(l10n.missingFetchHubLinksFirst);
       return;
     }
     final items = <Map<String, String>>[];
@@ -555,11 +580,11 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
       items.add({'url': url, 'name': entry.key});
     }
     if (items.isEmpty) {
-      _showSnackBar('No download URLs available.');
+      _showSnackBar(l10n.missingNoDownloadUrlsAvailable);
       return;
     }
     await _runJob('hub_download_all', {'items': items});
-    _showSnackBar('Added ${items.length} downloads.');
+    _showSnackBar(l10n.missingAddedDownloads(items.length));
   }
 
   void _setDraftLink(String name, String value) {
@@ -684,7 +709,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Link changes applied: $total total, $created created, $skipped skipped, $failed failed.',
+          context.l10n.linkChangesApplied(total, created, skipped, failed),
         ),
       ),
     );
@@ -706,8 +731,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   }
 
   Future<void> _loadMap() async {
+    final l10n = context.l10n;
     final file = await openFile(acceptedTypeGroups: [
-      const XTypeGroup(label: 'Text', extensions: ['txt'])
+      XTypeGroup(label: l10n.textFileTypeLabel, extensions: const ['txt'])
     ]);
     if (file == null) return;
     final client = ref.read(backendClientProvider);
@@ -741,11 +767,11 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(context.l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('OK'),
+              child: Text(context.l10n.commonOk),
             ),
           ],
         );
@@ -755,6 +781,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final filtered = _filteredEntries;
     final creators = _viewEntries
         .map((entry) => entry.displayName.split('.').first)
@@ -775,16 +802,28 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     final suggestion = selectedVar == null ? null : _suggestedLink(selectedVar);
     final suggestionLabel = suggestion == null
         ? '-'
-        : '$suggestion${_suggestedIsClosest(selectedVar!) ? ' (closest)' : ''}';
+        : _suggestedIsClosest(selectedVar!)
+            ? l10n.closestMatch(suggestion)
+            : suggestion;
     final linkStatusLabel =
         selectedVar == null ? '-' : _linkStatusLabel(selectedVar);
     final linkStatusColor =
         selectedVar == null ? Colors.grey : _linkStatusColor(selectedVar);
     final hasPendingChanges = pendingCount > 0;
     final hasDrafts = _draftLinkMap.isNotEmpty;
+    final appliedDisplay = selectedVar == null
+        ? '-'
+        : isBroken
+            ? l10n.linkStatusBroken
+            : (appliedLink.isEmpty ? '-' : appliedLink);
+    final draftDisplay = selectedVar == null
+        ? '-'
+        : hasDraft
+            ? (draftLink.isEmpty ? l10n.draftClearLabel : draftLink)
+            : '-';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Missing Dependencies')),
+      appBar: AppBar(title: Text(l10n.missingDependenciesTitle)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -800,9 +839,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           Expanded(
                             child: TextField(
                               controller: _searchController,
-                              decoration: const InputDecoration(
-                                labelText: 'Filter',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: l10n.commonFilter,
+                                border: const OutlineInputBorder(),
                               ),
                               onChanged: (_) => _ensureSelection(),
                             ),
@@ -811,10 +850,10 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           SizedBox(
                             width: 220,
                             child: LazyDropdownField(
-                              label: 'Creator',
+                              label: l10n.creatorLabel,
                               value: _creatorFilter.isEmpty ? 'ALL' : _creatorFilter,
                               allValue: 'ALL',
-                              allLabel: 'All creators',
+                              allLabel: l10n.allCreators,
                               optionsLoader: (queryText, offset, limit) async {
                                 final needle = queryText.trim().toLowerCase();
                                 final matches = creators
@@ -848,10 +887,12 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           const SizedBox(width: 12),
                           DropdownButton<String>(
                             value: _versionFilter,
-                            items: const [
+                            items: [
                               DropdownMenuItem(
-                                  value: 'ignore', child: Text('Ignore version mismatch')),
-                              DropdownMenuItem(value: 'all', child: Text('All missing vars')),
+                                  value: 'ignore',
+                                  child: Text(l10n.ignoreVersionMismatch)),
+                              DropdownMenuItem(
+                                  value: 'all', child: Text(l10n.allMissingVars)),
                             ],
                             onChanged: (value) {
                               if (value == null) return;
@@ -863,7 +904,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           ),
                           const SizedBox(width: 12),
                           Tooltip(
-                            message: 'Show entries that already have link substitutions.',
+                            message: l10n.includeLinkedTooltip,
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -876,7 +917,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                     _ensureSelection();
                                   },
                                 ),
-                                const Text('Include Linked'),
+                                Text(l10n.includeLinkedLabel),
                               ],
                             ),
                           ),
@@ -888,7 +929,9 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: Row(
                         children: [
-                          Text('Row ${filtered.isEmpty ? 0 : _selectedIndex + 1} / ${filtered.length}'),
+                          Text(l10n.rowPosition(
+                              filtered.isEmpty ? 0 : _selectedIndex + 1,
+                              filtered.length)),
                           const Spacer(),
                           IconButton(
                             onPressed: filtered.isEmpty || _selectedIndex <= 0
@@ -921,11 +964,11 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       child: Row(
                         children: [
-                          Text('Applied $appliedCount'),
+                          Text(l10n.appliedCount(appliedCount)),
                           const SizedBox(width: 12),
-                          Text('Draft $pendingCount'),
+                          Text(l10n.draftCount(pendingCount)),
                           const SizedBox(width: 12),
-                          Text('Broken $brokenCount'),
+                          Text(l10n.brokenCount(brokenCount)),
                           if (_loadingLinks) ...[
                             const SizedBox(width: 12),
                             const SizedBox(
@@ -942,10 +985,19 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                       color: Colors.grey.shade100,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       child: Row(
-                        children: const [
-                          Expanded(flex: 3, child: Text('Missing Var', style: TextStyle(fontWeight: FontWeight.w600))),
-                          Expanded(flex: 3, child: Text('Substitute', style: TextStyle(fontWeight: FontWeight.w600))),
-                          SizedBox(width: 32, child: Text('DL', style: TextStyle(fontWeight: FontWeight.w600))),
+                        children: [
+                          Expanded(
+                              flex: 3,
+                              child: Text(l10n.missingVarHeader,
+                                  style: const TextStyle(fontWeight: FontWeight.w600))),
+                          Expanded(
+                              flex: 3,
+                              child: Text(l10n.substituteHeader,
+                                  style: const TextStyle(fontWeight: FontWeight.w600))),
+                          SizedBox(
+                              width: 32,
+                              child: Text(l10n.downloadHeaderShort,
+                                  style: const TextStyle(fontWeight: FontWeight.w600))),
                         ],
                       ),
                     ),
@@ -1024,15 +1076,20 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Text('Details', style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text(l10n.detailsTitle,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
-                          Text('Selected: ${selectedVar ?? '-'}'),
+                          Text(l10n.selectedLabel(selectedVar ?? '-')),
                           const SizedBox(height: 4),
-                          Text('Resolved: ${selectedVar == null ? '-' : _resolvedDisplay(selectedVar)}'),
+                          Text(l10n.resolvedLabel(
+                              selectedVar == null ? '-' : _resolvedDisplay(selectedVar))),
                           const SizedBox(height: 4),
-                          Text('Download: ${selectedVar == null ? '-' : _downloadStatus(selectedVar)}'),
+                          Text(l10n.downloadLabel(
+                              selectedVar == null
+                                  ? '-'
+                                  : _downloadStatusLabel(_downloadStatus(selectedVar)))),
                           const SizedBox(height: 4),
-                          Text('Link status: $linkStatusLabel',
+                          Text(l10n.linkStatusLabel(linkStatusLabel),
                               style: TextStyle(color: linkStatusColor)),
                           if (_loadingLinks)
                             const Padding(
@@ -1040,40 +1097,40 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                               child: LinearProgressIndicator(minHeight: 2),
                             ),
                           const Divider(height: 16),
-                          const Text('Link Substitution',
-                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text(l10n.linkSubstitutionTitle,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 6),
                           Text(
-                            'Links create symlinks in ___MissingVarLink___ to substitute missing dependencies.',
+                            l10n.linkSubstitutionDescription,
                             style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Applied: ${selectedVar == null ? '-' : (isBroken ? 'broken link' : (appliedLink.isEmpty ? '-' : appliedLink))}',
+                            l10n.appliedLinkLabel(appliedDisplay),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Draft: ${selectedVar == null ? '-' : (hasDraft ? (draftLink.isEmpty ? '(clear)' : draftLink) : '-')}',
+                            l10n.draftLinkLabel(draftDisplay),
                           ),
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Expanded(child: Text('Suggestion: $suggestionLabel')),
+                              Expanded(child: Text(l10n.suggestionLabel(suggestionLabel))),
                               Tooltip(
-                                message: 'Use suggested resolved var as draft link.',
+                                message: l10n.useSuggestionTooltip,
                                 child: TextButton(
                                   onPressed: suggestion == null ? null : _applySuggestedForSelected,
-                                  child: const Text('Use'),
+                                  child: Text(l10n.commonUse),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
                           LazyDropdownField(
-                            label: 'Find target',
+                            label: l10n.findTargetLabel,
                             value: _pickerValue,
                             allValue: '',
-                            allLabel: 'Pick target',
+                            allLabel: l10n.pickTargetLabel,
                             pageSize: 15,
                             minQueryLength: 2,
                             optionsLoader: _loadLinkOptions,
@@ -1087,7 +1144,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           Row(
                             children: [
                               Tooltip(
-                                message: 'Limit picker to same creator/package as missing var.',
+                                message: l10n.limitSamePackageTooltip,
                                 child: Checkbox(
                                   value: _linkFilterSamePackage,
                                   onChanged: (value) {
@@ -1097,17 +1154,17 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                   },
                                 ),
                               ),
-                              const Expanded(
-                                child: Text('Limit to same creator/package'),
+                              Expanded(
+                                child: Text(l10n.limitSamePackageLabel),
                               ),
                             ],
                           ),
                           const SizedBox(height: 4),
                           TextField(
                             controller: _linkController,
-                            decoration: const InputDecoration(
-                              labelText: 'Target Var',
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              labelText: l10n.targetVarLabel,
+                              border: const OutlineInputBorder(),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -1115,7 +1172,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             children: [
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Save draft link for selected missing var.',
+                                  message: l10n.setDraftTooltip,
                                   child: FilledButton(
                                     onPressed: selectedVar == null
                                         ? null
@@ -1125,14 +1182,14 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                               _pickerValue = _linkController.text.trim();
                                             });
                                           },
-                                    child: const Text('Set Draft'),
+                                    child: Text(l10n.setDraftLabel),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Clear draft link for selected var (will remove).',
+                                  message: l10n.clearDraftTooltip,
                                   child: OutlinedButton(
                                     onPressed: selectedVar == null
                                         ? null
@@ -1143,7 +1200,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                               _pickerValue = '';
                                             });
                                           },
-                                    child: const Text('Clear Draft'),
+                                    child: Text(l10n.clearDraftLabel),
                                   ),
                                 ),
                               ),
@@ -1154,25 +1211,25 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             children: [
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Revert draft to currently applied link.',
+                                  message: l10n.revertDraftTooltip,
                                   child: OutlinedButton(
                                     onPressed: selectedVar == null || !hasDraft
                                         ? null
                                         : () => _revertDraft(selectedVar),
-                                    child: const Text('Revert Draft'),
+                                    child: Text(l10n.revertDraftLabel),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Apply draft target to all missing vars in same package.',
+                                  message: l10n.applyToPackageTooltip,
                                   child: OutlinedButton(
                                     onPressed: selectedVar == null ||
                                             _linkController.text.trim().isEmpty
                                         ? null
                                         : _applyDraftToPackage,
-                                    child: const Text('Apply to Package'),
+                                    child: Text(l10n.applyToPackageLabel),
                                   ),
                                 ),
                               ),
@@ -1183,21 +1240,21 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             children: [
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Fill drafts using best resolved matches.',
+                                  message: l10n.autoFillResolvedTooltip,
                                   child: OutlinedButton(
                                     onPressed: _autoFillResolved,
-                                    child: const Text('Auto-fill Resolved'),
+                                    child: Text(l10n.autoFillResolvedLabel),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Create/update/remove symlinks from draft changes.',
+                                  message: l10n.applyLinkChangesTooltip,
                                   child: FilledButton(
                                     onPressed:
                                         hasPendingChanges ? _applyLinkChanges : null,
-                                    child: const Text('Apply Link Changes'),
+                                    child: Text(l10n.applyLinkChangesLabel),
                                   ),
                                 ),
                               ),
@@ -1208,20 +1265,20 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             children: [
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Save current effective map to a text file.',
+                                  message: l10n.saveMapTooltip,
                                   child: OutlinedButton(
                                     onPressed: _saveMap,
-                                    child: const Text('Save Map'),
+                                    child: Text(l10n.saveMapLabel),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Tooltip(
-                                  message: 'Load a map file as drafts for this list.',
+                                  message: l10n.loadMapTooltip,
                                   child: OutlinedButton(
                                     onPressed: _loadMap,
-                                    child: const Text('Load Map'),
+                                    child: Text(l10n.loadMapLabel),
                                   ),
                                 ),
                               ),
@@ -1229,15 +1286,15 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           ),
                           const SizedBox(height: 8),
                           Tooltip(
-                            message: 'Discard all draft changes.',
+                            message: l10n.discardDraftsTooltip,
                             child: OutlinedButton(
                               onPressed: hasDrafts ? _discardDrafts : null,
-                              child: const Text('Discard Drafts'),
+                              child: Text(l10n.discardDraftsLabel),
                             ),
                           ),
                           const Divider(height: 16),
                           Tooltip(
-                            message: 'Search the missing var on the web.',
+                            message: l10n.googleSearchTooltip,
                             child: OutlinedButton(
                               onPressed: selectedVar == null
                                   ? null
@@ -1246,49 +1303,49 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                           selectedVar.replaceAll('.latest', '.1');
                                       await _runJob('open_url', {
                                         'url':
-                                            'https://www.google.com/search?q=$search var',
+                                        'https://www.google.com/search?q=$search var',
                                       });
                                     },
-                              child: const Text('Google Search'),
+                              child: Text(l10n.googleSearchLabel),
                             ),
                           ),
                           const SizedBox(height: 8),
                           Tooltip(
-                            message: 'Query hub for download links for missing vars.',
+                            message: l10n.fetchHubLinksTooltip,
                             child: OutlinedButton(
                               onPressed: _fetchDownload,
-                              child: const Text('Fetch Hub Links'),
+                              child: Text(l10n.fetchHubLinksLabel),
                             ),
                           ),
                           const SizedBox(height: 8),
                           Tooltip(
-                            message: 'Download link for selected missing var if available.',
+                            message: l10n.downloadSelectedTooltip,
                             child: OutlinedButton(
                               onPressed: _downloadSelected,
-                              child: const Text('Download Selected'),
+                              child: Text(l10n.downloadSelectedLabel),
                             ),
                           ),
                           const SizedBox(height: 8),
                           Tooltip(
-                            message: 'Queue downloads for all missing vars with links.',
+                            message: l10n.downloadAllTooltip,
                             child: OutlinedButton(
                               onPressed: _downloadAll,
-                              child: const Text('Download All'),
+                              child: Text(l10n.downloadAllLabel),
                             ),
                           ),
                           const Divider(height: 16),
                           Tooltip(
-                            message: 'Export installed vars to a text file.',
+                            message: l10n.exportInstalledTooltip,
                             child: OutlinedButton(
                               onPressed: () async {
-                                final path = await _askText(context, 'Export path',
+                                final path = await _askText(context, l10n.exportPathTitle,
                                     hint: 'installed_vars.txt');
                                 if (path == null || path.trim().isEmpty) return;
                                 await _runJob('vars_export_installed', {
                                   'path': path.trim(),
                                 });
                               },
-                              child: const Text('Export Installed'),
+                              child: Text(l10n.exportInstalledLabel),
                             ),
                           ),
                         ],
@@ -1302,7 +1359,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Dependents', style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text(l10n.dependentsTitle,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
                           if (_loadingDependents) const LinearProgressIndicator(minHeight: 2),
                           ..._dependents.map(
@@ -1318,14 +1376,14 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                       .read(navIndexProvider.notifier)
                                       .setIndex(0);
                                 },
-                                child: const Text('Select'),
+                                child: Text(l10n.commonSelect),
                               ),
                             ),
                           ),
                           if (_dependents.isEmpty)
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.symmetric(vertical: 8),
-                              child: Text('No dependents'),
+                              child: Text(l10n.noDependents),
                             ),
                         ],
                       ),
@@ -1338,8 +1396,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Dependent Saves',
-                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text(l10n.dependentSavesTitle,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
                           ..._dependentSaves.map(
                             (path) => ListTile(
@@ -1354,14 +1412,14 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                     'path': normalized.replaceAll('/', '\\'),
                                   });
                                 },
-                                child: const Text('Locate'),
+                                child: Text(l10n.commonLocate),
                               ),
                             ),
                           ),
                           if (_dependentSaves.isEmpty)
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.symmetric(vertical: 8),
-                              child: Text('No dependent saves'),
+                              child: Text(l10n.noDependentSaves),
                             ),
                         ],
                       ),

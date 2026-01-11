@@ -13,6 +13,14 @@ enum AppThemeType {
 }
 
 class AppTheme {
+  static const _appFontFamily = 'Inter';
+  static const _cjkFallbackFonts = <String>[
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'SimHei',
+    'Noto Sans CJK SC',
+    'PingFang SC',
+  ];
   // Default theme colors (原有主题)
   static const _defaultPrimary = Color(0xFF1F5E5B);
   static const _defaultSecondary = Color(0xFFB86B2B);
@@ -162,7 +170,8 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: background,
-      fontFamily: 'Bahnschrift',
+      fontFamily: _appFontFamily,
+      fontFamilyFallback: _cjkFallbackFonts,
     );
 
     final cardTheme = CardThemeData(
@@ -239,7 +248,8 @@ class AppTheme {
     return base.copyWith(
       textTheme: base.textTheme.copyWith(
         headlineSmall: base.textTheme.headlineSmall?.copyWith(
-          fontFamily: 'Cambria',
+          fontFamily: _appFontFamily,
+          fontFamilyFallback: _cjkFallbackFonts,
           fontWeight: FontWeight.w600,
         ),
         titleLarge: base.textTheme.titleLarge?.copyWith(

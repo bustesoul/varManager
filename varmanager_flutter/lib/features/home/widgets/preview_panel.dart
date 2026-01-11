@@ -11,6 +11,7 @@ import '../providers.dart';
 import '../../uninstall_vars/uninstall_vars_page.dart';
 import 'preview_dialog.dart';
 import '../../../widgets/preview_placeholder.dart';
+import '../../../l10n/l10n.dart';
 
 class PreviewPanel extends ConsumerStatefulWidget {
   const PreviewPanel({super.key});
@@ -199,10 +200,11 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
         return;
       }
     } else {
+      final l10n = context.l10n;
       final confirmed = await _confirmAction(
         context,
-        'Install Var',
-        '${item.varName} will be installed. Continue?',
+        l10n.installVarTitle,
+        l10n.installVarConfirm(item.varName),
       );
       if (!confirmed) return;
       await _runJob('vars_toggle_install', args: {
@@ -223,17 +225,18 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
+        final l10n = context.l10n;
         return AlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('OK'),
+              child: Text(l10n.commonOk),
             ),
           ],
         );
@@ -244,6 +247,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final focusedVar = ref.watch(focusedVarProvider);
     if (focusedVar != null) {
       ref.listen<AsyncValue<List<PreviewItem>>>(
@@ -271,8 +275,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
           data: (items) {
             if (items.isEmpty) {
               final message = hasSelection
-                  ? 'No preview entries for selected var'
-                  : 'Click on a var to load previews';
+                  ? l10n.noPreviewEntriesForVar
+                  : l10n.clickVarToLoadPreviews;
               return Center(child: Text(message));
             }
             final filtered = items.where((item) {
@@ -367,13 +371,15 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Center(child: Text('Preview load failed: $err')),
+          error: (err, _) =>
+              Center(child: Text(l10n.previewLoadFailed(err.toString()))),
         ),
       ),
     );
   }
 
   Widget _buildControls(int totalItems) {
+    final l10n = context.l10n;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -381,16 +387,17 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
       children: [
         DropdownButton<String>(
           value: _previewType,
-          items: const [
-            DropdownMenuItem(value: 'all', child: Text('All types')),
-            DropdownMenuItem(value: 'scenes', child: Text('Scenes')),
-            DropdownMenuItem(value: 'looks', child: Text('Looks')),
-            DropdownMenuItem(value: 'clothing', child: Text('Clothing')),
-            DropdownMenuItem(value: 'hairstyle', child: Text('Hairstyle')),
-            DropdownMenuItem(value: 'assets', child: Text('Assets')),
-            DropdownMenuItem(value: 'morphs', child: Text('Morphs')),
-            DropdownMenuItem(value: 'pose', child: Text('Pose')),
-            DropdownMenuItem(value: 'skin', child: Text('Skin')),
+          items: [
+            DropdownMenuItem(value: 'all', child: Text(l10n.allTypesLabel)),
+            DropdownMenuItem(value: 'scenes', child: Text(l10n.categoryScenes)),
+            DropdownMenuItem(value: 'looks', child: Text(l10n.categoryLooks)),
+            DropdownMenuItem(value: 'clothing', child: Text(l10n.categoryClothing)),
+            DropdownMenuItem(
+                value: 'hairstyle', child: Text(l10n.categoryHairstyle)),
+            DropdownMenuItem(value: 'assets', child: Text(l10n.categoryAssets)),
+            DropdownMenuItem(value: 'morphs', child: Text(l10n.categoryMorphs)),
+            DropdownMenuItem(value: 'pose', child: Text(l10n.categoryPose)),
+            DropdownMenuItem(value: 'skin', child: Text(l10n.categorySkin)),
           ],
           onChanged: (value) {
             if (value == null) return;
@@ -402,7 +409,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
           },
         ),
         FilterChip(
-          label: const Text('Loadable'),
+          label: Text(l10n.loadableLabel),
           selected: _previewLoadableOnly,
           onSelected: (value) {
             setState(() {
@@ -417,7 +424,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
           items: const [12, 24, 36, 48]
               .map((value) => DropdownMenuItem(
                     value: value,
-                    child: Text('Per page $value'),
+                    child: Text(l10n.perPageLabel(value)),
                   ))
               .toList(),
           onChanged: (value) {
@@ -430,12 +437,13 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
           },
         ),
         const SizedBox(width: 8),
-        Text('Items $totalItems'),
+        Text(l10n.itemsCount(totalItems)),
       ],
     );
   }
 
   Widget _buildNavigation(int? selectedIndex, int totalItems, int currentPage, int totalPages) {
+    final l10n = context.l10n;
     return Row(
       children: [
         IconButton(
@@ -452,8 +460,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
         ),
         Text(
           selectedIndex == null
-              ? 'Item 0/0'
-              : 'Item ${selectedIndex + 1}/$totalItems',
+              ? l10n.itemPosition(0, 0)
+              : l10n.itemPosition(selectedIndex + 1, totalItems),
         ),
         IconButton(
           onPressed: totalItems == 0
@@ -468,7 +476,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
           icon: const Icon(Icons.last_page),
         ),
         const Spacer(),
-        Text('Page $currentPage/$totalPages'),
+        Text(l10n.pageOf(currentPage, totalPages)),
         IconButton(
           onPressed: currentPage > 1
               ? () => _setPreviewPage(1, totalItems)
@@ -506,7 +514,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     required void Function(int index) onOpenPreview,
   }) {
     if (items.isEmpty) {
-      return const Center(child: Text('No previews after filters'));
+      return Center(child: Text(context.l10n.noPreviewsAfterFilters));
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -591,9 +599,10 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     PreviewItem? item, {
     VoidCallback? onOpenPreview,
   }) {
+    final l10n = context.l10n;
     final isBusy = ref.watch(jobBusyProvider);
     if (item == null) {
-      return const Center(child: Text('Select a preview'));
+      return Center(child: Text(l10n.selectPreviewHint));
     }
     final detailCacheWidth =
         (360 * MediaQuery.of(context).devicePixelRatio).round();
@@ -629,7 +638,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
-              Text('${_sceneTitle(item)} (${item.atomType})'),
+              Text(l10n.previewTitleWithType(_sceneTitle(item), item.atomType)),
               const SizedBox(height: 4),
               Text(
                 item.scenePath,
@@ -647,7 +656,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
                     icon: Icon(
                       item.installed ? Icons.delete_outline : Icons.download,
                     ),
-                    label: Text(item.installed ? 'Uninstall' : 'Install'),
+                    label: Text(
+                        item.installed ? l10n.uninstallLabel : l10n.installLabel),
                   ),
                   OutlinedButton(
                     onPressed: isBusy
@@ -656,7 +666,7 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
                             final jobArgs = {'var_name': item.varName};
                             await _runJob('vars_locate', args: jobArgs);
                           },
-                    child: const Text('Locate'),
+                    child: Text(l10n.commonLocate),
                   ),
                 ],
               ),

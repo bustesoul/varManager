@@ -9,6 +9,7 @@ class AppConfig {
     this.vamExec,
     this.downloaderSavePath,
     this.uiTheme,
+    this.uiLanguage,
   });
 
   final String listenHost;
@@ -20,6 +21,7 @@ class AppConfig {
   final String? vamExec;
   final String? downloaderSavePath;
   final String? uiTheme;
+  final String? uiLanguage;
 
   String get baseUrl => 'http://$listenHost:$listenPort';
 
@@ -34,6 +36,7 @@ class AppConfig {
       vamExec: json['vam_exec'] as String?,
       downloaderSavePath: json['downloader_save_path'] as String?,
       uiTheme: json['ui_theme'] as String?,
+      uiLanguage: json['ui_language'] as String?,
     );
   }
 
@@ -48,6 +51,7 @@ class AppConfig {
       'vam_exec': vamExec,
       'downloader_save_path': downloaderSavePath,
       'ui_theme': uiTheme,
+      'ui_language': uiLanguage,
     };
   }
 
@@ -61,6 +65,7 @@ class AppConfig {
     String? vamExec,
     String? downloaderSavePath,
     String? uiTheme,
+    String? uiLanguage,
   }) {
     return AppConfig(
       listenHost: listenHost ?? this.listenHost,
@@ -72,6 +77,7 @@ class AppConfig {
       vamExec: vamExec ?? this.vamExec,
       downloaderSavePath: downloaderSavePath ?? this.downloaderSavePath,
       uiTheme: uiTheme ?? this.uiTheme,
+      uiLanguage: uiLanguage ?? this.uiLanguage,
     );
   }
 }

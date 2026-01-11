@@ -94,6 +94,8 @@ pub struct Config {
     pub(crate) download: DownloadConfig,
     #[serde(default)]
     pub(crate) ui_theme: Option<String>,
+    #[serde(default)]
+    pub(crate) ui_language: Option<String>,
 }
 
 impl Default for Config {
@@ -110,6 +112,7 @@ impl Default for Config {
             image_cache: ImageCacheConfig::default(),
             download: DownloadConfig::default(),
             ui_theme: None,
+            ui_language: None,
         }
     }
 }

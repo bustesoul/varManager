@@ -220,6 +220,7 @@ pub(crate) struct UpdateConfigRequest {
     downloader_save_path: Option<String>,
     image_cache: Option<crate::app::ImageCacheConfig>,
     ui_theme: Option<String>,
+    ui_language: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -696,6 +697,9 @@ fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Con
     }
     if req.ui_theme.is_some() {
         next.ui_theme = normalize_optional(req.ui_theme);
+    }
+    if req.ui_language.is_some() {
+        next.ui_language = normalize_optional(req.ui_language);
     }
     Ok(next)
 }

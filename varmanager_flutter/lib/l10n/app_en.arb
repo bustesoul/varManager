@@ -1,0 +1,693 @@
+{
+  "@@locale": "en",
+  "commonOk": "OK",
+  "commonCancel": "Cancel",
+  "commonSave": "Save",
+  "commonClear": "Clear",
+  "commonSelectAll": "Select All",
+  "commonSelect": "Select",
+  "commonSearch": "Search",
+  "commonRefresh": "Refresh",
+  "commonBrowse": "Browse",
+  "commonClose": "Close",
+  "commonDelete": "Delete",
+  "commonAdd": "Add",
+  "commonDetails": "Details",
+  "commonLocate": "Locate",
+  "commonAnalyze": "Analyze",
+  "commonLoad": "Load",
+  "commonUse": "Use",
+  "commonConfirm": "Confirm",
+  "commonRetry": "Retry",
+  "commonFilter": "Filter",
+  "navHome": "Home",
+  "navScenes": "Scenes",
+  "navHub": "Hub",
+  "navSettings": "Settings",
+  "jobFailed": "Job failed: {kind} ({message})",
+  "backendReady": "Backend ready",
+  "backendError": "Backend error",
+  "backendStarting": "Starting backend",
+  "backendStartingHint": "Starting backend...",
+  "backendStartFailed": "Backend start failed: {message}",
+  "jobLogsTitle": "Job Logs",
+  "noMatches": "No matches",
+  "imagePreviewPrevious": "Previous",
+  "imagePreviewNext": "Next",
+  "imagePreviewScroll": "Scroll",
+  "downloadManagerTitle": "Download Manager",
+  "downloadSelectionCount": "{count} selected",
+  "downloadNoSelection": "No selection",
+  "downloadNoActive": "No active downloads",
+  "downloadItemsProgress": "Items {completed}/{total}",
+  "downloadActionPause": "Pause",
+  "downloadActionResume": "Resume",
+  "downloadActionRemoveRecord": "Remove Record",
+  "downloadActionDeleteFile": "Delete File",
+  "downloadStatusPaused": "Paused",
+  "downloadStatusDownloading": "Downloading",
+  "downloadStatusQueued": "Queued",
+  "downloadStatusFailed": "Failed",
+  "downloadStatusCompleted": "Completed",
+  "confirmDeleteTitle": "Confirm Delete",
+  "confirmDeleteMessage": "This will permanently delete the file. Are you sure?",
+  "settingsSectionUi": "UI",
+  "settingsSectionListen": "Listen & Logs",
+  "settingsSectionPaths": "Paths",
+  "settingsSectionAbout": "About",
+  "themeLabel": "Theme",
+  "themeDefault": "Default",
+  "themeOcean": "Ocean Blue",
+  "themeForest": "Forest Green",
+  "themeRose": "Rose",
+  "themeDark": "Dark",
+  "languageLabel": "Language",
+  "languageEnglish": "English",
+  "languageChinese": "中文",
+  "listenHostLabel": "Listen host",
+  "listenPortLabel": "Listen port",
+  "logLevelLabel": "Log level",
+  "jobConcurrencyLabel": "Job concurrency",
+  "varspathLabel": "varspath",
+  "vampathLabel": "vampath",
+  "vamExecLabel": "vam_exec",
+  "downloaderSavePathLabel": "Downloader save path",
+  "chooseVamHint": "choose virt_a_mate",
+  "chooseAddonPackagesHint": "choose AddonPackages",
+  "appVersionLabel": "App version",
+  "backendVersionLabel": "Backend version",
+  "configSavedRestartHint": "Config saved; listen_host/port applies after restart.",
+  "searchVarPackageLabel": "Search var/package",
+  "creatorLabel": "Creator",
+  "allCreators": "All creators",
+  "statusAllLabel": "All status",
+  "statusInstalled": "Installed",
+  "statusNotInstalled": "Not installed",
+  "sortMetaDate": "Meta date",
+  "sortVarDate": "Var date",
+  "sortVarName": "Var name",
+  "sortCreator": "Creator",
+  "sortPackage": "Package",
+  "sortSize": "Size",
+  "sortDesc": "Desc",
+  "sortAsc": "Asc",
+  "perPageLabel": "Per page {value}",
+  "selectedCount": "Selected {count}",
+  "selectPageTooltip": "Select all items on the current page.",
+  "selectPageLabel": "Select page",
+  "invertPageTooltip": "Invert selection on the current page.",
+  "invertPageLabel": "Invert page",
+  "clearAllTooltip": "Clear all selected items.",
+  "clearAllLabel": "Clear all",
+  "resetFiltersTooltip": "Reset all filters to defaults.",
+  "resetFiltersLabel": "Reset filters",
+  "showAdvancedTooltip": "Show advanced filters.",
+  "hideAdvancedTooltip": "Hide advanced filters.",
+  "advancedFiltersLabel": "Advanced filters",
+  "hideAdvancedLabel": "Hide advanced",
+  "packageFilterLabel": "Package filter",
+  "versionFilterLabel": "Version filter",
+  "enabledAllLabel": "All enabled",
+  "enabledOnlyLabel": "Enabled only",
+  "disabledOnlyLabel": "Disabled only",
+  "minSizeLabel": "Min size (MB)",
+  "maxSizeLabel": "Max size (MB)",
+  "minDepsLabel": "Min deps",
+  "maxDepsLabel": "Max deps",
+  "actionsTitle": "Actions",
+  "actionGroupCore": "Core",
+  "actionGroupCoreTooltip": "Core actions and dependency checks.",
+  "actionGroupMaintenance": "Maintenance",
+  "actionGroupMaintenanceTooltip": "Cleanup and maintenance jobs.",
+  "updateDbLabel": "Update DB",
+  "updateDbTooltip": "Scan vars, extract previews, and update the database.",
+  "startVamLabel": "Start VaM",
+  "startVamTooltip": "Launch the VaM application.",
+  "prepareSavesLabel": "Prepare Saves",
+  "prepareSavesTooltip": "Open the saves preparation and dependency tools.",
+  "missingDepsSourceTooltip": "Choose the source used to detect missing dependencies.",
+  "missingDepsSourceLabel": "Missing deps source",
+  "missingDepsSourceInstalled": "Installed packages",
+  "missingDepsSourceAll": "All packages",
+  "missingDepsSourceFiltered": "Filtered list",
+  "missingDepsSourceSaves": "Saves folder",
+  "missingDepsSourceLog": "Log (output_log.txt)",
+  "runMissingDepsLabel": "Run Missing Deps",
+  "runMissingDepsTooltip": "Analyze missing dependencies and open the results.",
+  "rebuildLinksLabel": "Rebuild Links",
+  "rebuildLinksTooltip": "Rebuild symlinks after changing the Vars source directory.",
+  "fixPreviewLabel": "Fix Preview",
+  "fixPreviewTooltip": "Re-extract missing preview images.",
+  "staleVarsLabel": "Stale Vars",
+  "staleVarsTooltip": "Move old versions not referenced by dependencies.",
+  "oldVersionsLabel": "Old Versions",
+  "oldVersionsTooltip": "Find or manage old package versions.",
+  "totalItems": "Total {count} items",
+  "loadFailed": "Load failed: {error}",
+  "installSelectedLabel": "Install Selected",
+  "installSelectedTooltip": "Install selected vars and dependencies.",
+  "uninstallSelectedLabel": "Uninstall Selected",
+  "uninstallSelectedTooltip": "Uninstall selected vars and affected items.",
+  "deleteSelectedLabel": "Delete Selected",
+  "deleteSelectedTooltip": "Delete selected vars and affected items.",
+  "moveLinksLabel": "Move Links",
+  "moveLinksTooltip": "Move selected symlink entries to a target folder.",
+  "targetDirLabel": "Target dir",
+  "exportInstalledLabel": "Export Installed",
+  "exportInstalledTooltip": "Export installed vars to a text file.",
+  "exportPathTitle": "Export path",
+  "installFromListLabel": "Install from List",
+  "installFromListTooltip": "Install vars from a text list.",
+  "installListPathLabel": "Install list path",
+  "packSwitchTitle": "Pack Switch",
+  "activeLabel": "Active",
+  "noSwitchesAvailable": "No switches available",
+  "activateLabel": "Activate",
+  "renameLabel": "Rename",
+  "newSwitchNameTitle": "New Switch Name",
+  "renameSwitchTitle": "Rename Switch",
+  "switchAlreadyExists": "Switch already exists",
+  "newNameMustBeDifferent": "New name must be different",
+  "switchNameAlreadyExists": "Target name already exists",
+  "deleteSwitchTitle": "Delete Switch",
+  "deleteSwitchConfirm": "Delete switch \"{name}\"?",
+  "presenceFilterLabel": "{label}: ",
+  "presenceAllLabel": "All",
+  "presenceHasLabel": "Has",
+  "presenceNoneLabel": "None",
+  "compactModeHint": "Window too small. Enlarge window to show preview panel.",
+  "categoryScenes": "Scenes",
+  "categoryLooks": "Looks",
+  "categoryClothing": "Clothing",
+  "categoryHairstyle": "Hairstyle",
+  "categoryAssets": "Assets",
+  "categoryMorphs": "Morphs",
+  "categoryPose": "Pose",
+  "categorySkin": "Skin",
+  "categoryHair": "Hair",
+  "categoryTextures": "Textures",
+  "categoryPlugins": "Plugins",
+  "categoryScripts": "Scripts",
+  "categorySubScene": "SubScene",
+  "categoryAppearance": "Appearance",
+  "categoryBreast": "Breast",
+  "categoryGlute": "Glute",
+  "clickVarToLoadPreviews": "Click on a var to load previews",
+  "noPreviewEntriesForVar": "No preview entries for selected var",
+  "previewLoadFailed": "Preview load failed: {error}",
+  "allTypesLabel": "All types",
+  "loadableLabel": "Loadable",
+  "itemsCount": "Items {count}",
+  "itemPosition": "Item {current}/{total}",
+  "noPreviewsAfterFilters": "No previews after filters",
+  "selectPreviewHint": "Select a preview",
+  "installVarTitle": "Install Var",
+  "installVarConfirm": "{varName} will be installed. Continue?",
+  "installLabel": "Install",
+  "uninstallLabel": "Uninstall",
+  "missingDependenciesTitle": "Missing Dependencies",
+  "ignoreVersionMismatch": "Ignore version mismatch",
+  "allMissingVars": "All missing vars",
+  "includeLinkedLabel": "Include Linked",
+  "includeLinkedTooltip": "Show entries that already have link substitutions.",
+  "rowPosition": "Row {current} / {total}",
+  "appliedCount": "Applied {count}",
+  "draftCount": "Draft {count}",
+  "brokenCount": "Broken {count}",
+  "missingVarHeader": "Missing Var",
+  "substituteHeader": "Substitute",
+  "downloadHeaderShort": "DL",
+  "detailsTitle": "Details",
+  "selectedLabel": "Selected: {value}",
+  "resolvedLabel": "Resolved: {value}",
+  "downloadLabel": "Download: {value}",
+  "linkStatusLabel": "Link status: {value}",
+  "linkSubstitutionTitle": "Link Substitution",
+  "linkSubstitutionDescription": "Links create symlinks in ___MissingVarLink___ to substitute missing dependencies.",
+  "appliedLinkLabel": "Applied: {value}",
+  "draftLinkLabel": "Draft: {value}",
+  "suggestionLabel": "Suggestion: {value}",
+  "useSuggestionTooltip": "Use suggested resolved var as draft link.",
+  "findTargetLabel": "Find target",
+  "pickTargetLabel": "Pick target",
+  "limitSamePackageLabel": "Limit to same creator/package",
+  "limitSamePackageTooltip": "Limit picker to same creator/package as missing var.",
+  "targetVarLabel": "Target Var",
+  "setDraftLabel": "Set Draft",
+  "setDraftTooltip": "Save draft link for selected missing var.",
+  "clearDraftLabel": "Clear Draft",
+  "clearDraftTooltip": "Clear draft link for selected var (will remove).",
+  "revertDraftLabel": "Revert Draft",
+  "revertDraftTooltip": "Revert draft to currently applied link.",
+  "applyToPackageLabel": "Apply to Package",
+  "applyToPackageTooltip": "Apply draft target to all missing vars in same package.",
+  "autoFillResolvedLabel": "Auto-fill Resolved",
+  "autoFillResolvedTooltip": "Fill drafts using best resolved matches.",
+  "applyLinkChangesLabel": "Apply Link Changes",
+  "applyLinkChangesTooltip": "Create/update/remove symlinks from draft changes.",
+  "saveMapLabel": "Save Map",
+  "saveMapTooltip": "Save current effective map to a text file.",
+  "loadMapLabel": "Load Map",
+  "loadMapTooltip": "Load a map file as drafts for this list.",
+  "discardDraftsLabel": "Discard Drafts",
+  "discardDraftsTooltip": "Discard all draft changes.",
+  "googleSearchLabel": "Google Search",
+  "googleSearchTooltip": "Search the missing var on the web.",
+  "fetchHubLinksLabel": "Fetch Hub Links",
+  "fetchHubLinksTooltip": "Query hub for download links for missing vars.",
+  "downloadSelectedLabel": "Download Selected",
+  "downloadSelectedTooltip": "Download link for selected missing var if available.",
+  "downloadAllLabel": "Download All",
+  "downloadAllTooltip": "Queue downloads for all missing vars with links.",
+  "dependentsTitle": "Dependents",
+  "noDependents": "No dependents",
+  "dependentSavesTitle": "Dependent Saves",
+  "noDependentSaves": "No dependent saves",
+  "linkStatusBroken": "Broken link",
+  "linkStatusRemove": "Remove link",
+  "linkStatusClear": "Clear link",
+  "linkStatusNew": "New link",
+  "linkStatusLinked": "Linked",
+  "linkStatusChanged": "Link changed",
+  "linkStatusNotLinked": "Not linked",
+  "downloadStatusDirect": "Direct",
+  "downloadStatusNoVersion": "No Version",
+  "downloadStatusNone": "None",
+  "missingSelectFirst": "Please select a missing var first.",
+  "missingFetchHubLinksFirst": "Please click \"Fetch Hub Links\" first to get download URLs.",
+  "missingNoDownloadUrlForSelected": "No download URL available for the selected var.",
+  "missingAddedDownload": "Added 1 download.",
+  "missingNoDownloadUrlsAvailable": "No download URLs available.",
+  "missingAddedDownloads": "Added {count} downloads.",
+  "linkChangesApplied": "Link changes applied: {total} total, {created} created, {skipped} skipped, {failed} failed.",
+  "missingStatus": "missing",
+  "closestMatch": "{name} (closest)",
+  "draftClearLabel": "(clear)",
+  "textFileTypeLabel": "Text",
+  "varDetailsTitle": "Details: {varName}",
+  "filterByCreator": "Filter by Creator",
+  "missingDeps": "Missing Deps",
+  "dependenciesTitle": "Dependencies",
+  "saveDependenciesTitle": "Save Dependencies",
+  "previewsTitle": "Previews",
+  "noPreviews": "No previews",
+  "previewTitleWithType": "{title} ({type})",
+  "totalCount": "Total {count}",
+  "nameFilterLabel": "Name filter",
+  "sortNewToOld": "New to Old",
+  "sortSceneName": "SceneName",
+  "columnsLabel": "Columns:",
+  "columnHide": "Hide",
+  "columnNormal": "Normal",
+  "columnFav": "Fav",
+  "mergeLabel": "Merge",
+  "forMaleLabel": "For Male",
+  "hideLabel": "Hide",
+  "unhideLabel": "Unhide",
+  "favLabel": "Fav",
+  "unfavLabel": "Unfav",
+  "columnTitleWithCount": "{title} ({count})",
+  "locationLabel": "Location",
+  "locationInstalled": "Installed",
+  "locationNotInstalled": "Not installed",
+  "locationMissingLink": "MissingLink",
+  "locationSave": "Save",
+  "clearCacheLabel": "Clear cache",
+  "personLabel": "Person {value}",
+  "uninstallPreviewTitle": "Uninstall Preview",
+  "uninstallPackageCount": "Will uninstall {count} packages",
+  "uninstallTagRequested": "Requested",
+  "uninstallTagImplicated": "Implicated",
+  "previewsCount": "Previews ({count})",
+  "dependenciesCount": "Dependencies ({count})",
+  "noDependencies": "No dependencies",
+  "prepareSavesTitle": "Prepare Saves",
+  "outputFolderLabel": "Output folder",
+  "outputFolderReady": "Output folder is ready.",
+  "outputFolderValidationFailed": "Output folder validation failed.",
+  "validateOutputLabel": "Validate Output",
+  "savesTreeTitle": "Saves Tree",
+  "noSavesFound": "No saves found",
+  "selectedFilesCount": "Selected {count} files",
+  "filtersActionsTitle": "Filters & Actions",
+  "basicFiltersTitle": "Basic Filters",
+  "advancedFiltersTitle": "Advanced Filters",
+  "sortOptionsTitle": "Sort Options",
+  "allLocationsLabel": "All locations",
+  "allPayTypesLabel": "All pay types",
+  "payTypeLabel": "Pay Type",
+  "categoryLabel": "Category",
+  "tagLabel": "Tag",
+  "allTagsLabel": "All tags",
+  "primarySortLabel": "Primary Sort",
+  "secondarySortLabel": "Secondary Sort",
+  "noSortOptions": "No sort options available",
+  "loadingLabel": "Loading...",
+  "noSecondarySort": "No secondary sort",
+  "scanMissingLabel": "Scan Missing",
+  "scanUpdatesLabel": "Scan Updates",
+  "downloadListTitle": "Download List",
+  "totalLinksSize": "Total {count} links, Total {sizeLabel}",
+  "addedDownloads": "Added {count} downloads.",
+  "copyLinksLabel": "Copy Links",
+  "clearListLabel": "Clear List",
+  "resourcesCount": "Resources ({count})",
+  "ratingDownloads": "Rating {avg} ({count}) | {downloads} downloads",
+  "updatedLabel": "Updated {date}",
+  "versionLabel": "Version {version}",
+  "depsCountLabel": "Deps {count}",
+  "extraTagsLabel": "+{count}",
+  "repoStatusGoToDownload": "Go To Download",
+  "repoStatusGenerateDownloadList": "Generate Download List",
+  "repoStatusInRepository": "In Repository",
+  "repoStatusUpgrade": "Upgrade {installedVersion} to {hubVersion}",
+  "unknownStatusLabel": "Unknown Status",
+  "untitledLabel": "Untitled",
+  "unknownLabel": "unknown",
+  "detailLabel": "Detail",
+  "addFilesOnlyLabel": "Add Files Only",
+  "addWithDependenciesLabel": "Add With Dependencies",
+  "openPageLabel": "Open Page",
+  "basicInfoTitle": "Basic Information",
+  "loadingDetailsLabel": "Loading detailed information...",
+  "loadDetailsFailed": "Failed to load details: {error}",
+  "descriptionTitle": "Description",
+  "imagesTitle": "Images",
+  "sceneAnalysisTitle": "Scene Analysis",
+  "analysisLoadFailed": "Failed to load analysis summary",
+  "entryLabel": "Entry: {entry}",
+  "genderLabel": "Gender",
+  "personsLabel": "Persons",
+  "atomsLabel": "Atoms",
+  "depsLabel": "Deps",
+  "missingLabel": "Missing",
+  "mismatchLabel": "Mismatch",
+  "peopleTitle": "People",
+  "atomsTitle": "Atoms",
+  "noPersonAtomsFound": "No person atoms found",
+  "poseTag": "Pose",
+  "animationTag": "Animation",
+  "pluginTag": "Plugin",
+  "presetsActionsTitle": "Presets & Actions",
+  "lookOptionsTitle": "Look Options",
+  "loadLookLabel": "Load Look",
+  "loadPoseLabel": "Load Pose",
+  "loadAnimationLabel": "Load Animation",
+  "loadPluginLabel": "Load Plugin",
+  "posePresetHint": "Pose presets require .json scene entries.",
+  "atomSearchTitle": "Atom Search",
+  "filterAtomsHint": "Filter atoms by name",
+  "selectionTitle": "Selection",
+  "selectedAtomsCount": "Selected {count} atoms",
+  "selectBaseLabel": "Select Base",
+  "selectTypeLabel": "Select Type",
+  "selectTypeWithCount": "Select {type} ({count})",
+  "includeBaseAtomsLabel": "Include base atoms",
+  "atomTreeTitle": "Atom Tree",
+  "noAtomsAvailable": "No atoms available",
+  "sceneActionsTitle": "Scene Actions",
+  "loadSceneLabel": "Load Scene",
+  "addToSceneLabel": "Add To Scene",
+  "addAsSubsceneLabel": "Add as Subscene",
+  "dependencySearchTitle": "Dependency Search",
+  "filterDependenciesHint": "Filter dependencies",
+  "filtersTitle": "Filters",
+  "filterAllLabel": "All",
+  "filterMissingLabel": "Missing",
+  "filterMismatchLabel": "Mismatch",
+  "filterResolvedLabel": "Resolved",
+  "filterInstalledLabel": "Installed",
+  "missingDepsCopied": "Missing deps copied",
+  "copyMissingLabel": "Copy Missing",
+  "noDependenciesMatch": "No dependencies match",
+  "presetTargetTitle": "Preset Target",
+  "ignoreGenderLabel": "Ignore Gender",
+  "ignoreGenderHint": "Applies to person presets only. Atom actions ignore this.",
+  "labelValue": "{label}: {value}",
+  "pageOf": "Page {current}/{total}",
+  "@jobFailed": {
+    "placeholders": {
+      "kind": {},
+      "message": {}
+    }
+  },
+  "@backendStartFailed": {
+    "placeholders": {
+      "message": {}
+    }
+  },
+  "@downloadSelectionCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@downloadItemsProgress": {
+    "placeholders": {
+      "completed": {},
+      "total": {}
+    }
+  },
+  "@varDetailsTitle": {
+    "placeholders": {
+      "varName": {}
+    }
+  },
+  "@loadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@totalCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@pageOf": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "@entryLabel": {
+    "placeholders": {
+      "entry": {}
+    }
+  },
+  "@labelValue": {
+    "placeholders": {
+      "label": {},
+      "value": {}
+    }
+  },
+  "@selectedAtomsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@selectTypeWithCount": {
+    "placeholders": {
+      "type": {},
+      "count": {}
+    }
+  },
+  "@dependenciesCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@previewsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@uninstallPackageCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@itemsCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@perPageLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@selectedCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@totalItems": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@installVarConfirm": {
+    "placeholders": {
+      "varName": {}
+    }
+  },
+  "@previewLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@itemPosition": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "@deleteSwitchConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "@presenceFilterLabel": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "@totalLinksSize": {
+    "placeholders": {
+      "count": {},
+      "sizeLabel": {}
+    }
+  },
+  "@addedDownloads": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@resourcesCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@ratingDownloads": {
+    "placeholders": {
+      "avg": {},
+      "count": {},
+      "downloads": {}
+    }
+  },
+  "@updatedLabel": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "@versionLabel": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "@depsCountLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@extraTagsLabel": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@loadDetailsFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "@selectedFilesCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@selectedLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@resolvedLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@downloadLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@linkStatusLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@appliedLinkLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@draftLinkLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@suggestionLabel": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "@missingAddedDownloads": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@linkChangesApplied": {
+    "placeholders": {
+      "total": {},
+      "created": {},
+      "skipped": {},
+      "failed": {}
+    }
+  },
+  "@closestMatch": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "@appliedCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@draftCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@brokenCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@rowPosition": {
+    "placeholders": {
+      "current": {},
+      "total": {}
+    }
+  },
+  "@previewTitleWithType": {
+    "placeholders": {
+      "title": {},
+      "type": {}
+    }
+  },
+  "@repoStatusUpgrade": {
+    "placeholders": {
+      "installedVersion": {},
+      "hubVersion": {}
+    }
+  }
+}

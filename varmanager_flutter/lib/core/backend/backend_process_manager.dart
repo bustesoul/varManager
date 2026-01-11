@@ -53,6 +53,12 @@ class BackendProcessManager {
     return config?.uiTheme;
   }
 
+  /// Resolve language from local config.json (before backend starts)
+  static Future<String?> resolveLanguage(Directory workDir) async {
+    final config = await _readLocalConfig(workDir);
+    return config?.uiLanguage;
+  }
+
   Future<void> start() async {
     if (_starting) {
       return;

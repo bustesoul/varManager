@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/backend/job_log_controller.dart';
+import '../l10n/l10n.dart';
 
 class JobLogPanel extends ConsumerStatefulWidget {
   const JobLogPanel({super.key});
@@ -35,6 +36,7 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final logs = ref.watch(jobLogProvider);
 
     // 当日志更新时自动滚动到底部
@@ -62,11 +64,12 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
         children: [
           Row(
             children: [
-              const Text('Job Logs', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(l10n.jobLogsTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
               const Spacer(),
               TextButton(
                 onPressed: () => ref.read(jobLogProvider.notifier).clear(),
-                child: const Text('Clear'),
+                child: Text(l10n.commonClear),
               ),
             ],
           ),

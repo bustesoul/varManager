@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:varmanager_flutter/l10n/app_localizations.dart';
 
 import '../core/app_version.dart';
 import '../core/backend/job_log_controller.dart';
@@ -9,6 +11,7 @@ import '../features/scenes/scenes_page.dart';
 import '../features/settings/settings_page.dart';
 import '../widgets/download_manager.dart';
 import '../widgets/job_log_panel.dart';
+import '../l10n/l10n.dart';
 import 'providers.dart';
 import 'theme.dart';
 
@@ -22,6 +25,14 @@ class VarManagerApp extends ConsumerWidget {
       title: 'varManager',
       theme: AppTheme.build(themeType),
       debugShowCheckedModeBanner: false,
+      locale: ref.watch(localeProvider),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const AppShell(),
     );
   }
@@ -39,12 +50,14 @@ class _AppShellState extends ConsumerState<AppShell> {
   String? _error;
   String _appVersion = '';
 
-  final List<_NavEntry> _pages = const [
-    _NavEntry(label: 'Home', icon: Icons.dashboard, page: HomePage()),
-    _NavEntry(label: 'Scenes', icon: Icons.photo_library, page: ScenesPage()),
-    _NavEntry(label: 'Hub', icon: Icons.cloud_download, page: HubPage()),
-    _NavEntry(label: 'Settings', icon: Icons.tune, page: SettingsPage()),
-  ];
+  List<_NavEntry> _buildPages(AppLocalizations l10n) {
+    return [
+      _NavEntry(label: l10n.navHome, icon: Icons.dashboard, page: const HomePage()),
+      _NavEntry(label: l10n.navScenes, icon: Icons.photo_library, page: const ScenesPage()),
+      _NavEntry(label: l10n.navHub, icon: Icons.cloud_download, page: const HubPage()),
+      _NavEntry(label: l10n.navSettings, icon: Icons.tune, page: const SettingsPage()),
+    ];
+  }
 
   @override
   void initState() {
@@ -65,6 +78,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (!mounted) return;
       // Load theme from config after backend is ready
       await ref.read(themeProvider.notifier).loadFromConfig();
+      // Load locale from config after backend is ready
+      await ref.read(localeProvider.notifier).loadFromConfig();
+      await ref.read(localeProvider.notifier).persistInitialIfNeeded();
       if (!mounted) return;
       setState(() {
         _ready = true;
@@ -79,8 +95,10 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final index = ref.watch(navIndexProvider);
     final isCompact = MediaQuery.of(context).size.width < 900;
+    final pages = _buildPages(l10n);
 
     // Listen for job errors and show snackbar
     ref.listen<JobErrorNotice?>(jobErrorProvider, (previous, next) {
@@ -89,7 +107,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       messenger.clearSnackBars();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Job failed: ${next.kind} (${next.message})'),
+          content: Text(l10n.jobFailed(next.kind, next.message)),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -104,10 +122,10 @@ class _AppShellState extends ConsumerState<AppShell> {
             child: Center(
               child: Text(
                 _ready
-                    ? 'Backend ready'
+                    ? l10n.backendReady
                     : _error != null
-                        ? 'Backend error'
-                        : 'Starting backend',
+                        ? l10n.backendError
+                        : l10n.backendStarting,
                 style: TextStyle(
                   color: _ready
                       ? Colors.green.shade700
@@ -143,22 +161,22 @@ class _AppShellState extends ConsumerState<AppShell> {
             ? Column(
                 children: [
                   Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 350),
-                      child: _error != null
-                          ? _ErrorPane(message: _error!)
-                          : !_ready
-                              ? const _LoadingPane()
-                              : _pages[index].page,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 350),
+                        child: _error != null
+                            ? _ErrorPane(message: _error!)
+                            : !_ready
+                                ? const _LoadingPane()
+                                : pages[index].page,
+                      ),
                     ),
-                  ),
                   const JobLogPanel(),
                   NavigationBar(
                     selectedIndex: index,
                     onDestinationSelected: (value) {
                       ref.read(navIndexProvider.notifier).setIndex(value);
                     },
-                    destinations: _pages
+                    destinations: pages
                         .map(
                           (entry) => NavigationDestination(
                             icon: Icon(entry.icon),
@@ -182,7 +200,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                             onDestinationSelected: (value) {
                               ref.read(navIndexProvider.notifier).setIndex(value);
                             },
-                            destinations: _pages
+                            destinations: pages
                                 .map(
                                   (entry) => NavigationRailDestination(
                                     icon: Icon(entry.icon),
@@ -209,7 +227,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                                 ? _ErrorPane(message: _error!)
                                 : !_ready
                                     ? const _LoadingPane()
-                                    : _pages[index].page,
+                                    : pages[index].page,
                           ),
                         ),
                         const JobLogPanel(),
@@ -238,13 +256,14 @@ class _LoadingPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final l10n = context.l10n;
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 12),
-          Text('Starting backend...'),
+          const CircularProgressIndicator(),
+          const SizedBox(height: 12),
+          Text(l10n.backendStartingHint),
         ],
       ),
     );
@@ -258,8 +277,9 @@ class _ErrorPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Center(
-      child: Text('Backend start failed: $message'),
+      child: Text(l10n.backendStartFailed(message)),
     );
   }
 }

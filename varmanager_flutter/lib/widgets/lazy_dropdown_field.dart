@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 class LazyDropdownField extends StatefulWidget {
   const LazyDropdownField({
     super.key,
@@ -281,9 +283,9 @@ class _LazyDropdownFieldState extends State<LazyDropdownField> {
           );
         }
         if (showEmpty && index == displayItems.length) {
-          return const ListTile(
+          return ListTile(
             dense: true,
-            title: Text('No matches'),
+            title: Text(context.l10n.noMatches),
           );
         }
         return const Padding(

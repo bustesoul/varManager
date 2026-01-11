@@ -5,6 +5,7 @@ import '../../app/providers.dart';
 import '../../core/models/extra_models.dart';
 import '../../core/utils/debounce.dart';
 import '../../widgets/preview_placeholder.dart';
+import '../../l10n/l10n.dart';
 
 class UninstallVarsPage extends ConsumerStatefulWidget {
   const UninstallVarsPage({super.key, required this.payload});
@@ -143,6 +144,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
   }
 
   Future<void> _showPreview(VarPreviewItem item) async {
+    final l10n = context.l10n;
     final client = ref.read(backendClientProvider);
     final path = _previewPath(item);
     await showDialog<void>(
@@ -166,7 +168,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+              child: Text(l10n.commonClose),
             ),
           ],
         );
@@ -176,6 +178,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final dependencies = _dependencies
         .map((item) => item.dependency)
         .toSet()
@@ -183,7 +186,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
       ..sort();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Uninstall Preview')),
+      appBar: AppBar(title: Text(l10n.uninstallPreviewTitle)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -201,17 +204,17 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Will uninstall ${_varList.length} packages'),
+                                Text(l10n.uninstallPackageCount(_varList.length)),
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
                                     TextButton(
                                       onPressed: _selectAll,
-                                      child: const Text('Select All'),
+                                      child: Text(l10n.commonSelectAll),
                                     ),
                                     TextButton(
                                       onPressed: _clearSelection,
-                                      child: const Text('Clear'),
+                                      child: Text(l10n.commonClear),
                                     ),
                                   ],
                                 ),
@@ -226,8 +229,12 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                               itemBuilder: (context, index) {
                                 final name = _varList[index];
                                 final tags = <String>[];
-                                if (_requested.contains(name)) tags.add('Requested');
-                                if (_implicated.contains(name)) tags.add('Implicated');
+                                if (_requested.contains(name)) {
+                                  tags.add(l10n.uninstallTagRequested);
+                                }
+                                if (_implicated.contains(name)) {
+                                  tags.add(l10n.uninstallTagImplicated);
+                                }
                                 final selected = _selectedVars.contains(name);
                                 return CheckboxListTile(
                                   value: selected,
@@ -256,7 +263,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                 children: [
                                   Row(
                                     children: [
-                                      Text('Previews (${_filteredPreviews.length})'),
+                                      Text(l10n.previewsCount(_filteredPreviews.length)),
                                       const Spacer(),
                                       if (_loadingDetails)
                                         const SizedBox(
@@ -271,13 +278,25 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                     children: [
                                       DropdownButton<String>(
                                         value: _previewType,
-                                        items: const [
-                                          DropdownMenuItem(value: 'all', child: Text('All types')),
-                                          DropdownMenuItem(value: 'scenes', child: Text('Scenes')),
-                                          DropdownMenuItem(value: 'looks', child: Text('Looks')),
-                                          DropdownMenuItem(value: 'clothing', child: Text('Clothing')),
-                                          DropdownMenuItem(value: 'hairstyle', child: Text('Hairstyle')),
-                                          DropdownMenuItem(value: 'assets', child: Text('Assets')),
+                                        items: [
+                                          DropdownMenuItem(
+                                              value: 'all',
+                                              child: Text(l10n.allTypesLabel)),
+                                          DropdownMenuItem(
+                                              value: 'scenes',
+                                              child: Text(l10n.categoryScenes)),
+                                          DropdownMenuItem(
+                                              value: 'looks',
+                                              child: Text(l10n.categoryLooks)),
+                                          DropdownMenuItem(
+                                              value: 'clothing',
+                                              child: Text(l10n.categoryClothing)),
+                                          DropdownMenuItem(
+                                              value: 'hairstyle',
+                                              child: Text(l10n.categoryHairstyle)),
+                                          DropdownMenuItem(
+                                              value: 'assets',
+                                              child: Text(l10n.categoryAssets)),
                                         ],
                                         onChanged: (value) {
                                           if (value == null) return;
@@ -288,7 +307,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                         },
                                       ),
                                       const Spacer(),
-                                      Text('Page $_previewPage / $_previewTotalPages'),
+                                      Text(l10n.pageOf(_previewPage, _previewTotalPages)),
                                       IconButton(
                                         onPressed: _previewPage <= 1
                                             ? null
@@ -334,7 +353,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                   const SizedBox(height: 8),
                                   Expanded(
                                     child: _pagedPreviews.isEmpty
-                                        ? const Center(child: Text('No previews'))
+                                        ? Center(child: Text(l10n.noPreviews))
                                         : LayoutBuilder(
                                             builder: (context, constraints) {
                                               final columns = constraints.maxWidth > 1200
@@ -402,11 +421,11 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Dependencies (${dependencies.length})'),
+                                  Text(l10n.dependenciesCount(dependencies.length)),
                                   const SizedBox(height: 8),
                                   Expanded(
                                     child: dependencies.isEmpty
-                                        ? const Center(child: Text('No dependencies'))
+                                        ? Center(child: Text(l10n.noDependencies))
                                         : ListView.builder(
                                             itemCount: dependencies.length,
                                             itemBuilder: (context, index) {
@@ -434,12 +453,12 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.commonCancel),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Confirm'),
+                  child: Text(l10n.commonConfirm),
                 ),
               ],
             ),

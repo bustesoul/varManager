@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:varmanager_flutter/l10n/app_localizations.dart';
 
 import '../../app/providers.dart';
 import '../../core/backend/backend_client.dart';
@@ -8,6 +9,7 @@ import '../../core/backend/job_log_controller.dart';
 import '../../widgets/lazy_dropdown_field.dart';
 import '../../widgets/preview_placeholder.dart';
 import '../../widgets/image_preview_dialog.dart';
+import '../../l10n/l10n.dart';
 import '../home/providers.dart';
 
 class HubInfo {
@@ -63,6 +65,40 @@ class HubPackageInfo {
   final String packageKey;
   final int hubVersion;
   final String displayVarName;
+}
+
+enum HubRepoStatusType {
+  unknown,
+  inRepository,
+  goToDownload,
+  generateDownloadList,
+  upgradeAvailable,
+}
+
+class HubRepoStatus {
+  const HubRepoStatus._(
+    this.type, {
+    this.installedVersion,
+    this.hubVersion,
+  });
+
+  const HubRepoStatus.unknown() : this._(HubRepoStatusType.unknown);
+  const HubRepoStatus.inRepository() : this._(HubRepoStatusType.inRepository);
+  const HubRepoStatus.goToDownload() : this._(HubRepoStatusType.goToDownload);
+  const HubRepoStatus.generateDownloadList()
+      : this._(HubRepoStatusType.generateDownloadList);
+  const HubRepoStatus.upgrade({
+    required int installedVersion,
+    required int hubVersion,
+  }) : this._(
+          HubRepoStatusType.upgradeAvailable,
+          installedVersion: installedVersion,
+          hubVersion: hubVersion,
+        );
+
+  final HubRepoStatusType type;
+  final int? installedVersion;
+  final int? hubVersion;
 }
 
 class HubResourcesCacheEntry {
@@ -123,7 +159,7 @@ class HubPageSnapshot {
   final String sortPrimary;
   final String sortSecondary;
   final String searchText;
-  final Map<String, String> repoStatusById;
+  final Map<String, HubRepoStatus> repoStatusById;
   final Map<String, String> repoPackageById;
   final Map<String, String> downloadUrlById;
   final Map<String, String> downloadByVar;
@@ -166,7 +202,7 @@ class _HubPageState extends ConsumerState<HubPage> {
 
   List<Map<String, dynamic>> _resources = [];
   final Map<String, HubResourcesCacheEntry> _resourcesCache = {};
-  final Map<String, String> _repoStatusById = {};
+  final Map<String, HubRepoStatus> _repoStatusById = {};
   final Map<String, String> _repoPackageById = {};
   final Map<String, String> _downloadUrlById = {};
 
@@ -312,7 +348,7 @@ class _HubPageState extends ConsumerState<HubPage> {
       sortPrimary: _sortPrimary,
       sortSecondary: _sortSecondary,
       searchText: _searchController.text,
-      repoStatusById: Map<String, String>.from(_repoStatusById),
+      repoStatusById: Map<String, HubRepoStatus>.from(_repoStatusById),
       repoPackageById: Map<String, String>.from(_repoPackageById),
       downloadUrlById: Map<String, String>.from(_downloadUrlById),
       downloadByVar: Map<String, String>.from(_downloadByVar),
@@ -531,7 +567,7 @@ class _HubPageState extends ConsumerState<HubPage> {
         final downloadUrl = resource['download_url']?.toString() ?? '';
         if (downloadUrl.isNotEmpty && downloadUrl != 'null') {
           _downloadUrlById[resourceId] = downloadUrl;
-          _repoStatusById[resourceId] = 'Go To Download';
+          _repoStatusById[resourceId] = const HubRepoStatus.goToDownload();
         }
       }
     }
@@ -542,7 +578,7 @@ class _HubPageState extends ConsumerState<HubPage> {
     }
     final client = ref.read(backendClientProvider);
     final resolved = await client.resolveVars(latestRequests.toList());
-    final nextStatus = <String, String>{};
+    final nextStatus = <String, HubRepoStatus>{};
     final nextPackage = <String, String>{};
 
     for (final entry in packageByResource.entries) {
@@ -550,7 +586,7 @@ class _HubPageState extends ConsumerState<HubPage> {
       final info = entry.value;
       final resolvedName = resolved.resolved['${info.packageKey}.latest'] ?? 'missing';
       if (resolvedName == 'missing') {
-        nextStatus[resourceId] = 'Generate Download List';
+        nextStatus[resourceId] = const HubRepoStatus.generateDownloadList();
         nextPackage[resourceId] = info.displayVarName;
         continue;
       }
@@ -561,9 +597,12 @@ class _HubPageState extends ConsumerState<HubPage> {
       final installedVersion =
           parts.isNotEmpty ? int.tryParse(parts.last) ?? 0 : 0;
       if (installedVersion >= info.hubVersion) {
-        nextStatus[resourceId] = 'In Repository';
+        nextStatus[resourceId] = const HubRepoStatus.inRepository();
       } else {
-        nextStatus[resourceId] = '$installedVersion Upgrade to ${info.hubVersion}';
+        nextStatus[resourceId] = HubRepoStatus.upgrade(
+          installedVersion: installedVersion,
+          hubVersion: info.hubVersion,
+        );
       }
       nextPackage[resourceId] = info.displayVarName;
     }
@@ -827,8 +866,8 @@ class _HubPageState extends ConsumerState<HubPage> {
   Future<void> _handleRepositoryAction(Map<String, dynamic> resource) async {
     final resourceId = _resourceId(resource);
     if (resourceId.isEmpty) return;
-    final status = _repoStatusById[resourceId] ?? 'Unknown Status';
-    if (status == 'In Repository') {
+    final status = _repoStatusById[resourceId] ?? const HubRepoStatus.unknown();
+    if (status.type == HubRepoStatusType.inRepository) {
       final name = _repoPackageById[resourceId];
       if (name == null || name.isEmpty) return;
       ref.read(varsQueryProvider.notifier).update(
@@ -837,14 +876,33 @@ class _HubPageState extends ConsumerState<HubPage> {
       ref.read(navIndexProvider.notifier).setIndex(0);
       return;
     }
-    if (status.contains('Generate Download List') || status.contains('Upgrade to')) {
+    if (status.type == HubRepoStatusType.generateDownloadList ||
+        status.type == HubRepoStatusType.upgradeAvailable) {
       await _addResourceDownloads(resourceId);
       return;
     }
-    if (status == 'Go To Download') {
+    if (status.type == HubRepoStatusType.goToDownload) {
       final url = _downloadUrlById[resourceId];
       if (url == null || url.isEmpty) return;
       await _runJob('open_url', {'url': url});
+    }
+  }
+
+  String _repoStatusLabel(AppLocalizations l10n, HubRepoStatus status) {
+    switch (status.type) {
+      case HubRepoStatusType.inRepository:
+        return l10n.repoStatusInRepository;
+      case HubRepoStatusType.generateDownloadList:
+        return l10n.repoStatusGenerateDownloadList;
+      case HubRepoStatusType.goToDownload:
+        return l10n.repoStatusGoToDownload;
+      case HubRepoStatusType.upgradeAvailable:
+        return l10n.repoStatusUpgrade(
+          status.installedVersion ?? 0,
+          status.hubVersion ?? 0,
+        );
+      case HubRepoStatusType.unknown:
+        return l10n.unknownStatusLabel;
     }
   }
 
@@ -980,6 +1038,7 @@ class _HubPageState extends ConsumerState<HubPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final options = _info;
     final sortPrimaryValue = options == null || options.sorts.isEmpty
         ? null
@@ -1002,16 +1061,16 @@ class _HubPageState extends ConsumerState<HubPage> {
                   onKeyEvent: _handleFilterKeyEvent,
                   child: ListView(
                     children: [
-                    const Text('Filters & Actions',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text(l10n.filtersActionsTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 12),
 
                     // Search - 始终显示
                     TextField(
                       controller: _searchController,
-                      decoration: const InputDecoration(
-                        labelText: 'Search',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l10n.commonSearch,
+                        border: const OutlineInputBorder(),
                       ),
                       onSubmitted: (_) {
                         _triggerSearch();
@@ -1019,9 +1078,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 基础筛选 - 可折叠
+                    // 基础筛�?- 可折�?
                     ExpansionTile(
-                      title: const Text('Basic Filters'),
+                      title: Text(l10n.basicFiltersTitle),
                       initiallyExpanded: true,
                       children: [
                         Padding(
@@ -1034,7 +1093,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                 items: _optionsWithAll(options?.locations ?? [])
                                     .map((value) => DropdownMenuItem(
                                           value: value,
-                                          child: Text(value == 'All' ? 'All locations' : value),
+                                          child: Text(value == 'All'
+                                              ? l10n.allLocationsLabel
+                                              : value),
                                         ))
                                     .toList(),
                                 onChanged: (value) {
@@ -1043,9 +1104,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                     _location = value;
                                   });
                                 },
-                                decoration: const InputDecoration(
-                                  labelText: 'Location',
-                                  border: OutlineInputBorder(),
+                                decoration: InputDecoration(
+                                  labelText: l10n.locationLabel,
+                                  border: const OutlineInputBorder(),
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -1055,7 +1116,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                 items: _optionsWithAll(options?.payTypes ?? [])
                                     .map((value) => DropdownMenuItem(
                                           value: value,
-                                          child: Text(value == 'All' ? 'All pay types' : value),
+                                          child: Text(value == 'All'
+                                              ? l10n.allPayTypesLabel
+                                              : value),
                                         ))
                                     .toList(),
                                 onChanged: (value) {
@@ -1064,9 +1127,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                     _payType = value;
                                   });
                                 },
-                                decoration: const InputDecoration(
-                                  labelText: 'Pay Type',
-                                  border: OutlineInputBorder(),
+                                decoration: InputDecoration(
+                                  labelText: l10n.payTypeLabel,
+                                  border: const OutlineInputBorder(),
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -1076,9 +1139,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                       ],
                     ),
 
-                    // 高级筛选 - 可折叠
+                    // 高级筛�?- 可折�?
                     ExpansionTile(
-                      title: const Text('Advanced Filters'),
+                      title: Text(l10n.advancedFiltersTitle),
                       initiallyExpanded: false,
                       children: [
                         Padding(
@@ -1091,7 +1154,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                 items: _optionsWithAll(options?.categories ?? [])
                                     .map((value) => DropdownMenuItem(
                                           value: value,
-                                          child: Text(value == 'All' ? 'All types' : value),
+                                          child: Text(value == 'All'
+                                              ? l10n.allTypesLabel
+                                              : value),
                                         ))
                                     .toList(),
                                 onChanged: (value) {
@@ -1100,17 +1165,17 @@ class _HubPageState extends ConsumerState<HubPage> {
                                     _category = value;
                                   });
                                 },
-                                decoration: const InputDecoration(
-                                  labelText: 'Category',
-                                  border: OutlineInputBorder(),
+                                decoration: InputDecoration(
+                                  labelText: l10n.categoryLabel,
+                                  border: const OutlineInputBorder(),
                                 ),
                               ),
                               const SizedBox(height: 8),
                               LazyDropdownField(
-                                label: 'Creator',
+                                label: l10n.creatorLabel,
                                 value: _creator.isEmpty ? 'All' : _creator,
                                 allValue: 'All',
-                                allLabel: 'All creators',
+                                allLabel: l10n.allCreators,
                                 optionsLoader: (queryText, offset, limit) async {
                                   final client = ref.read(backendClientProvider);
                                   return client.listHubOptions(
@@ -1128,10 +1193,10 @@ class _HubPageState extends ConsumerState<HubPage> {
                               ),
                               const SizedBox(height: 8),
                               LazyDropdownField(
-                                label: 'Tag',
+                                label: l10n.tagLabel,
                                 value: 'All',
                                 allValue: 'All',
-                                allLabel: 'All tags',
+                                allLabel: l10n.allTagsLabel,
                                 clearOnSelect: true,
                                 optionsLoader: (queryText, offset, limit) async {
                                   final client = ref.read(backendClientProvider);
@@ -1174,9 +1239,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                       ],
                     ),
 
-                    // 排序选项 - 可折叠，修复空列表问题
+                    // 排序选项 - 可折叠，修复空列表问�?
                     ExpansionTile(
-                      title: const Text('Sort Options'),
+                      title: Text(l10n.sortOptionsTitle),
                       initiallyExpanded: false,
                       children: [
                         Padding(
@@ -1199,15 +1264,15 @@ class _HubPageState extends ConsumerState<HubPage> {
                                       _sortPrimary = value;
                                     });
                                   },
-                                  decoration: const InputDecoration(
-                                    labelText: 'Primary Sort',
-                                    border: OutlineInputBorder(),
+                                  decoration: InputDecoration(
+                                    labelText: l10n.primarySortLabel,
+                                    border: const OutlineInputBorder(),
                                   ),
                                 )
                               else
-                                const ListTile(
-                                  title: Text('No sort options available'),
-                                  subtitle: Text('Loading...'),
+                                ListTile(
+                                  title: Text(l10n.noSortOptions),
+                                  subtitle: Text(l10n.loadingLabel),
                                 ),
                               const SizedBox(height: 8),
                               if (options?.sorts != null && options!.sorts.isNotEmpty)
@@ -1218,7 +1283,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                       .followedBy(options.sorts)
                                       .map((value) => DropdownMenuItem(
                                             value: value,
-                                            child: Text(value.isEmpty ? 'No secondary sort' : value),
+                                            child: Text(value.isEmpty
+                                                ? l10n.noSecondarySort
+                                                : value),
                                           ))
                                       .toList(),
                                   onChanged: (value) {
@@ -1227,9 +1294,9 @@ class _HubPageState extends ConsumerState<HubPage> {
                                       _sortSecondary = value;
                                     });
                                   },
-                                  decoration: const InputDecoration(
-                                    labelText: 'Secondary Sort',
-                                    border: OutlineInputBorder(),
+                                  decoration: InputDecoration(
+                                    labelText: l10n.secondarySortLabel,
+                                    border: const OutlineInputBorder(),
                                   ),
                                 ),
                               const SizedBox(height: 8),
@@ -1241,7 +1308,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                     const SizedBox(height: 12),
                     OutlinedButton(
                       onPressed: _resetFilters,
-                      child: const Text('Reset Filters'),
+                      child: Text(l10n.resetFiltersLabel),
                     ),
                     const SizedBox(height: 4),
                     Row(
@@ -1252,7 +1319,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                             items: const [12, 24, 48]
                                 .map((value) => DropdownMenuItem(
                                       value: value,
-                                      child: Text('Per page $value'),
+                                      child: Text(l10n.perPageLabel(value)),
                                     ))
                                 .toList(),
                             onChanged: (value) {
@@ -1263,7 +1330,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                             },
                           ),
                         ),
-                        Text('$_page / $_totalPages'),
+                        Text(l10n.pageOf(_page, _totalPages)),
                       ],
                     ),
                     Row(
@@ -1319,23 +1386,23 @@ class _HubPageState extends ConsumerState<HubPage> {
                       onPressed: _loadingResources
                           ? null
                           : () => _triggerSearch(),
-                      child: const Text('Search'),
+                      child: Text(l10n.commonSearch),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: _scanMissing,
-                      child: const Text('Scan Missing'),
+                      child: Text(l10n.scanMissingLabel),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: _scanUpdates,
-                      child: const Text('Scan Updates'),
+                      child: Text(l10n.scanUpdatesLabel),
                     ),
                     const Divider(height: 24),
-                    const Text('Download List',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text(l10n.downloadListTitle,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-                    Text('Total ${downloadUrls.length} links, Total $totalSizeLabel'),
+                    Text(l10n.totalLinksSize(downloadUrls.length, totalSizeLabel)),
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: downloadUrls.isEmpty
@@ -1358,11 +1425,12 @@ class _HubPageState extends ConsumerState<HubPage> {
                               });
                               messenger.showSnackBar(
                                 SnackBar(
-                                  content: Text('Added ${items.length} downloads.'),
+                                  content:
+                                      Text(l10n.addedDownloads(items.length)),
                                 ),
                               );
                             },
-                      child: const Text('Download All'),
+                      child: Text(l10n.downloadAllLabel),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
@@ -1373,7 +1441,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                 ClipboardData(text: downloadUrls.join('\n')),
                               );
                             },
-                      child: const Text('Copy Links'),
+                      child: Text(l10n.copyLinksLabel),
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
@@ -1386,7 +1454,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                                 _downloadSizeByUrl.clear();
                               });
                             },
-                      child: const Text('Clear List'),
+                      child: Text(l10n.clearListLabel),
                     ),
                   ],
                 ),
@@ -1403,7 +1471,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
-                        Text('Resources ($_totalFound)'),
+                        Text(l10n.resourcesCount(_totalFound)),
                         const Spacer(),
                         if (_loadingResources)
                           const SizedBox(
@@ -1415,7 +1483,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                         TextButton(
                           onPressed:
                               _loadingResources ? null : () => _triggerSearch(),
-                          child: const Text('Search'),
+                          child: Text(l10n.commonSearch),
                         ),
                       ],
                     ),
@@ -1457,10 +1525,11 @@ class _HubPageState extends ConsumerState<HubPage> {
   }
 
   Widget _buildResourceCard(Map<String, dynamic> resource) {
+    final l10n = context.l10n;
     final client = ref.read(backendClientProvider);
     final resourceId = _resourceId(resource);
-    final title = resource['title']?.toString() ?? 'Untitled';
-    final username = resource['username']?.toString() ?? 'unknown';
+    final title = resource['title']?.toString() ?? l10n.untitledLabel;
+    final username = resource['username']?.toString() ?? l10n.unknownLabel;
     final type = resource['type']?.toString() ?? '-';
     final payType = resource['category']?.toString() ?? '-';
     final tagLine = resource['tag_line']?.toString() ?? '';
@@ -1478,7 +1547,8 @@ class _HubPageState extends ConsumerState<HubPage> {
         tags.length > _tagChipLimit ? tags.length - _tagChipLimit : 0;
     final hasHubFiles =
         resource['hubFiles'] is List && (resource['hubFiles'] as List).isNotEmpty;
-    final repoStatus = _repoStatusById[resourceId] ?? 'Unknown Status';
+    final repoStatus = _repoStatusById[resourceId] ?? const HubRepoStatus.unknown();
+    final repoStatusLabel = _repoStatusLabel(l10n, repoStatus);
     final cacheSize =
         (96 * MediaQuery.of(context).devicePixelRatio).round();
 
@@ -1580,17 +1650,17 @@ class _HubPageState extends ConsumerState<HubPage> {
                               ],
                             ),
                             const SizedBox(height: 6),
-                            Text('Rating $ratingAvg ($ratingCount) | $downloads downloads'),
-                            Text('Updated $lastUpdated'),
+                            Text(l10n.ratingDownloads(ratingAvg, ratingCount, downloads)),
+                            Text(l10n.updatedLabel(lastUpdated)),
                             if (version.isNotEmpty && version != 'null' ||
                                 dependencyCount != null) ...[
                               const SizedBox(height: 4),
                               Text(
                                 [
                                   if (version.isNotEmpty && version != 'null')
-                                    'Version $version',
+                                    l10n.versionLabel(version),
                                   if (dependencyCount != null)
-                                    'Deps $dependencyCount',
+                                    l10n.depsCountLabel(dependencyCount),
                                 ].join(' | '),
                               ),
                             ],
@@ -1610,7 +1680,8 @@ class _HubPageState extends ConsumerState<HubPage> {
                             label: Text(tag),
                             onPressed: () => _addTagFilter(tag),
                           ),
-                        if (extraTagCount > 0) Chip(label: Text('+$extraTagCount')),
+                        if (extraTagCount > 0)
+                          Chip(label: Text(l10n.extraTagsLabel(extraTagCount))),
                       ],
                     ),
                   ],
@@ -1622,14 +1693,17 @@ class _HubPageState extends ConsumerState<HubPage> {
               children: [
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: repoStatus == 'Unknown Status' ? null : () => _handleRepositoryAction(resource),
-                    child: Text(repoStatus, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    onPressed: repoStatus.type == HubRepoStatusType.unknown
+                        ? null
+                        : () => _handleRepositoryAction(resource),
+                    child: Text(repoStatusLabel,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => _openResourceDetails(resource),
-                  child: const Text('Detail'),
+                  child: Text(l10n.detailLabel),
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
@@ -1644,15 +1718,15 @@ class _HubPageState extends ConsumerState<HubPage> {
                     PopupMenuItem(
                       value: 'files',
                       enabled: hasHubFiles,
-                      child: const Text('Add Files Only'),
+                      child: Text(l10n.addFilesOnlyLabel),
                     ),
                     PopupMenuItem(
                       value: 'deps',
                       enabled: resourceId.isNotEmpty,
-                      child: const Text('Add With Dependencies'),
+                      child: Text(l10n.addWithDependenciesLabel),
                     ),
                   ],
-                  child: const Text('Add'),
+                  child: Text(l10n.commonAdd),
                 ),
                 TextButton(
                   onPressed: resourceId.isEmpty
@@ -1662,7 +1736,7 @@ class _HubPageState extends ConsumerState<HubPage> {
                             'url': 'https://hub.virtamate.com/resources/$resourceId/',
                           });
                         },
-                  child: const Text('Open Page'),
+                  child: Text(l10n.openPageLabel),
                 ),
               ],
             ),
@@ -1780,6 +1854,7 @@ class _EnhancedResourceDetailDialogState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
@@ -1818,8 +1893,8 @@ class _EnhancedResourceDetailDialogState
                     children: [
                       // 基本信息
                       if (widget.basicDetails.isNotEmpty) ...[
-                        const Text(
-                          'Basic Information',
+                        Text(
+                          l10n.basicInfoTitle,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -1848,14 +1923,14 @@ class _EnhancedResourceDetailDialogState
                         const SizedBox(height: 24),
                       ],
 
-                      // 加载状态
+                      // 加载状�?
                       if (_loading) ...[
-                        const Center(
+                        Center(
                           child: Column(
                             children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 12),
-                              Text('Loading detailed information...'),
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 12),
+                              Text(l10n.loadingDetailsLabel),
                             ],
                           ),
                         ),
@@ -1875,7 +1950,7 @@ class _EnhancedResourceDetailDialogState
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Failed to load details: $_error',
+                                  l10n.loadDetailsFailed(_error ?? ''),
                                   style: TextStyle(color: Colors.red.shade700),
                                 ),
                               ),
@@ -1886,8 +1961,8 @@ class _EnhancedResourceDetailDialogState
 
                       // 描述
                       if (!_loading && _error == null && _description.isNotEmpty) ...[
-                        const Text(
-                          'Description',
+                        Text(
+                          l10n.descriptionTitle,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -1910,8 +1985,8 @@ class _EnhancedResourceDetailDialogState
 
                       // 图片
                       if (!_loading && _error == null && _images.isNotEmpty) ...[
-                        const Text(
-                          'Images',
+                        Text(
+                          l10n.imagesTitle,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

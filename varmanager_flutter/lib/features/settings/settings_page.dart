@@ -2,11 +2,14 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import 'package:varmanager_flutter/l10n/app_localizations.dart';
 
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/app_version.dart';
 import '../../core/models/config.dart';
+import '../../l10n/l10n.dart';
+import '../../l10n/locale_config.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -101,7 +104,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _config = cfg;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Config saved; listen_host/port applies after restart.')),
+      SnackBar(content: Text(context.l10n.configSavedRestartHint)),
     );
   }
 
@@ -143,6 +146,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (_config == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Form(
@@ -150,48 +154,56 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         child: ListView(
           children: [
             _section(
-              title: 'UI',
-              child: _buildThemeSelector(),
+              title: l10n.settingsSectionUi,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildThemeSelector(l10n),
+                  const SizedBox(height: 16),
+                  _buildLanguageSelector(l10n),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             _section(
-              title: 'Listen & Logs',
+              title: l10n.settingsSectionListen,
               child: Column(
                 children: [
-                  _field(_listenHost, 'listen_host'),
-                  _field(_listenPort, 'listen_port', keyboard: TextInputType.number),
-                  _field(_logLevel, 'log_level'),
-                  _field(_jobConcurrency, 'job_concurrency',
+                  _field(_listenHost, l10n.listenHostLabel),
+                  _field(_listenPort, l10n.listenPortLabel,
+                      keyboard: TextInputType.number),
+                  _field(_logLevel, l10n.logLevelLabel),
+                  _field(_jobConcurrency, l10n.jobConcurrencyLabel,
                       keyboard: TextInputType.number),
                 ],
               ),
             ),
             const SizedBox(height: 12),
             _section(
-              title: 'Paths',
+              title: l10n.settingsSectionPaths,
               child: Column(
                 children: [
                   _pathField(
                     _varspath,
-                    'varspath',
-                    hintText: 'choose virt_a_mate',
+                    l10n.varspathLabel,
+                    hintText: l10n.chooseVamHint,
                     onBrowse: _pickVarspathDirectory,
                   ),
                   _pathField(
                     _vampath,
-                    'vampath',
-                    hintText: 'choose virt_a_mate',
+                    l10n.vampathLabel,
+                    hintText: l10n.chooseVamHint,
                     onBrowse: () => _pickDirectory(_vampath),
                   ),
                   _pathField(
                     _vamExec,
-                    'vam_exec',
+                    l10n.vamExecLabel,
                     onBrowse: () => _pickFile(_vamExec),
                   ),
                   _pathField(
                     _downloaderSavePath,
-                    'downloader_save_path',
-                    hintText: 'choose AddonPackages',
+                    l10n.downloaderSavePathLabel,
+                    hintText: l10n.chooseAddonPackagesHint,
                     onBrowse: () => _pickDirectory(_downloaderSavePath),
                   ),
                 ],
@@ -199,11 +211,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             const SizedBox(height: 12),
             _section(
-              title: 'About',
+              title: l10n.settingsSectionAbout,
               child: Column(
                 children: [
-                  _infoRow('App version', _appVersion ?? '-'),
-                  _infoRow('Backend version', _backendVersion ?? '-'),
+                  _infoRow(l10n.appVersionLabel, _appVersion ?? '-'),
+                  _infoRow(l10n.backendVersionLabel, _backendVersion ?? '-'),
                 ],
               ),
             ),
@@ -212,7 +224,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               alignment: Alignment.centerRight,
               child: FilledButton(
                 onPressed: _save,
-                child: const Text('Save'),
+                child: Text(l10n.commonSave),
               ),
             ),
           ],
@@ -259,6 +271,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     TextInputType keyboard = TextInputType.text,
     VoidCallback? onBrowse,
   }) {
+    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -281,7 +294,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             const SizedBox(width: 8),
             OutlinedButton(
               onPressed: onBrowse,
-              child: const Text('Browse'),
+              child: Text(l10n.commonBrowse),
             ),
           ],
         ],
@@ -306,12 +319,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _buildThemeSelector() {
+  Widget _buildThemeSelector(AppLocalizations l10n) {
     final currentTheme = ref.watch(themeProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Theme', style: TextStyle(fontSize: 14)),
+        Text(l10n.themeLabel, style: const TextStyle(fontSize: 14)),
         const SizedBox(height: 12),
         Wrap(
           spacing: 12,
@@ -320,6 +333,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             final isSelected = currentTheme == theme;
             return _ThemeCard(
               theme: theme,
+              label: _themeLabel(theme, l10n),
               isSelected: isSelected,
               onTap: () {
                 ref.read(themeProvider.notifier).setTheme(theme);
@@ -330,16 +344,63 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ],
     );
   }
+
+  Widget _buildLanguageSelector(AppLocalizations l10n) {
+    final locale = ref.watch(localeProvider);
+    final currentTag = localeTagFromLocale(locale);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.languageLabel, style: const TextStyle(fontSize: 14)),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: currentTag,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+          items: [
+            DropdownMenuItem(
+              value: kEnglishLocaleTag,
+              child: Text(l10n.languageEnglish),
+            ),
+            DropdownMenuItem(
+              value: kChineseLocaleTag,
+              child: Text(l10n.languageChinese),
+            ),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            ref.read(localeProvider.notifier).setLocale(localeFromTag(value));
+          },
+        ),
+      ],
+    );
+  }
+
+  String _themeLabel(AppThemeType theme, AppLocalizations l10n) {
+    switch (theme) {
+      case AppThemeType.defaultTheme:
+        return l10n.themeDefault;
+      case AppThemeType.ocean:
+        return l10n.themeOcean;
+      case AppThemeType.forest:
+        return l10n.themeForest;
+      case AppThemeType.rose:
+        return l10n.themeRose;
+      case AppThemeType.dark:
+        return l10n.themeDark;
+    }
+  }
 }
 
 class _ThemeCard extends StatelessWidget {
   const _ThemeCard({
     required this.theme,
+    required this.label,
     required this.isSelected,
     required this.onTap,
   });
 
   final AppThemeType theme;
+  final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -428,7 +489,7 @@ class _ThemeCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                theme.label,
+                label,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,

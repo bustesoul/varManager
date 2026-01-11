@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/models/extra_models.dart';
+import '../../l10n/l10n.dart';
 
 class AnalysisPage extends ConsumerStatefulWidget {
   const AnalysisPage({super.key, required this.payload});
@@ -237,15 +238,16 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final summary = _summary;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scene Analysis'),
+        title: Text(l10n.sceneAnalysisTitle),
         actions: [
           IconButton(
             onPressed: _loading ? null : _loadSummary,
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+            tooltip: l10n.commonRefresh,
           ),
         ],
       ),
@@ -266,23 +268,25 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Widget _buildErrorState() {
+    final l10n = context.l10n;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Failed to load analysis summary'),
+          Text(l10n.analysisLoadFailed),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Text(_error!, style: const TextStyle(color: Colors.redAccent)),
           ],
           const SizedBox(height: 12),
-          FilledButton(onPressed: _loadSummary, child: const Text('Retry')),
+          FilledButton(onPressed: _loadSummary, child: Text(l10n.commonRetry)),
         ],
       ),
     );
   }
 
   Widget _buildHeader(AnalysisSummaryResponse summary) {
+    final l10n = context.l10n;
     final personCount = summary.personAtoms.length;
     final atomCount = _allAtomPaths.length;
     final missingCount = summary.dependencies
@@ -309,13 +313,13 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
-                      Text('Entry: ${summary.entryName}'),
+                      Text(l10n.entryLabel(summary.entryName)),
                     ],
                   ),
                 ),
                 TextButton(
                   onPressed: _loading ? null : _clearCache,
-                  child: const Text('Clear cache'),
+                  child: Text(l10n.clearCacheLabel),
                 ),
               ],
             ),
@@ -324,15 +328,15 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _chip('Gender', summary.characterGender),
-                _chip('Persons', personCount.toString()),
-                _chip('Atoms', atomCount.toString()),
-                _chip('Deps', depsCount.toString()),
+                _chip(l10n.genderLabel, summary.characterGender),
+                _chip(l10n.personsLabel, personCount.toString()),
+                _chip(l10n.atomsLabel, atomCount.toString()),
+                _chip(l10n.depsLabel, depsCount.toString()),
                 if (missingCount > 0)
-                  _chip('Missing', missingCount.toString(),
+                  _chip(l10n.missingLabel, missingCount.toString(),
                       color: Colors.redAccent),
                 if (mismatchCount > 0)
-                  _chip('Mismatch', mismatchCount.toString(),
+                  _chip(l10n.mismatchLabel, mismatchCount.toString(),
                       color: Colors.orangeAccent),
               ],
             ),
@@ -354,19 +358,21 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: fg.withValues(alpha: 0.2)),
       ),
-      child: Text('$label: $value', style: TextStyle(color: fg)),
+      child: Text(context.l10n.labelValue(label, value),
+          style: TextStyle(color: fg)),
     );
   }
 
   Widget _buildTabs(AnalysisSummaryResponse summary) {
-    final tabs = <Tab>[const Tab(text: 'People')];
+    final l10n = context.l10n;
+    final tabs = <Tab>[Tab(text: l10n.peopleTitle)];
     final views = <Widget>[_buildPeopleTab(summary)];
     if (summary.isScene || summary.atoms.isNotEmpty) {
-      tabs.add(const Tab(text: 'Atoms'));
+      tabs.add(Tab(text: l10n.atomsTitle));
       views.add(_buildAtomsTab(summary));
     }
     if (summary.dependencies.isNotEmpty) {
-      tabs.add(const Tab(text: 'Dependencies'));
+      tabs.add(Tab(text: l10n.dependenciesTitle));
       views.add(_buildDependenciesTab(summary));
     }
     return DefaultTabController(
@@ -412,14 +418,15 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Widget _buildPersonList(AnalysisSummaryResponse summary) {
+    final l10n = context.l10n;
     if (summary.personAtoms.isEmpty) {
       return _section(
-        title: 'People',
-        child: const Text('No person atoms found'),
+        title: l10n.peopleTitle,
+        child: Text(l10n.noPersonAtomsFound),
       );
     }
     return _section(
-      title: 'People',
+      title: l10n.peopleTitle,
       child: SizedBox(
         height: 420,
         child: ListView.separated(
@@ -435,9 +442,9 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                 runSpacing: 6,
                 children: [
                   _tag(person.gender),
-                  if (person.hasPose) _tag('Pose'),
-                  if (person.hasAnimation) _tag('Animation'),
-                  if (person.hasPlugin) _tag('Plugin'),
+                  if (person.hasPose) _tag(l10n.poseTag),
+                  if (person.hasAnimation) _tag(l10n.animationTag),
+                  if (person.hasPlugin) _tag(l10n.pluginTag),
                 ],
               ),
               trailing:
@@ -468,36 +475,38 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Widget _buildPersonActions(AnalysisSummaryResponse summary) {
+    final l10n = context.l10n;
     final person = _selectedPerson;
     final allowBreast = person == null ? false : _allowBreast(person.gender);
     final allowGlute = person == null ? false : _allowGlute(person.gender);
     return _section(
-      title: 'Presets & Actions',
+      title: l10n.presetsActionsTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildTargetOptions(),
           const SizedBox(height: 12),
-          Text('Look Options', style: Theme.of(context).textTheme.titleSmall),
+          Text(l10n.lookOptionsTitle,
+              style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _optionChip('Morphs', _morphs, (value) {
+              _optionChip(l10n.categoryMorphs, _morphs, (value) {
                 setState(() => _morphs = value);
               }),
-              _optionChip('Hair', _hair, (value) {
+              _optionChip(l10n.categoryHair, _hair, (value) {
                 setState(() => _hair = value);
               }),
-              _optionChip('Clothing', _clothing, (value) {
+              _optionChip(l10n.categoryClothing, _clothing, (value) {
                 setState(() => _clothing = value);
               }),
-              _optionChip('Skin', _skin, (value) {
+              _optionChip(l10n.categorySkin, _skin, (value) {
                 setState(() => _skin = value);
               }),
               _optionChip(
-                'Breast',
+                l10n.categoryBreast,
                 _breast,
                 allowBreast
                     ? (value) {
@@ -506,7 +515,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                     : null,
               ),
               _optionChip(
-                'Glute',
+                l10n.categoryGlute,
                 _glute,
                 allowGlute
                     ? (value) {
@@ -517,7 +526,8 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
             ],
           ),
           const SizedBox(height: 16),
-          Text('Actions', style: Theme.of(context).textTheme.titleSmall),
+          Text(l10n.actionsTitle,
+              style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -541,7 +551,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           'person_order': _personOrder,
                         });
                       },
-                child: const Text('Load Look'),
+                child: Text(l10n.loadLookLabel),
               ),
               FilledButton.tonal(
                 onPressed: person == null || !person.hasPose
@@ -555,7 +565,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           'person_order': _personOrder,
                         });
                       },
-                child: const Text('Load Pose'),
+                child: Text(l10n.loadPoseLabel),
               ),
               FilledButton.tonal(
                 onPressed: person == null || !person.hasAnimation
@@ -569,7 +579,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           'person_order': _personOrder,
                         });
                       },
-                child: const Text('Load Animation'),
+                child: Text(l10n.loadAnimationLabel),
               ),
               FilledButton.tonal(
                 onPressed: person == null || !person.hasPlugin
@@ -583,13 +593,13 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           'person_order': _personOrder,
                         });
                       },
-                child: const Text('Load Plugin'),
+                child: Text(l10n.loadPluginLabel),
               ),
             ],
           ),
           if (person != null && !person.hasPose) ...[
             const SizedBox(height: 8),
-            const Text('Pose presets require .json scene entries.'),
+            Text(l10n.posePresetHint),
           ],
         ],
       ),
@@ -605,6 +615,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Widget _buildAtomsTab(AnalysisSummaryResponse summary) {
+    final l10n = context.l10n;
     final types = _typeToPaths.keys.toList()..sort();
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -612,23 +623,23 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _section(
-            title: 'Atom Search',
+            title: l10n.atomSearchTitle,
             child: TextField(
               controller: _atomSearchController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Filter atoms by name',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: l10n.filterAtomsHint,
+                prefixIcon: const Icon(Icons.search),
               ),
             ),
           ),
           const SizedBox(height: 12),
           _section(
-            title: 'Selection',
+            title: l10n.selectionTitle,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Selected ${_selectedAtomPaths.length} atoms'),
+                Text(l10n.selectedAtomsCount(_selectedAtomPaths.length)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -638,13 +649,13 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                       onPressed: _baseAtomPaths.isEmpty
                           ? null
                           : () => _selectPaths(_baseAtomPaths),
-                      child: const Text('Select Base'),
+                      child: Text(l10n.selectBaseLabel),
                     ),
                     OutlinedButton(
                       onPressed: _allAtomPaths.isEmpty
                           ? null
                           : () => _selectPaths(_allAtomPaths, replace: true),
-                      child: const Text('Select All'),
+                      child: Text(l10n.commonSelectAll),
                     ),
                     OutlinedButton(
                       onPressed: _selectedAtomPaths.isEmpty
@@ -652,7 +663,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           : () {
                               setState(() => _selectedAtomPaths.clear());
                             },
-                      child: const Text('Clear'),
+                      child: Text(l10n.commonClear),
                     ),
                     if (_typeToPaths.isNotEmpty)
                       PopupMenuButton<String>(
@@ -664,7 +675,8 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                                 (type) => PopupMenuItem(
                                   value: type,
                                   child: Text(
-                                      'Select $type (${_typeToPaths[type]!.length})'),
+                                      l10n.selectTypeWithCount(
+                                          type, _typeToPaths[type]!.length)),
                                 ),
                               )
                               .toList();
@@ -678,7 +690,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                               color: Theme.of(context).colorScheme.outline,
                             ),
                           ),
-                          child: const Text('Select Type'),
+                          child: Text(l10n.selectTypeLabel),
                         ),
                       ),
                     Row(
@@ -690,7 +702,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                             setState(() => _includeBaseAtoms = value);
                           },
                         ),
-                        const Text('Include base atoms'),
+                        Text(l10n.includeBaseAtomsLabel),
                       ],
                     ),
                   ],
@@ -701,10 +713,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           const SizedBox(height: 12),
           Expanded(
             child: _section(
-              title: 'Atom Tree',
+              title: l10n.atomTreeTitle,
               expandChild: true,
               child: summary.atoms.isEmpty
-                  ? const Center(child: Text('No atoms available'))
+                  ? Center(child: Text(l10n.noAtomsAvailable))
                   : ListView(
                       children: _buildAtomNodes(summary.atoms, '', _atomQuery),
                     ),
@@ -712,7 +724,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           ),
           const SizedBox(height: 12),
           _section(
-            title: 'Scene Actions',
+            title: l10n.sceneActionsTitle,
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -732,7 +744,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           });
                         }
                       : null,
-                  child: const Text('Load Scene'),
+                  child: Text(l10n.loadSceneLabel),
                 ),
                 FilledButton.tonal(
                   onPressed: _selectedAtomPaths.isNotEmpty
@@ -744,7 +756,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           });
                         }
                       : null,
-                  child: const Text('Add To Scene'),
+                  child: Text(l10n.addToSceneLabel),
                 ),
                 FilledButton.tonal(
                   onPressed: _selectedAtomPaths.isNotEmpty
@@ -756,7 +768,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           });
                         }
                       : null,
-                  child: const Text('Add as Subscene'),
+                  child: Text(l10n.addAsSubsceneLabel),
                 ),
               ],
             ),
@@ -885,6 +897,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Widget _buildDependenciesTab(AnalysisSummaryResponse summary) {
+    final l10n = context.l10n;
     final filtered = summary.dependencies.where((dep) {
       if (_dependencyFilter != 'all' && dep.status != _dependencyFilter) {
         return false;
@@ -905,28 +918,28 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _section(
-            title: 'Dependency Search',
+            title: l10n.dependencySearchTitle,
             child: TextField(
               controller: _dependencySearchController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Filter dependencies',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: l10n.filterDependenciesHint,
+                prefixIcon: const Icon(Icons.search),
               ),
             ),
           ),
           const SizedBox(height: 12),
           _section(
-            title: 'Filters',
+            title: l10n.filtersTitle,
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                _filterChip('all', 'All'),
-                _filterChip('missing', 'Missing'),
-                _filterChip('version_mismatch', 'Mismatch'),
-                _filterChip('resolved', 'Resolved'),
-                _filterChip('ok', 'Installed'),
+                _filterChip('all', l10n.filterAllLabel),
+                _filterChip('missing', l10n.filterMissingLabel),
+                _filterChip('version_mismatch', l10n.filterMismatchLabel),
+                _filterChip('resolved', l10n.filterResolvedLabel),
+                _filterChip('ok', l10n.filterInstalledLabel),
                 TextButton(
                   onPressed: missing.isEmpty
                       ? null
@@ -936,10 +949,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                           );
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Missing deps copied')),
+                            SnackBar(content: Text(l10n.missingDepsCopied)),
                           );
                         },
-                  child: const Text('Copy Missing'),
+                  child: Text(l10n.copyMissingLabel),
                 ),
               ],
             ),
@@ -947,10 +960,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           const SizedBox(height: 12),
           Expanded(
             child: _section(
-              title: 'Dependencies (${filtered.length})',
+              title: l10n.dependenciesCount(filtered.length),
               expandChild: true,
               child: filtered.isEmpty
-                  ? const Center(child: Text('No dependencies match'))
+                  ? Center(child: Text(l10n.noDependenciesMatch))
                   : ListView.separated(
                       itemCount: filtered.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -962,7 +975,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                         return ListTile(
                           title: Text(dep.name),
                           subtitle: resolved
-                              ? Text('Resolved: ${dep.resolved}')
+                              ? Text(l10n.resolvedLabel(dep.resolved))
                               : Text(dep.status.replaceAll('_', ' ')),
                           trailing: Icon(Icons.circle, color: color, size: 12),
                         );
@@ -1003,8 +1016,9 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Widget _buildTargetOptions() {
+    final l10n = context.l10n;
     return _section(
-      title: 'Preset Target',
+      title: l10n.presetTargetTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1018,7 +1032,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                     8,
                     (index) => DropdownMenuItem(
                       value: index + 1,
-                      child: Text('Person ${index + 1}'),
+                      child: Text(l10n.personLabel(index + 1)),
                     ),
                   ),
                   onChanged: (value) {
@@ -1029,7 +1043,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
               ),
               const SizedBox(width: 12),
               FilterChip(
-                label: const Text('Ignore Gender'),
+                label: Text(l10n.ignoreGenderLabel),
                 selected: _ignoreGender,
                 onSelected: (value) {
                   setState(() => _ignoreGender = value);
@@ -1039,7 +1053,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Applies to person presets only. Atom actions ignore this.',
+            context.l10n.ignoreGenderHint,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

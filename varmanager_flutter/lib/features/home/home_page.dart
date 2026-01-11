@@ -9,6 +9,7 @@ import '../../core/models/job_models.dart';
 import '../../core/models/var_models.dart';
 import '../../core/utils/debounce.dart';
 import '../../widgets/lazy_dropdown_field.dart';
+import '../../l10n/l10n.dart';
 import '../missing_vars/missing_vars_page.dart';
 import '../prepare_saves/prepare_saves_page.dart';
 import '../uninstall_vars/uninstall_vars_page.dart';
@@ -136,6 +137,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final varsAsync = ref.watch(varsListProvider);
     final selected = ref.watch(selectedVarsProvider);
     final focusedVar = ref.watch(focusedVarProvider);
@@ -165,9 +167,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   SizedBox(
                     width: 240,
                     child: TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Search var/package',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l10n.searchVarPackageLabel,
+                        border: const OutlineInputBorder(),
                       ),
                       onChanged: (value) {
                         _searchDebounce.run(() {
@@ -181,10 +183,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                   SizedBox(
                     width: 220,
                     child: LazyDropdownField(
-                      label: 'Creator',
+                      label: l10n.creatorLabel,
                       value: query.creator.isEmpty ? 'ALL' : query.creator,
                       allValue: 'ALL',
-                      allLabel: 'All creators',
+                      allLabel: l10n.allCreators,
                       optionsLoader: (queryText, offset, limit) async {
                         final client = ref.read(backendClientProvider);
                         return client.listCreators(
@@ -202,10 +204,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   DropdownButton<String>(
                     value: query.installed,
-                    items: const [
-                      DropdownMenuItem(value: 'all', child: Text('All status')),
-                      DropdownMenuItem(value: 'true', child: Text('Installed')),
-                      DropdownMenuItem(value: 'false', child: Text('Not installed')),
+                    items: [
+                      DropdownMenuItem(
+                          value: 'all', child: Text(l10n.statusAllLabel)),
+                      DropdownMenuItem(
+                          value: 'true', child: Text(l10n.statusInstalled)),
+                      DropdownMenuItem(
+                          value: 'false', child: Text(l10n.statusNotInstalled)),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -216,13 +221,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   DropdownButton<String>(
                     value: query.sort,
-                    items: const [
-                      DropdownMenuItem(value: 'meta_date', child: Text('Meta date')),
-                      DropdownMenuItem(value: 'var_date', child: Text('Var date')),
-                      DropdownMenuItem(value: 'var_name', child: Text('Var name')),
-                      DropdownMenuItem(value: 'creator', child: Text('Creator')),
-                      DropdownMenuItem(value: 'package', child: Text('Package')),
-                      DropdownMenuItem(value: 'size', child: Text('Size')),
+                    items: [
+                      DropdownMenuItem(
+                          value: 'meta_date', child: Text(l10n.sortMetaDate)),
+                      DropdownMenuItem(
+                          value: 'var_date', child: Text(l10n.sortVarDate)),
+                      DropdownMenuItem(
+                          value: 'var_name', child: Text(l10n.sortVarName)),
+                      DropdownMenuItem(
+                          value: 'creator', child: Text(l10n.sortCreator)),
+                      DropdownMenuItem(
+                          value: 'package', child: Text(l10n.sortPackage)),
+                      DropdownMenuItem(value: 'size', child: Text(l10n.sortSize)),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -233,9 +243,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                   DropdownButton<String>(
                     value: query.order,
-                    items: const [
-                      DropdownMenuItem(value: 'desc', child: Text('Desc')),
-                      DropdownMenuItem(value: 'asc', child: Text('Asc')),
+                    items: [
+                      DropdownMenuItem(value: 'desc', child: Text(l10n.sortDesc)),
+                      DropdownMenuItem(value: 'asc', child: Text(l10n.sortAsc)),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -249,7 +259,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     items: const [25, 50, 100, 200]
                         .map((value) => DropdownMenuItem(
                               value: value,
-                              child: Text('Per page $value'),
+                              child: Text(l10n.perPageLabel(value)),
                             ))
                         .toList(),
                     onChanged: (value) {
@@ -259,9 +269,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       );
                     },
                   ),
-                  Text('Selected ${selected.length}'),
+                  Text(l10n.selectedCount(selected.length)),
                   _withTooltip(
-                    'Select all items on the current page.',
+                    l10n.selectPageTooltip,
                     TextButton(
                       onPressed: () {
                         final items = varsAsync.asData?.value.items ?? [];
@@ -270,11 +280,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                         final next = <String>{...selected, ...pageNames};
                         ref.read(selectedVarsProvider.notifier).setSelection(next);
                       },
-                      child: const Text('Select page'),
+                      child: Text(l10n.selectPageLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Invert selection on the current page.',
+                    l10n.invertPageTooltip,
                     TextButton(
                       onPressed: () {
                         final items = varsAsync.asData?.value.items ?? [];
@@ -297,22 +307,22 @@ class _HomePageState extends ConsumerState<HomePage> {
                             .read(selectedVarsProvider.notifier)
                             .setSelection(next);
                       },
-                      child: const Text('Invert page'),
+                      child: Text(l10n.invertPageLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Clear all selected items.',
+                    l10n.clearAllTooltip,
                     TextButton(
                       onPressed: selected.isEmpty
                           ? null
                           : () {
                               ref.read(selectedVarsProvider.notifier).clear();
                             },
-                      child: const Text('Clear all'),
+                      child: Text(l10n.clearAllLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Reset all filters to defaults.',
+                    l10n.resetFiltersTooltip,
                     TextButton(
                       onPressed: () {
                         ref.read(varsQueryProvider.notifier).reset();
@@ -326,13 +336,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                           _showAdvancedFilters = false;
                         });
                       },
-                      child: const Text('Reset filters'),
+                      child: Text(l10n.resetFiltersLabel),
                     ),
                   ),
                   _withTooltip(
                     _showAdvancedFilters
-                        ? 'Hide advanced filters.'
-                        : 'Show advanced filters.',
+                        ? l10n.hideAdvancedTooltip
+                        : l10n.showAdvancedTooltip,
                     TextButton(
                       onPressed: () {
                         setState(() {
@@ -341,8 +351,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                       },
                       child: Text(
                         _showAdvancedFilters
-                            ? 'Hide advanced'
-                            : 'Advanced filters',
+                            ? l10n.hideAdvancedLabel
+                            : l10n.advancedFiltersLabel,
                       ),
                     ),
                   ),
@@ -364,9 +374,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       width: 220,
                       child: TextField(
                         controller: _packageController,
-                        decoration: const InputDecoration(
-                          labelText: 'Package filter',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l10n.packageFilterLabel,
+                          border: const OutlineInputBorder(),
                         ),
                         onChanged: (value) {
                           _filterDebounce.run(() {
@@ -384,9 +394,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       width: 180,
                       child: TextField(
                         controller: _versionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Version filter',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l10n.versionFilterLabel,
+                          border: const OutlineInputBorder(),
                         ),
                         onChanged: (value) {
                           _filterDebounce.run(() {
@@ -402,10 +412,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                     DropdownButton<String>(
                       value: query.disabled,
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All enabled')),
-                        DropdownMenuItem(value: 'false', child: Text('Enabled only')),
-                        DropdownMenuItem(value: 'true', child: Text('Disabled only')),
+                      items: [
+                        DropdownMenuItem(
+                            value: 'all', child: Text(l10n.enabledAllLabel)),
+                        DropdownMenuItem(
+                            value: 'false', child: Text(l10n.enabledOnlyLabel)),
+                        DropdownMenuItem(
+                            value: 'true', child: Text(l10n.disabledOnlyLabel)),
                       ],
                       onChanged: (value) {
                         if (value == null) return;
@@ -418,9 +431,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       width: 140,
                       child: TextField(
                         controller: _minSizeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Min size (MB)',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l10n.minSizeLabel,
+                          border: const OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
@@ -439,9 +452,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       width: 140,
                       child: TextField(
                         controller: _maxSizeController,
-                        decoration: const InputDecoration(
-                          labelText: 'Max size (MB)',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l10n.maxSizeLabel,
+                          border: const OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
@@ -460,9 +473,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       width: 140,
                       child: TextField(
                         controller: _minDepController,
-                        decoration: const InputDecoration(
-                          labelText: 'Min deps',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l10n.minDepsLabel,
+                          border: const OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
@@ -481,9 +494,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       width: 140,
                       child: TextField(
                         controller: _maxDepController,
-                        decoration: const InputDecoration(
-                          labelText: 'Max deps',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l10n.maxDepsLabel,
+                          border: const OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
@@ -498,43 +511,43 @@ class _HomePageState extends ConsumerState<HomePage> {
                         },
                       ),
                     ),
-                    _presenceFilter('Scenes', query.hasScene,
+                    _presenceFilter(l10n.categoryScenes, query.hasScene,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasScene: value))),
-                    _presenceFilter('Looks', query.hasLook,
+                    _presenceFilter(l10n.categoryLooks, query.hasLook,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasLook: value))),
-                    _presenceFilter('Clothing', query.hasCloth,
+                    _presenceFilter(l10n.categoryClothing, query.hasCloth,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasCloth: value))),
-                    _presenceFilter('Hair', query.hasHair,
+                    _presenceFilter(l10n.categoryHair, query.hasHair,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasHair: value))),
-                    _presenceFilter('Skin', query.hasSkin,
+                    _presenceFilter(l10n.categorySkin, query.hasSkin,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasSkin: value))),
-                    _presenceFilter('Pose', query.hasPose,
+                    _presenceFilter(l10n.categoryPose, query.hasPose,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasPose: value))),
-                    _presenceFilter('Morphs', query.hasMorph,
+                    _presenceFilter(l10n.categoryMorphs, query.hasMorph,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasMorph: value))),
-                    _presenceFilter('Plugins', query.hasPlugin,
+                    _presenceFilter(l10n.categoryPlugins, query.hasPlugin,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasPlugin: value))),
-                    _presenceFilter('Scripts', query.hasScript,
+                    _presenceFilter(l10n.categoryScripts, query.hasScript,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasScript: value))),
-                    _presenceFilter('Assets', query.hasAsset,
+                    _presenceFilter(l10n.categoryAssets, query.hasAsset,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasAsset: value))),
-                    _presenceFilter('Textures', query.hasTexture,
+                    _presenceFilter(l10n.categoryTextures, query.hasTexture,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasTexture: value))),
-                    _presenceFilter('SubScene', query.hasSubScene,
+                    _presenceFilter(l10n.categorySubScene, query.hasSubScene,
                         (value) => _updateQuery(
                             (state) => state.copyWith(page: 1, hasSubScene: value))),
-                    _presenceFilter('Appearance', query.hasAppearance,
+                    _presenceFilter(l10n.categoryAppearance, query.hasAppearance,
                         (value) => _updateQuery((state) =>
                             state.copyWith(page: 1, hasAppearance: value))),
                   ],
@@ -586,7 +599,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => Center(
-                child: Text('Load failed: $err'),
+                child: Text(l10n.loadFailed(err.toString())),
               ),
             ),
           ),
@@ -600,6 +613,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     AsyncValue<VarsListResponse> _,
     VarsQueryParams query,
   ) {
+    final l10n = context.l10n;
     final isBusy = ref.watch(jobBusyProvider);
     final compactPadding =
         const EdgeInsets.symmetric(horizontal: 12, vertical: 8);
@@ -614,20 +628,20 @@ class _HomePageState extends ConsumerState<HomePage> {
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 520;
                 final title = Text(
-                  'Actions',
+                  l10n.actionsTitle,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 );
                 final switcher = SegmentedButton<_ActionGroup>(
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: _ActionGroup.core,
-                      label: Text('Core'),
-                      tooltip: 'Core actions and dependency checks.',
+                      label: Text(l10n.actionGroupCore),
+                      tooltip: l10n.actionGroupCoreTooltip,
                     ),
                     ButtonSegment(
                       value: _ActionGroup.maintenance,
-                      label: Text('Maintenance'),
-                      tooltip: 'Cleanup and maintenance jobs.',
+                      label: Text(l10n.actionGroupMaintenance),
+                      tooltip: l10n.actionGroupMaintenanceTooltip,
                     ),
                   ],
                   selected: {_actionGroup},
@@ -696,6 +710,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     bool isBusy,
     EdgeInsets compactPadding,
   ) {
+    final l10n = context.l10n;
     switch (_actionGroup) {
       case _ActionGroup.core:
         return Wrap(
@@ -705,7 +720,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             _withTooltip(
-              'Scan vars, extract previews, and update the database.',
+              l10n.updateDbTooltip,
               FilledButton.icon(
                 onPressed: isBusy
                     ? null
@@ -714,7 +729,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ref.invalidate(varsListProvider);
                       },
                 icon: const Icon(Icons.sync),
-                label: const Text('Update DB'),
+                label: Text(l10n.updateDbLabel),
                 style: FilledButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -722,7 +737,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             _withTooltip(
-              'Launch the VaM application.',
+              l10n.startVamTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
@@ -730,7 +745,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         await _runJob('vam_start');
                       },
                 icon: const Icon(Icons.play_arrow),
-                label: const Text('Start VaM'),
+                label: Text(l10n.startVamLabel),
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -738,7 +753,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             _withTooltip(
-              'Open the saves preparation and dependency tools.',
+              l10n.prepareSavesTooltip,
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -748,7 +763,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   );
                 },
                 icon: const Icon(Icons.build_circle),
-                label: const Text('Prepare Saves'),
+                label: Text(l10n.prepareSavesLabel),
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -758,38 +773,38 @@ class _HomePageState extends ConsumerState<HomePage> {
             SizedBox(
               width: 230,
               child: _withTooltip(
-                'Choose the source used to detect missing dependencies.',
+                l10n.missingDepsSourceTooltip,
                 DropdownButtonFormField<String>(
                   initialValue: _missingDepsScope,
-                  decoration: const InputDecoration(
-                    labelText: 'Missing deps source',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.missingDepsSourceLabel,
+                    border: const OutlineInputBorder(),
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 10,
                     ),
                   ),
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: 'installed',
-                      child: Text('Installed packages'),
+                      child: Text(l10n.missingDepsSourceInstalled),
                     ),
                     DropdownMenuItem(
                       value: 'all',
-                      child: Text('All packages'),
+                      child: Text(l10n.missingDepsSourceAll),
                     ),
                     DropdownMenuItem(
                       value: 'filtered',
-                      child: Text('Filtered list'),
+                      child: Text(l10n.missingDepsSourceFiltered),
                     ),
                     DropdownMenuItem(
                       value: 'saves',
-                      child: Text('Saves folder'),
+                      child: Text(l10n.missingDepsSourceSaves),
                     ),
                     DropdownMenuItem(
                       value: 'log',
-                      child: Text('Log (output_log.txt)'),
+                      child: Text(l10n.missingDepsSourceLog),
                     ),
                   ],
                   onChanged: (value) {
@@ -802,11 +817,11 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             _withTooltip(
-              'Analyze missing dependencies and open the results.',
+              l10n.runMissingDepsTooltip,
               FilledButton.icon(
                 onPressed: isBusy ? null : () => _runMissingDeps(query),
                 icon: const Icon(Icons.search),
-                label: const Text('Run Missing Deps'),
+                label: Text(l10n.runMissingDepsLabel),
                 style: FilledButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -822,7 +837,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           runSpacing: 8,
           children: [
             _withTooltip(
-              'Rebuild symlinks after changing the Vars source directory.',
+              l10n.rebuildLinksTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
@@ -831,7 +846,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             args: {'include_missing': true});
                       },
                 icon: const Icon(Icons.link),
-                label: const Text('Rebuild Links'),
+                label: Text(l10n.rebuildLinksLabel),
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -839,7 +854,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             _withTooltip(
-              'Re-extract missing preview images.',
+              l10n.fixPreviewTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
@@ -847,7 +862,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         await _runJob('fix_previews');
                       },
                 icon: const Icon(Icons.image_search),
-                label: const Text('Fix Preview'),
+                label: Text(l10n.fixPreviewLabel),
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -855,7 +870,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             _withTooltip(
-              'Move old versions not referenced by dependencies.',
+              l10n.staleVarsTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
@@ -863,7 +878,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         await _runJob('stale_vars');
                       },
                 icon: const Icon(Icons.inventory_2_outlined),
-                label: const Text('Stale Vars'),
+                label: Text(l10n.staleVarsLabel),
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -871,7 +886,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             _withTooltip(
-              'Find or manage old package versions.',
+              l10n.oldVersionsTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
@@ -879,7 +894,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         await _runJob('old_version_vars');
                       },
                 icon: const Icon(Icons.layers_clear),
-                label: const Text('Old Versions'),
+                label: Text(l10n.oldVersionsLabel),
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
@@ -897,6 +912,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       Set<String> selected,
       VarsQueryParams query,
       String? focusedVar) {
+    final l10n = context.l10n;
     final isBusy = ref.watch(jobBusyProvider);
     final totalPages =
         data.total == 0 ? 1 : (data.total + query.perPage - 1) ~/ query.perPage;
@@ -912,9 +928,9 @@ class _HomePageState extends ConsumerState<HomePage> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                Text('Total ${data.total} items'),
+                Text(l10n.totalItems(data.total)),
                 const Spacer(),
-                Text('Page ${data.page}/$totalPages'),
+                Text(l10n.pageOf(data.page, totalPages)),
                 IconButton(
                   onPressed: data.page > 1
                       ? () {
@@ -955,7 +971,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   onPressed: () {
                     _updateQuery((state) => state.copyWith(page: 1));
                   },
-                  child: const Text('Refresh'),
+                  child: Text(l10n.commonRefresh),
                 ),
               ],
             ),
@@ -999,16 +1015,26 @@ class _HomePageState extends ConsumerState<HomePage> {
                             final isDark = Theme.of(context).brightness == Brightness.dark;
                             return Chip(
                               label: Text(
-                                item.installed ? 'Installed' : 'Not installed',
+                                item.installed
+                                    ? l10n.statusInstalled
+                                    : l10n.statusNotInstalled,
                                 style: TextStyle(
                                   color: isDark
-                                      ? (item.installed ? Colors.green.shade200 : Colors.grey.shade300)
-                                      : (item.installed ? Colors.green.shade800 : Colors.grey.shade700),
+                                      ? (item.installed
+                                          ? Colors.green.shade200
+                                          : Colors.grey.shade300)
+                                      : (item.installed
+                                          ? Colors.green.shade800
+                                          : Colors.grey.shade700),
                                 ),
                               ),
                               backgroundColor: isDark
-                                  ? (item.installed ? Colors.green.shade900 : Colors.grey.shade800)
-                                  : (item.installed ? Colors.green.shade100 : Colors.grey.shade200),
+                                  ? (item.installed
+                                      ? Colors.green.shade900
+                                      : Colors.grey.shade800)
+                                  : (item.installed
+                                      ? Colors.green.shade100
+                                      : Colors.grey.shade200),
                             );
                           },
                         ),
@@ -1020,7 +1046,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               ),
                             );
                           },
-                          child: const Text('Details'),
+                          child: Text(l10n.commonDetails),
                         ),
                       ],
                     ),
@@ -1037,7 +1063,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 runSpacing: 8,
                 children: [
                   _withTooltip(
-                    'Install selected vars and dependencies.',
+                    l10n.installSelectedTooltip,
                     FilledButton(
                       onPressed: isBusy
                           ? null
@@ -1048,11 +1074,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                               });
                               ref.invalidate(varsListProvider);
                             },
-                      child: const Text('Install Selected'),
+                      child: Text(l10n.installSelectedLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Uninstall selected vars and affected items.',
+                    l10n.uninstallSelectedTooltip,
                     FilledButton.tonal(
                       onPressed: isBusy
                           ? null
@@ -1081,11 +1107,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 ref.invalidate(varsListProvider);
                               }
                             },
-                      child: const Text('Uninstall Selected'),
+                      child: Text(l10n.uninstallSelectedLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Delete selected vars and affected items.',
+                    l10n.deleteSelectedTooltip,
                     OutlinedButton(
                       onPressed: isBusy
                           ? null
@@ -1096,17 +1122,17 @@ class _HomePageState extends ConsumerState<HomePage> {
                               });
                               ref.invalidate(varsListProvider);
                             },
-                      child: const Text('Delete Selected'),
+                      child: Text(l10n.deleteSelectedLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Move selected symlink entries to a target folder.',
+                    l10n.moveLinksTooltip,
                     OutlinedButton(
                       onPressed: isBusy
                           ? null
                           : () async {
                               final target =
-                                  await _askText(context, 'Target dir');
+                                  await _askText(context, l10n.targetDirLabel);
                               if (target == null || target.trim().isEmpty) {
                                 return;
                               }
@@ -1115,18 +1141,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 'target_dir': target.trim(),
                               });
                             },
-                      child: const Text('Move Links'),
+                      child: Text(l10n.moveLinksLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Export installed vars to a text file.',
+                    l10n.exportInstalledTooltip,
                     OutlinedButton(
                       onPressed: isBusy
                           ? null
                           : () async {
                               final path = await _askText(
                                 context,
-                                'Export path',
+                                l10n.exportPathTitle,
                                 hint: 'installed_vars.txt',
                               );
                               if (path == null || path.trim().isEmpty) return;
@@ -1134,18 +1160,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 'path': path.trim(),
                               });
                             },
-                      child: const Text('Export Installed'),
+                      child: Text(l10n.exportInstalledLabel),
                     ),
                   ),
                   _withTooltip(
-                    'Install vars from a text list.',
+                    l10n.installFromListTooltip,
                     OutlinedButton(
                       onPressed: isBusy
                           ? null
                           : () async {
                               final path = await _askText(
                                 context,
-                                'Install list path',
+                                l10n.installListPathLabel,
                                 hint: 'install_list.txt',
                               );
                               if (path == null || path.trim().isEmpty) return;
@@ -1154,7 +1180,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               });
                               ref.invalidate(varsListProvider);
                             },
-                      child: const Text('Install from List'),
+                      child: Text(l10n.installFromListLabel),
                     ),
                   ),
                 ],
@@ -1170,17 +1196,18 @@ class _HomePageState extends ConsumerState<HomePage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
+        final l10n = context.l10n;
         return AlertDialog(
           title: Text(title),
           content: Text(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('OK'),
+              child: Text(l10n.commonOk),
             ),
           ],
         );
@@ -1228,6 +1255,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     return showDialog<String>(
       context: context,
       builder: (context) {
+        final l10n = context.l10n;
         return AlertDialog(
           title: Text(title),
           content: TextField(
@@ -1237,11 +1265,11 @@ class _HomePageState extends ConsumerState<HomePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('OK'),
+              child: Text(l10n.commonOk),
             ),
           ],
         );
@@ -1250,6 +1278,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildPackSwitchPanel(BuildContext context) {
+    final l10n = context.l10n;
     final switches = _packSwitchData?.switches ?? [];
     final current = _packSwitchData?.current ?? 'default';
     final selectedSwitch = switches.contains(_selectedSwitch)
@@ -1262,9 +1291,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Pack Switch',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            Text(
+              l10n.packSwitchTitle,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
             const SizedBox(height: 12),
             if (switches.isNotEmpty)
@@ -1293,9 +1322,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     color: Colors.green.shade100,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Text(
-                                    'Active',
-                                    style: TextStyle(fontSize: 10),
+                                  child: Text(
+                                    l10n.activeLabel,
+                                    style: const TextStyle(fontSize: 10),
                                   ),
                                 ),
                             ],
@@ -1311,12 +1340,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                 },
               )
             else
-              const Text('No switches available', style: TextStyle(fontSize: 12)),
+              Text(l10n.noSwitchesAvailable,
+                  style: const TextStyle(fontSize: 12)),
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: () => _addPackSwitch(context),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add'),
+              label: Text(l10n.commonAdd),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 8),
               ),
@@ -1329,12 +1359,12 @@ class _HomePageState extends ConsumerState<HomePage> {
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 8),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_outline, size: 18),
-                  SizedBox(width: 8),
-                  Text('Activate'),
+                  const Icon(Icons.check_circle_outline, size: 18),
+                  const SizedBox(width: 8),
+                  Text(l10n.activateLabel),
                 ],
               ),
             ),
@@ -1344,7 +1374,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ? () => _renamePackSwitch(context, selectedSwitch)
                   : null,
               icon: const Icon(Icons.edit, size: 18),
-              label: const Text('Rename'),
+              label: Text(l10n.renameLabel),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 8),
               ),
@@ -1357,7 +1387,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ? () => _deletePackSwitch(selectedSwitch)
                   : null,
               icon: const Icon(Icons.delete_outline, size: 18),
-              label: const Text('Delete'),
+              label: Text(l10n.commonDelete),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 foregroundColor: Colors.red.shade700,
@@ -1370,14 +1400,14 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _addPackSwitch(BuildContext context) async {
-    final name = await _askText(context, 'New Switch Name', hint: '');
+    final name = await _askText(context, context.l10n.newSwitchNameTitle, hint: '');
     if (name == null || name.trim().isEmpty) return;
     final trimmed = name.trim();
     final switches = _packSwitchData?.switches ?? [];
     if (switches.any((s) => s.toLowerCase() == trimmed.toLowerCase())) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Switch already exists')),
+        SnackBar(content: Text(context.l10n.switchAlreadyExists)),
       );
       return;
     }
@@ -1386,13 +1416,14 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _renamePackSwitch(BuildContext context, String oldName) async {
-    final newName = await _askText(context, 'Rename Switch', hint: oldName);
+    final newName =
+        await _askText(context, context.l10n.renameSwitchTitle, hint: oldName);
     if (newName == null || newName.trim().isEmpty) return;
     final trimmed = newName.trim();
     if (trimmed.toLowerCase() == oldName.toLowerCase()) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New name must be different')),
+        SnackBar(content: Text(context.l10n.newNameMustBeDifferent)),
       );
       return;
     }
@@ -1400,7 +1431,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (switches.any((s) => s.toLowerCase() == trimmed.toLowerCase())) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Target name already exists')),
+        SnackBar(content: Text(context.l10n.switchNameAlreadyExists)),
       );
       return;
     }
@@ -1414,8 +1445,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _deletePackSwitch(String name) async {
     final confirmed = await _confirmAction(
       context,
-      'Delete Switch',
-      'Delete switch "$name"?',
+      context.l10n.deleteSwitchTitle,
+      context.l10n.deleteSwitchConfirm(name),
     );
     if (!confirmed) return;
     await _runJob('packswitch_delete', args: {'name': name});
@@ -1469,19 +1500,20 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _presenceFilter(
       String label, String value, ValueChanged<String> onChanged) {
+    final l10n = context.l10n;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          '$label: ',
+          l10n.presenceFilterLabel(label),
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         DropdownButton<String>(
           value: value,
-          items: const [
-            DropdownMenuItem(value: 'all', child: Text('All')),
-            DropdownMenuItem(value: 'true', child: Text('Has')),
-            DropdownMenuItem(value: 'false', child: Text('None')),
+          items: [
+            DropdownMenuItem(value: 'all', child: Text(l10n.presenceAllLabel)),
+            DropdownMenuItem(value: 'true', child: Text(l10n.presenceHasLabel)),
+            DropdownMenuItem(value: 'false', child: Text(l10n.presenceNoneLabel)),
           ],
           onChanged: (next) {
             if (next == null) return;
@@ -1494,6 +1526,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildCompactModeHint(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -1510,7 +1543,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Window too small. Enlarge window to show preview panel.',
+              l10n.compactModeHint,
               style: TextStyle(
                 fontSize: 13,
                 color: Theme.of(context).colorScheme.onPrimaryContainer,
