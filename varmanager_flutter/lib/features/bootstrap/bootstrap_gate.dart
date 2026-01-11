@@ -86,6 +86,7 @@ class _BootstrapGateState extends ConsumerState<BootstrapGate> {
       case BootstrapStep.tourScenes:
       case BootstrapStep.tourHubTags:
       case BootstrapStep.tourHubDownloads:
+      case BootstrapStep.tourDownloadManager:
       case BootstrapStep.tourSettings:
         return const SizedBox.shrink();
     }
@@ -134,6 +135,12 @@ BootstrapTourData resolveBootstrapTourData(
         targetKey: BootstrapKeys.hubDownloadAllButton,
         title: l10n.bootstrapTourHubDownloadsTitle,
         body: l10n.bootstrapTourHubDownloadsBody,
+      );
+    case BootstrapStep.tourDownloadManager:
+      return BootstrapTourData(
+        targetKey: BootstrapKeys.downloadManagerBubble,
+        title: l10n.bootstrapTourDownloadManagerTitle,
+        body: l10n.bootstrapTourDownloadManagerBody,
       );
     case BootstrapStep.tourSettings:
       return BootstrapTourData(

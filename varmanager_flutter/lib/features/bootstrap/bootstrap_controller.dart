@@ -24,6 +24,7 @@ class BootstrapController extends Notifier<BootstrapState> {
     BootstrapStep.tourScenes,
     BootstrapStep.tourHubTags,
     BootstrapStep.tourHubDownloads,
+    BootstrapStep.tourDownloadManager,
     BootstrapStep.tourSettings,
     BootstrapStep.finish,
   ];
@@ -225,6 +226,7 @@ class BootstrapController extends Notifier<BootstrapState> {
         return 1;
       case BootstrapStep.tourHubTags:
       case BootstrapStep.tourHubDownloads:
+      case BootstrapStep.tourDownloadManager:
         return 2;
       case BootstrapStep.tourSettings:
         return 3;

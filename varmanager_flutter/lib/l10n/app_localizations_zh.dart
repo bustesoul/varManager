@@ -1576,6 +1576,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapTourHubDownloadsBody => '生成下载列表显示总大小，可复制链接或一键加入下载队列。';
 
   @override
+  String get bootstrapTourDownloadManagerTitle => '下载管理器：统一查看下载';
+
+  @override
+  String get bootstrapTourDownloadManagerBody =>
+      '在 Hub 中添加的依赖或开始下载后，任务会汇总到这里，随时查看进度与状态。';
+
+  @override
   String get bootstrapTourSettingsTitle => '设置：实时配置';
 
   @override

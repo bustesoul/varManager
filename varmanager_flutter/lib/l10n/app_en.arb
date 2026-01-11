@@ -754,6 +754,8 @@
   "bootstrapTourHubTagsBody": "Search by tags/creator and use quick chips; open details for version and dependency info.",
   "bootstrapTourHubDownloadsTitle": "Hub: Download list",
   "bootstrapTourHubDownloadsBody": "Build a download list, see total size, copy links, or Download All to enqueue.",
+  "bootstrapTourDownloadManagerTitle": "Download Manager: All downloads in one place",
+  "bootstrapTourDownloadManagerBody": "Dependencies added from Hub and started downloads will appear here so you can track progress and status.",
   "bootstrapTourSettingsTitle": "Settings: Live config",
   "bootstrapTourSettingsBody": "Edit paths and backend config at runtime, plus theme/language switching.",
   "bootstrapFinishTitle": "All set",

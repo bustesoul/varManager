@@ -484,6 +484,8 @@
   "bootstrapTourHubTagsBody": "按标签/作者筛选，快捷芯片一键过滤，详情可查看版本/依赖信息。",
   "bootstrapTourHubDownloadsTitle": "Hub：下载列表",
   "bootstrapTourHubDownloadsBody": "生成下载列表显示总大小，可复制链接或一键加入下载队列。",
+  "bootstrapTourDownloadManagerTitle": "下载管理器：统一查看下载",
+  "bootstrapTourDownloadManagerBody": "在 Hub 中添加的依赖或开始下载后，任务会汇总到这里，随时查看进度与状态。",
   "bootstrapTourSettingsTitle": "设置：实时配置",
   "bootstrapTourSettingsBody": "运行中编辑路径和后端配置，切换主题与语言。",
   "bootstrapFinishTitle": "完成",

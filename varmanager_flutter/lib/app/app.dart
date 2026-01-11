@@ -11,6 +11,7 @@ import '../features/scenes/scenes_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/bootstrap/bootstrap_controller.dart';
 import '../features/bootstrap/bootstrap_gate.dart';
+import '../features/bootstrap/bootstrap_keys.dart';
 import '../widgets/download_manager.dart';
 import '../widgets/job_log_panel.dart';
 import '../l10n/l10n.dart';
@@ -219,9 +220,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                                         .toList(),
                                   ),
                                 ),
-                                const Padding(
-                                  padding: EdgeInsets.only(bottom: 16),
-                                  child: DownloadManagerBubble(),
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: DownloadManagerBubble(
+                                    key: BootstrapKeys.downloadManagerBubble,
+                                  ),
                                 ),
                               ],
                             ),

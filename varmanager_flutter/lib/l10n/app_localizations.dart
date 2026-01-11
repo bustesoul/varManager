@@ -3007,6 +3007,18 @@ abstract class AppLocalizations {
   /// **'Build a download list, see total size, copy links, or Download All to enqueue.'**
   String get bootstrapTourHubDownloadsBody;
 
+  /// No description provided for @bootstrapTourDownloadManagerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download Manager: All downloads in one place'**
+  String get bootstrapTourDownloadManagerTitle;
+
+  /// No description provided for @bootstrapTourDownloadManagerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Dependencies added from Hub and started downloads will appear here so you can track progress and status.'**
+  String get bootstrapTourDownloadManagerBody;
+
   /// No description provided for @bootstrapTourSettingsTitle.
   ///
   /// In en, this message translates to:

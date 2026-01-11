@@ -7,6 +7,7 @@ enum BootstrapStep {
   tourScenes,
   tourHubTags,
   tourHubDownloads,
+  tourDownloadManager,
   tourSettings,
   finish,
 }
@@ -149,6 +150,7 @@ class BootstrapState {
       case BootstrapStep.tourScenes:
       case BootstrapStep.tourHubTags:
       case BootstrapStep.tourHubDownloads:
+      case BootstrapStep.tourDownloadManager:
       case BootstrapStep.tourSettings:
         return true;
       case BootstrapStep.welcome:

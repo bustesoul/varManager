@@ -1619,6 +1619,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Build a download list, see total size, copy links, or Download All to enqueue.';
 
   @override
+  String get bootstrapTourDownloadManagerTitle =>
+      'Download Manager: All downloads in one place';
+
+  @override
+  String get bootstrapTourDownloadManagerBody =>
+      'Dependencies added from Hub and started downloads will appear here so you can track progress and status.';
+
+  @override
   String get bootstrapTourSettingsTitle => 'Settings: Live config';
 
   @override
