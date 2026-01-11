@@ -142,6 +142,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get previewLastItemTooltip => '最后一项';
 
   @override
+  String get previewOpenTooltip => '打开预览';
+
+  @override
+  String get previewOpenDoubleClickTooltip => '双击打开预览';
+
+  @override
+  String get previewSelectOrOpenTooltip => '单击选择，双击预览';
+
+  @override
+  String get selectMissingVarTooltip => '选择缺失 Var';
+
+  @override
   String get jobLogExpandTooltip => '展开日志面板';
 
   @override
@@ -242,6 +254,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get themeDark => '暗色';
+
+  @override
+  String themeSelectTooltip(Object theme) {
+    return '切换到$theme主题';
+  }
 
   @override
   String get languageLabel => '语言';

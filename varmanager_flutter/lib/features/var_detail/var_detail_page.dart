@@ -367,6 +367,7 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                     }
                   : null,
               icon: const Icon(Icons.first_page),
+              tooltip: l10n.paginationFirstPageTooltip,
             ),
             IconButton(
               onPressed: currentPage > 1
@@ -377,6 +378,7 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                     }
                   : null,
               icon: const Icon(Icons.chevron_left),
+              tooltip: l10n.paginationPreviousPageTooltip,
             ),
             IconButton(
               onPressed: currentPage < totalPages
@@ -387,6 +389,7 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                     }
                   : null,
               icon: const Icon(Icons.chevron_right),
+              tooltip: l10n.paginationNextPageTooltip,
             ),
             IconButton(
               onPressed: currentPage < totalPages
@@ -397,6 +400,7 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                     }
                   : null,
               icon: const Icon(Icons.last_page),
+              tooltip: l10n.paginationLastPageTooltip,
             ),
           ],
         ),
@@ -440,15 +444,18 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                           ),
                         ),
                 );
-                return GestureDetector(
-                  onDoubleTap: canPreview
-                      ? () => _openPreviewDialog(
-                            context,
-                            items,
-                            startIndex + index,
-                          )
-                      : null,
-                  child: previewImage,
+                return Tooltip(
+                  message: l10n.previewOpenDoubleClickTooltip,
+                  child: GestureDetector(
+                    onDoubleTap: canPreview
+                        ? () => _openPreviewDialog(
+                              context,
+                              items,
+                              startIndex + index,
+                            )
+                        : null,
+                    child: previewImage,
+                  ),
                 );
               },
             );

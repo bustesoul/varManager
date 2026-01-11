@@ -43,6 +43,10 @@
   "previewPreviousItemTooltip": "Previous item",
   "previewNextItemTooltip": "Next item",
   "previewLastItemTooltip": "Last item",
+  "previewOpenTooltip": "Open preview",
+  "previewOpenDoubleClickTooltip": "Double-click to open preview",
+  "previewSelectOrOpenTooltip": "Click to select, double-click to preview",
+  "selectMissingVarTooltip": "Select missing var",
   "jobLogExpandTooltip": "Expand log panel",
   "jobLogCollapseTooltip": "Collapse log panel",
   "downloadManagerTitle": "Download Manager",
@@ -75,6 +79,7 @@
   "themeForest": "Forest Green",
   "themeRose": "Rose",
   "themeDark": "Dark",
+  "themeSelectTooltip": "Switch to {theme} theme",
   "languageLabel": "Language",
   "languageEnglish": "English",
   "languageChinese": "中文",
@@ -502,6 +507,11 @@
     "placeholders": {
       "label": {},
       "value": {}
+    }
+  },
+  "@themeSelectTooltip": {
+    "placeholders": {
+      "theme": {}
     }
   },
   "@selectedAtomsCount": {

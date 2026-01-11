@@ -80,6 +80,7 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final downloads = ref.watch(downloadListProvider);
     final data = downloads.value ?? DownloadListResponse.empty();
     final total = data.items.length;
@@ -101,12 +102,14 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
           setState(() => _hoverBubble = false);
           _updateOverlay();
         },
-        child: GestureDetector(
-          onTap: () {
-            setState(() => _pinned = !_pinned);
-            _updateOverlay();
-          },
-          child: Container(
+        child: Tooltip(
+          message: l10n.downloadManagerTitle,
+          child: GestureDetector(
+            onTap: () {
+              setState(() => _pinned = !_pinned);
+              _updateOverlay();
+            },
+            child: Container(
               width: 52,
               height: 52,
               decoration: BoxDecoration(
@@ -134,8 +137,7 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
                       strokeWidth: 4,
                       backgroundColor:
                           colorScheme.primary.withValues(alpha: 0.15),
-                      valueColor:
-                          AlwaysStoppedAnimation(colorScheme.primary),
+                      valueColor: AlwaysStoppedAnimation(colorScheme.primary),
                     ),
                   ),
                   Column(
@@ -155,6 +157,7 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
               ),
             ),
           ),
+        ),
       ),
     );
   }

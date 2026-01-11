@@ -142,6 +142,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewLastItemTooltip => 'Last item';
 
   @override
+  String get previewOpenTooltip => 'Open preview';
+
+  @override
+  String get previewOpenDoubleClickTooltip => 'Double-click to open preview';
+
+  @override
+  String get previewSelectOrOpenTooltip =>
+      'Click to select, double-click to preview';
+
+  @override
+  String get selectMissingVarTooltip => 'Select missing var';
+
+  @override
   String get jobLogExpandTooltip => 'Expand log panel';
 
   @override
@@ -244,6 +257,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeDark => 'Dark';
+
+  @override
+  String themeSelectTooltip(Object theme) {
+    return 'Switch to $theme theme';
+  }
 
   @override
   String get languageLabel => 'Language';

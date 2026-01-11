@@ -560,10 +560,13 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     );
     return Row(
       children: [
-        GestureDetector(
-          onDoubleTap:
-              canPreview ? () => _openScenePreview(context, item) : null,
-          child: previewImage,
+        Tooltip(
+          message: l10n.previewOpenDoubleClickTooltip,
+          child: GestureDetector(
+            onDoubleTap:
+                canPreview ? () => _openScenePreview(context, item) : null,
+            child: previewImage,
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(

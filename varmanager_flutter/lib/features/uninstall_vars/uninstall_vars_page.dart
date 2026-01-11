@@ -317,6 +317,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                 });
                                               },
                                         icon: const Icon(Icons.first_page),
+                                        tooltip: l10n.paginationFirstPageTooltip,
                                       ),
                                       IconButton(
                                         onPressed: _previewPage <= 1
@@ -327,6 +328,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                 });
                                               },
                                         icon: const Icon(Icons.chevron_left),
+                                        tooltip: l10n.paginationPreviousPageTooltip,
                                       ),
                                       IconButton(
                                         onPressed: _previewPage >= _previewTotalPages
@@ -337,6 +339,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                 });
                                               },
                                         icon: const Icon(Icons.chevron_right),
+                                        tooltip: l10n.paginationNextPageTooltip,
                                       ),
                                       IconButton(
                                         onPressed: _previewPage >= _previewTotalPages
@@ -347,6 +350,7 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                 });
                                               },
                                         icon: const Icon(Icons.last_page),
+                                        tooltip: l10n.paginationLastPageTooltip,
                                       ),
                                     ],
                                   ),
@@ -384,23 +388,26 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                   final item = _pagedPreviews[index];
                                                   final client = ref.read(backendClientProvider);
                                                   final path = _previewPath(item);
-                                                  return InkWell(
-                                                    onTap: () => _showPreview(item),
-                                                    child: ClipRRect(
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      child: path == null
-                                                          ? const PreviewPlaceholder()
-                                                          : Image.network(
-                                                              client.previewUrl(
-                                                                  root: 'varspath', path: path),
-                                                              fit: BoxFit.cover,
-                                                              cacheWidth: cacheSize,
-                                                              cacheHeight: cacheSize,
-                                                              errorBuilder: (_, _, _) =>
-                                                                  const PreviewPlaceholder(
-                                                                icon: Icons.broken_image,
+                                                  return Tooltip(
+                                                    message: l10n.previewOpenTooltip,
+                                                    child: InkWell(
+                                                      onTap: () => _showPreview(item),
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        child: path == null
+                                                            ? const PreviewPlaceholder()
+                                                            : Image.network(
+                                                                client.previewUrl(
+                                                                    root: 'varspath', path: path),
+                                                                fit: BoxFit.cover,
+                                                                cacheWidth: cacheSize,
+                                                                cacheHeight: cacheSize,
+                                                                errorBuilder: (_, _, _) =>
+                                                                    const PreviewPlaceholder(
+                                                                  icon: Icons.broken_image,
+                                                                ),
                                                               ),
-                                                            ),
+                                                      ),
                                                     ),
                                                   );
                                                 },

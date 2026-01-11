@@ -938,24 +938,28 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                 ? null
                                 : () => _selectIndex(0, filtered),
                             icon: const Icon(Icons.first_page),
+                            tooltip: l10n.paginationFirstPageTooltip,
                           ),
                           IconButton(
                             onPressed: filtered.isEmpty || _selectedIndex <= 0
                                 ? null
                                 : () => _selectIndex(_selectedIndex - 1, filtered),
                             icon: const Icon(Icons.chevron_left),
+                            tooltip: l10n.paginationPreviousPageTooltip,
                           ),
                           IconButton(
                             onPressed: filtered.isEmpty || _selectedIndex >= filtered.length - 1
                                 ? null
                                 : () => _selectIndex(_selectedIndex + 1, filtered),
                             icon: const Icon(Icons.chevron_right),
+                            tooltip: l10n.paginationNextPageTooltip,
                           ),
                           IconButton(
                             onPressed: filtered.isEmpty || _selectedIndex >= filtered.length - 1
                                 ? null
                                 : () => _selectIndex(filtered.length - 1, filtered),
                             icon: const Icon(Icons.last_page),
+                            tooltip: l10n.paginationLastPageTooltip,
                           ),
                         ],
                       ),
@@ -1011,50 +1015,53 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           final pending = _isPendingChange(entry.displayName);
                           final broken = _isBroken(entry.displayName);
                           final selected = index == _selectedIndex;
-                          return InkWell(
-                            onTap: () => _selectIndex(index, filtered),
-                            child: Container(
-                              color: selected ? Colors.blue.shade50 : null,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    flex: 3,
-                                    child: Row(
-                                      children: [
-                                        Expanded(child: Text(entry.displayName)),
-                                        if (entry.versionMismatch)
-                                          const Padding(
-                                            padding: EdgeInsets.only(left: 6),
-                                            child: Icon(Icons.warning_amber, size: 16, color: Colors.orange),
-                                          ),
-                                      ],
+                          return Tooltip(
+                            message: l10n.selectMissingVarTooltip,
+                            child: InkWell(
+                              onTap: () => _selectIndex(index, filtered),
+                              child: Container(
+                                color: selected ? Colors.blue.shade50 : null,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: Row(
+                                        children: [
+                                          Expanded(child: Text(entry.displayName)),
+                                          if (entry.versionMismatch)
+                                            const Padding(
+                                              padding: EdgeInsets.only(left: 6),
+                                              child: Icon(Icons.warning_amber, size: 16, color: Colors.orange),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  Expanded(
-                                    flex: 3,
-                                    child: Row(
-                                      children: [
-                                        Expanded(child: Text(link.isEmpty ? '-' : link)),
-                                        if (pending)
-                                          const Padding(
-                                            padding: EdgeInsets.only(left: 6),
-                                            child: Icon(Icons.edit, size: 14, color: Colors.blueGrey),
-                                          ),
-                                        if (broken && !pending)
-                                          const Padding(
-                                            padding: EdgeInsets.only(left: 6),
-                                            child: Icon(Icons.link_off, size: 14, color: Colors.orange),
-                                          ),
-                                      ],
+                                    Expanded(
+                                      flex: 3,
+                                      child: Row(
+                                        children: [
+                                          Expanded(child: Text(link.isEmpty ? '-' : link)),
+                                          if (pending)
+                                            const Padding(
+                                              padding: EdgeInsets.only(left: 6),
+                                              child: Icon(Icons.edit, size: 14, color: Colors.blueGrey),
+                                            ),
+                                          if (broken && !pending)
+                                            const Padding(
+                                              padding: EdgeInsets.only(left: 6),
+                                              child: Icon(Icons.link_off, size: 14, color: Colors.orange),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  SizedBox(
-                                    width: 32,
-                                    child: Icon(_downloadIcon(entry.displayName),
-                                        color: _downloadColor(entry.displayName), size: 18),
-                                  ),
-                                ],
+                                    SizedBox(
+                                      width: 32,
+                                      child: Icon(_downloadIcon(entry.displayName),
+                                          color: _downloadColor(entry.displayName), size: 18),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );

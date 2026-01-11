@@ -356,6 +356,30 @@ abstract class AppLocalizations {
   /// **'Last item'**
   String get previewLastItemTooltip;
 
+  /// No description provided for @previewOpenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Open preview'**
+  String get previewOpenTooltip;
+
+  /// No description provided for @previewOpenDoubleClickTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Double-click to open preview'**
+  String get previewOpenDoubleClickTooltip;
+
+  /// No description provided for @previewSelectOrOpenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Click to select, double-click to preview'**
+  String get previewSelectOrOpenTooltip;
+
+  /// No description provided for @selectMissingVarTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Select missing var'**
+  String get selectMissingVarTooltip;
+
   /// No description provided for @jobLogExpandTooltip.
   ///
   /// In en, this message translates to:
@@ -547,6 +571,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get themeDark;
+
+  /// No description provided for @themeSelectTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to {theme} theme'**
+  String themeSelectTooltip(Object theme);
 
   /// No description provided for @languageLabel.
   ///

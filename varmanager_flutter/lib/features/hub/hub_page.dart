@@ -1606,11 +1606,14 @@ class _HubPageState extends ConsumerState<HubPage> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onDoubleTap: canPreview
-                            ? () => _openImagePreview(context, [imageUrl], 0)
-                            : null,
-                        child: previewImage,
+                      Tooltip(
+                        message: l10n.previewOpenDoubleClickTooltip,
+                        child: GestureDetector(
+                          onDoubleTap: canPreview
+                              ? () => _openImagePreview(context, [imageUrl], 0)
+                              : null,
+                          child: previewImage,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1898,6 +1901,7 @@ class _EnhancedResourceDetailDialogState
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close),
+                    tooltip: l10n.commonClose,
                   ),
                 ],
               ),
@@ -2018,26 +2022,29 @@ class _EnhancedResourceDetailDialogState
                           children: _images.asMap().entries.map((entry) {
                             final index = entry.key;
                             final imageUrl = entry.value;
-                            return GestureDetector(
-                              onTap: () => _openImagePreview(context, _images, index),
-                              child: Container(
-                                width: 200,
-                                height: 200,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey.shade300),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    widget.client.hubImageUrl(imageUrl),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => Container(
-                                      color: Colors.grey.shade200,
-                                      child: const Icon(
-                                        Icons.broken_image,
-                                        size: 48,
-                                        color: Colors.grey,
+                            return Tooltip(
+                              message: l10n.previewOpenTooltip,
+                              child: GestureDetector(
+                                onTap: () => _openImagePreview(context, _images, index),
+                                child: Container(
+                                  width: 200,
+                                  height: 200,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      widget.client.hubImageUrl(imageUrl),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Container(
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(
+                                          Icons.broken_image,
+                                          size: 48,
+                                          color: Colors.grey,
+                                        ),
                                       ),
                                     ),
                                   ),

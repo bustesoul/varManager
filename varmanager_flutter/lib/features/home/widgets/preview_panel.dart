@@ -544,55 +544,58 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
             final globalIndex = startIndex + index;
             final isSelected = selectedIndex == globalIndex;
             final previewPath = _previewPath(item);
-            return InkWell(
-              key: ValueKey('preview_${item.varName}_${item.scenePath}'),
-              onTap: () => _handlePreviewTap(
-                globalIndex,
-                totalItems,
-                onOpenPreview,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey.shade300,
-                          width: isSelected ? 2 : 1,
+            return Tooltip(
+              message: context.l10n.previewSelectOrOpenTooltip,
+              child: InkWell(
+                key: ValueKey('preview_${item.varName}_${item.scenePath}'),
+                onTap: () => _handlePreviewTap(
+                  globalIndex,
+                  totalItems,
+                  onOpenPreview,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey.shade300,
+                            width: isSelected ? 2 : 1,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: previewPath == null
-                            ? const PreviewPlaceholder()
-                            : Image.network(
-                                client.previewUrl(
-                                  root: 'varspath',
-                                  path: previewPath,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: previewPath == null
+                              ? const PreviewPlaceholder()
+                              : Image.network(
+                                  client.previewUrl(
+                                    root: 'varspath',
+                                    path: previewPath,
+                                  ),
+                                  fit: BoxFit.cover,
+                                  cacheWidth: cacheWidth,
+                                  filterQuality: FilterQuality.low,
+                                  errorBuilder: (_, _, _) =>
+                                      const PreviewPlaceholder(
+                                    icon: Icons.broken_image,
+                                  ),
                                 ),
-                                fit: BoxFit.cover,
-                                cacheWidth: cacheWidth,
-                                filterQuality: FilterQuality.low,
-                                errorBuilder: (_, _, _) =>
-                                    const PreviewPlaceholder(
-                                  icon: Icons.broken_image,
-                                ),
-                              ),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _sceneTitle(item),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      _sceneTitle(item),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -619,20 +622,23 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
       children: [
         SizedBox(
           width: 360,
-          child: GestureDetector(
-            onDoubleTap: onOpenPreview,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: previewPath == null
-                  ? const PreviewPlaceholder()
-                  : Image.network(
-                      client.previewUrl(root: 'varspath', path: previewPath),
-                      fit: BoxFit.contain,
-                      cacheWidth: detailCacheWidth,
-                      filterQuality: FilterQuality.medium,
-                      errorBuilder: (_, _, _) =>
-                          const PreviewPlaceholder(icon: Icons.broken_image),
-                    ),
+          child: Tooltip(
+            message: l10n.previewOpenDoubleClickTooltip,
+            child: GestureDetector(
+              onDoubleTap: onOpenPreview,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: previewPath == null
+                    ? const PreviewPlaceholder()
+                    : Image.network(
+                        client.previewUrl(root: 'varspath', path: previewPath),
+                        fit: BoxFit.contain,
+                        cacheWidth: detailCacheWidth,
+                        filterQuality: FilterQuality.medium,
+                        errorBuilder: (_, _, _) =>
+                            const PreviewPlaceholder(icon: Icons.broken_image),
+                      ),
+              ),
             ),
           ),
         ),

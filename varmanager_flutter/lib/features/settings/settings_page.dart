@@ -514,67 +514,70 @@ class _ThemeCard extends StatelessWidget {
     final isDarkTheme = theme == AppThemeType.dark;
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 120,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primaryContainer
-                : Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
+      child: Tooltip(
+        message: context.l10n.themeSelectTooltip(label),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 120,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
               color: isSelected
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-              width: isSelected ? 2 : 1,
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                width: isSelected ? 2 : 1,
+              ),
             ),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isDarkTheme ? _previewColor : _previewColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: _previewColor, width: 3),
-                ),
-                child: Center(
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: _secondaryColor,
-                      borderRadius: BorderRadius.circular(10),
+            child: Column(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isDarkTheme ? _previewColor : _previewColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: _previewColor, width: 3),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: _secondaryColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Icon(
-                theme.icon,
-                size: 20,
-                color: isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurface,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                const SizedBox(height: 8),
+                Icon(
+                  theme.icon,
+                  size: 20,
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary
                       : Theme.of(context).colorScheme.onSurface,
                 ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),
