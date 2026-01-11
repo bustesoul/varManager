@@ -1438,7 +1438,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonSkip => '跳过';
 
   @override
-  String get bootstrapWelcomeTitle => '欢迎使用 varManager';
+  String bootstrapWelcomeTitle(Object app) {
+    return '欢迎使用 $app';
+  }
 
   @override
   String get bootstrapWelcomeBody => '本向导将帮助你完成基础配置、自检和关键功能的快速了解。';

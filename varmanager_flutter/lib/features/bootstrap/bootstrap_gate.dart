@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
+import '../../core/app_version.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
 import 'bootstrap_controller.dart';
@@ -511,7 +512,7 @@ class _CoachBubble extends StatelessWidget {
   }
 }
 
-class _WelcomeStep extends ConsumerWidget {
+class _WelcomeStep extends ConsumerStatefulWidget {
   const _WelcomeStep({
     required this.onSkip,
     required this.onNext,
@@ -521,30 +522,47 @@ class _WelcomeStep extends ConsumerWidget {
   final VoidCallback onNext;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_WelcomeStep> createState() => _WelcomeStepState();
+}
+
+class _WelcomeStepState extends ConsumerState<_WelcomeStep> {
+  late final Future<String> _versionFuture = loadAppVersion();
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return BootstrapDialogFrame(
-      key: const ValueKey('welcome'),
-      title: l10n.bootstrapWelcomeTitle,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.bootstrapWelcomeBody),
-          const SizedBox(height: 16),
-          Text(l10n.bootstrapWelcomeHint,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: onSkip,
-          child: Text(l10n.bootstrapWelcomeSkip),
-        ),
-        FilledButton(
-          onPressed: onNext,
-          child: Text(l10n.bootstrapWelcomeStart),
-        ),
-      ],
+    return FutureBuilder<String>(
+      future: _versionFuture,
+      builder: (context, snapshot) {
+        final version = snapshot.data?.trim() ?? '';
+        final appLabel =
+            version.isEmpty || version == 'unknown' ? 'varManager' : 'varManager $version';
+        return BootstrapDialogFrame(
+          key: const ValueKey('welcome'),
+          title: l10n.bootstrapWelcomeTitle(appLabel),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.bootstrapWelcomeBody),
+              const SizedBox(height: 16),
+              Text(
+                l10n.bootstrapWelcomeHint,
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: widget.onSkip,
+              child: Text(l10n.bootstrapWelcomeSkip),
+            ),
+            FilledButton(
+              onPressed: widget.onNext,
+              child: Text(l10n.bootstrapWelcomeStart),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -788,30 +806,28 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
               },
             ),
             const SizedBox(height: 12),
-            _textField(
-              controller: _proxyHost,
-              label: l10n.proxyHostLabel,
-              enabled: manualProxy,
-            ),
-            _textField(
-              controller: _proxyPort,
-              label: l10n.proxyPortLabel,
-              keyboard: TextInputType.number,
-              enabled: manualProxy,
-            ),
-            _textField(
-              controller: _proxyUsername,
-              label: l10n.proxyUserLabel,
-              enabled: manualProxy,
-            ),
-            _textField(
-              controller: _proxyPassword,
-              label: l10n.proxyPasswordLabel,
-              obscureText: true,
-              enableSuggestions: false,
-              autocorrect: false,
-              enabled: manualProxy,
-            ),
+            if (manualProxy) ...[
+              _textField(
+                controller: _proxyHost,
+                label: l10n.proxyHostLabel,
+              ),
+              _textField(
+                controller: _proxyPort,
+                label: l10n.proxyPortLabel,
+                keyboard: TextInputType.number,
+              ),
+              _textField(
+                controller: _proxyUsername,
+                label: l10n.proxyUserLabel,
+              ),
+              _textField(
+                controller: _proxyPassword,
+                label: l10n.proxyPasswordLabel,
+                obscureText: true,
+                enableSuggestions: false,
+                autocorrect: false,
+              ),
+            ],
             if (state.errorMessage != null) ...[
               const SizedBox(height: 8),
               Text(

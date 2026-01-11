@@ -2740,8 +2740,8 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapWelcomeTitle.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to varManager'**
-  String get bootstrapWelcomeTitle;
+  /// **'Welcome to {app}'**
+  String bootstrapWelcomeTitle(Object app);
 
   /// No description provided for @bootstrapWelcomeBody.
   ///

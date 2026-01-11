@@ -1464,7 +1464,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonSkip => 'Skip';
 
   @override
-  String get bootstrapWelcomeTitle => 'Welcome to varManager';
+  String bootstrapWelcomeTitle(Object app) {
+    return 'Welcome to $app';
+  }
 
   @override
   String get bootstrapWelcomeBody =>
