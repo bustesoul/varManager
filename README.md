@@ -1,7 +1,7 @@
 # varManager
 [English](README.md) | [简体中文](README_CN.md)
 
-A modern var package manager for Virt-A-Mate. Manage your var files efficiently using symbolic links, with a beautiful cross-platform UI and powerful backend.
+A modern var package manager for Virt-A-Mate. Manage your var files efficiently using symbolic links, with a beautiful Flutter UI and powerful backend.
 
 ## Current Version: 2.0.0 (Major Update)
 
@@ -20,33 +20,34 @@ A modern var package manager for Virt-A-Mate. Manage your var files efficiently 
 └─────────────────────────────────┘
 ```
 
-#### Key Improvements
+#### Key Improvements (vs v1.0.4.x)
 
-**1. Modern User Interface**
-- Material Design 3 theme with responsive layouts
-- Real-time job log streaming
-- Improved filtering and search capabilities
-- Better preview image management
-- Integrated PackSwitch in main window
+**1. Modern UI & Workflows**
+- Material Design 3 with responsive layouts and navigation rail
+- Theme + language switching
+- Advanced VAR filters (size/deps/content types) and batch actions
+- PackSwitch integrated into the Home sidebar
+- Missing Vars detail panel with dependents, map I/O, and Hub actions
 
-**2. Performance & Reliability**
-- Rust-powered backend for faster processing
-- Asynchronous job queue with concurrent execution
-- Better memory management and caching
-- Native Windows symbolic link support
+**2. Scenes & Analysis**
+- Hide/Normal/Fav 3-column board with drag-and-drop organization
+- Scene analysis cache with clear-cache actions
+- Quick actions for load/analyze/locate
 
-**3. Cross-Platform Ready**
-- Built with Flutter - supports Windows, macOS, and Linux
-- No .NET Runtime dependency required
-- Smaller deployment size
-- Easier installation
+**3. Hub & Downloads**
+- Tag search + quick filter chips; card view with ratings/version/deps
+- Detail dialog for extra fields (file size, program version, license)
+- Download list with total size, copy links, and Download All
+- Built-in download manager with queue/concurrency/retries
+- Hub result caching to reduce redundant requests
 
-**4. Enhanced Features**
-- Complete dependency analysis (fast/normal/recursive modes)
-- Hub integration with batch downloads
-- Scene analysis with drag-and-drop organization
-- Missing vars resolution with smart linking
-- Stale package cleanup
+**4. Performance & Deployment**
+- Rust backend with async job queue and live log streaming
+- Unified preview pipeline with memory + disk image cache
+- Runtime config editing with validation and file pickers
+- Native symlink support (no admin required)
+- Self-contained bundle with backend auto-start/health/shutdown
+- Windows-first Flutter app (cross-platform ready)
 
 #### Installation & Deployment
 

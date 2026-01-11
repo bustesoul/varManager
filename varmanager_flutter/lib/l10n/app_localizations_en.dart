@@ -1471,19 +1471,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bootstrapFeatureVars =>
-      'Manage VAR packages: install, clean old versions, and rebuild links.';
+      'Manage VARs with advanced filters, batch actions, and PackSwitch integration.';
 
   @override
   String get bootstrapFeatureScenes =>
-      'Browse scenes and drag cards to favorite or hide.';
+      'Scenes board with Hide/Normal/Fav columns, drag-and-drop, and quick actions.';
 
   @override
   String get bootstrapFeatureHub =>
-      'Search Hub by tags and build download lists.';
+      'Hub cards with tag search, detail info, and download lists.';
 
   @override
   String get bootstrapFeaturePacks =>
-      'Use Pack Switch to toggle profiles quickly.';
+      'Switch pack profiles fast from the Home sidebar.';
 
   @override
   String get bootstrapConfigTitle => 'Basic configuration';
@@ -1565,39 +1565,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bootstrapCheckStatusPending => 'Pending';
 
   @override
-  String get bootstrapTourHomeTitle => 'Home: Update database';
+  String get bootstrapTourHomeTitle => 'Home: Filters + PackSwitch';
 
   @override
   String get bootstrapTourHomeBody =>
-      'After adding new VARs under varspath, click Update DB to index them. VARs in vampath/AddonPackages are staged into varsForInstall before install.';
+      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs.';
 
   @override
-  String get bootstrapTourScenesTitle => 'Scenes: Drag to organize';
+  String get bootstrapTourScenesTitle => 'Scenes: 3-column board';
 
   @override
   String get bootstrapTourScenesBody =>
-      'Drag scene cards into Favorite or Hide columns for quick organization.';
+      'Scenes are split into Hide/Normal/Fav; drag cards to organize, filter by location, and clear cache when needed.';
 
   @override
-  String get bootstrapTourHubTagsTitle => 'Hub: Tag search';
+  String get bootstrapTourHubTagsTitle => 'Hub: Tags + quick filters';
 
   @override
   String get bootstrapTourHubTagsBody =>
-      'Add tags and search to build a focused list. Use resource actions to generate download links.';
+      'Search by tags/creator and use quick chips; open details for version and dependency info.';
 
   @override
   String get bootstrapTourHubDownloadsTitle => 'Hub: Download list';
 
   @override
   String get bootstrapTourHubDownloadsBody =>
-      'Review the download list and click Download All to enqueue.';
+      'Build a download list, see total size, copy links, or Download All to enqueue.';
 
   @override
-  String get bootstrapTourSettingsTitle => 'Settings: Theme';
+  String get bootstrapTourSettingsTitle => 'Settings: Live config';
 
   @override
   String get bootstrapTourSettingsBody =>
-      'Pick a theme to customize the app look and feel.';
+      'Edit paths and backend config at runtime, plus theme/language switching.';
 
   @override
   String get bootstrapFinishTitle => 'All set';

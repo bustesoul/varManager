@@ -1441,16 +1441,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapFeaturesTitle => '功能一览';
 
   @override
-  String get bootstrapFeatureVars => '管理 VAR 包：安装、清理旧版本、重建链接。';
+  String get bootstrapFeatureVars => '管理 VAR：高级筛选、批量操作，并集成 PackSwitch。';
 
   @override
-  String get bootstrapFeatureScenes => '浏览场景，拖拽卡片即可收藏或隐藏。';
+  String get bootstrapFeatureScenes => '场景三列看板，拖拽整理，快捷操作。';
 
   @override
-  String get bootstrapFeatureHub => '按标签搜索 Hub，生成下载列表。';
+  String get bootstrapFeatureHub => 'Hub 卡片 + 标签搜索 + 详情 + 下载列表。';
 
   @override
-  String get bootstrapFeaturePacks => 'Pack Switch 可快速切换配置。';
+  String get bootstrapFeaturePacks => '在主页侧栏快速切换 Pack 配置。';
 
   @override
   String get bootstrapConfigTitle => '基础配置';
@@ -1525,35 +1525,35 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapCheckStatusPending => '等待';
 
   @override
-  String get bootstrapTourHomeTitle => '主页：更新数据库';
+  String get bootstrapTourHomeTitle => '主页：筛选 + PackSwitch';
 
   @override
   String get bootstrapTourHomeBody =>
-      '当你在 varspath 新增 VAR 包后，点击“更新数据库”进行入库。位于 vampath/AddonPackages 的 VAR 会先进入 varsForInstall，再安装并入库。';
+      '更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。';
 
   @override
-  String get bootstrapTourScenesTitle => 'Scenes：拖拽整理';
+  String get bootstrapTourScenesTitle => 'Scenes：三列拖拽';
 
   @override
-  String get bootstrapTourScenesBody => '将场景卡片拖入收藏或隐藏列，快速分类。';
+  String get bootstrapTourScenesBody => 'Hide/Normal/Fav 三列拖拽整理，支持位置筛选和清理缓存。';
 
   @override
-  String get bootstrapTourHubTagsTitle => 'Hub：标签搜索';
+  String get bootstrapTourHubTagsTitle => 'Hub：标签与快捷筛选';
 
   @override
-  String get bootstrapTourHubTagsBody => '添加标签并搜索，缩小结果范围；资源动作可生成下载链接。';
+  String get bootstrapTourHubTagsBody => '按标签/作者筛选，快捷芯片一键过滤，详情可查看版本/依赖信息。';
 
   @override
   String get bootstrapTourHubDownloadsTitle => 'Hub：下载列表';
 
   @override
-  String get bootstrapTourHubDownloadsBody => '检查下载列表，点击“全部下载”加入队列。';
+  String get bootstrapTourHubDownloadsBody => '生成下载列表显示总大小，可复制链接或一键加入下载队列。';
 
   @override
-  String get bootstrapTourSettingsTitle => '设置：主题外观';
+  String get bootstrapTourSettingsTitle => '设置：实时配置';
 
   @override
-  String get bootstrapTourSettingsBody => '在这里选择主题风格，调整应用的整体观感。';
+  String get bootstrapTourSettingsBody => '运行中编辑路径和后端配置，切换主题与语言。';
 
   @override
   String get bootstrapFinishTitle => '完成';
