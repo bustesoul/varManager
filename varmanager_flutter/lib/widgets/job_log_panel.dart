@@ -13,6 +13,9 @@ class JobLogPanel extends ConsumerStatefulWidget {
 
 class _JobLogPanelState extends ConsumerState<JobLogPanel> {
   final ScrollController _scrollController = ScrollController();
+  static const double _expandedHeight = 160;
+  static const double _collapsedHeight = 36;
+  bool _isExpanded = false;
 
   @override
   void dispose() {
@@ -34,60 +37,120 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
     }
   }
 
+  void _toggleExpanded() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+    });
+  }
+
+  IconButton _buildToggleButton() {
+    return IconButton(
+      onPressed: _toggleExpanded,
+      icon: Icon(_isExpanded ? Icons.expand_more : Icons.expand_less),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final logs = ref.watch(jobLogProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+    final latestLine = logs.isNotEmpty ? logs.last.format() : '';
+    final buttonStyle = TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
 
     // 当日志更新时自动滚动到底部
-    if (logs.isNotEmpty) {
+    if (_isExpanded && logs.isNotEmpty) {
       _scrollToBottom();
     }
 
-    if (logs.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      height: 160,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      height: _isExpanded ? _expandedHeight : _collapsedHeight,
       margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: _isExpanded ? 12 : 6,
+      ),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
+          color: colorScheme.onSurface.withValues(alpha: 0.08),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(l10n.jobLogsTitle,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              const Spacer(),
-              TextButton(
-                onPressed: () => ref.read(jobLogProvider.notifier).clear(),
-                child: Text(l10n.commonClear),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Scrollbar(
-              controller: _scrollController,
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                child: SelectableText(
-                  logs.map((entry) => entry.format()).join('\n'),
-                  style: const TextStyle(fontSize: 12),
+      child: _isExpanded
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      l10n.jobLogsTitle,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    _buildToggleButton(),
+                    const SizedBox(width: 4),
+                    TextButton(
+                      onPressed: () => ref.read(jobLogProvider.notifier).clear(),
+                      style: buttonStyle,
+                      child: Text(l10n.commonClear),
+                    ),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Scrollbar(
+                    controller: _scrollController,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      child: SelectableText(
+                        logs.map((entry) => entry.format()).join('\n'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Text(
+                  l10n.jobLogsTitle,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    latestLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurface.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ),
+                _buildToggleButton(),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: () => ref.read(jobLogProvider.notifier).clear(),
+                  style: buttonStyle,
+                  child: Text(l10n.commonClear),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
