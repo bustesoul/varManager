@@ -21,10 +21,7 @@ class AtomTreeNode {
 }
 
 class AnalysisAtomsResponse {
-  AnalysisAtomsResponse({
-    required this.atoms,
-    required this.personAtoms,
-  });
+  AnalysisAtomsResponse({required this.atoms, required this.personAtoms});
 
   final List<AtomTreeNode> atoms;
   final List<String> personAtoms;
@@ -137,13 +134,19 @@ class AnalysisSummaryResponse {
           .map((item) => AtomTreeNode.fromJson(item as Map<String, dynamic>))
           .toList(),
       personAtoms: (json['person_atoms'] as List<dynamic>? ?? [])
-          .map((item) => AnalysisPersonInfo.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => AnalysisPersonInfo.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
       dependencies: (json['dependencies'] as List<dynamic>? ?? [])
-          .map((item) => AnalysisDependency.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => AnalysisDependency.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
       parentLinks: (json['parent_links'] as List<dynamic>? ?? [])
-          .map((item) => AnalysisParentLink.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => AnalysisParentLink.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
     );
   }
@@ -173,11 +176,7 @@ class SavesTreeItem {
 }
 
 class SavesTreeGroup {
-  SavesTreeGroup({
-    required this.id,
-    required this.title,
-    required this.items,
-  });
+  SavesTreeGroup({required this.id, required this.title, required this.items});
 
   final String id;
   final String title;
@@ -236,10 +235,7 @@ class MissingMapItem {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'missing_var': missingVar,
-      'dest_var': destVar,
-    };
+    return {'missing_var': missingVar, 'dest_var': destVar};
   }
 }
 
@@ -265,8 +261,9 @@ class ResolveVarsResponse {
   factory ResolveVarsResponse.fromJson(Map<String, dynamic> json) {
     final raw = json['resolved'] as Map<String, dynamic>? ?? {};
     return ResolveVarsResponse(
-      resolved:
-          raw.map((key, value) => MapEntry(key, value?.toString() ?? 'missing')),
+      resolved: raw.map(
+        (key, value) => MapEntry(key, value?.toString() ?? 'missing'),
+      ),
     );
   }
 }
@@ -327,7 +324,9 @@ class VarDependenciesResponse {
   factory VarDependenciesResponse.fromJson(Map<String, dynamic> json) {
     return VarDependenciesResponse(
       items: (json['items'] as List<dynamic>? ?? [])
-          .map((item) => VarDependencyItem.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => VarDependencyItem.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
     );
   }

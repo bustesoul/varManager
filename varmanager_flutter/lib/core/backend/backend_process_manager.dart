@@ -143,7 +143,9 @@ class BackendProcessManager {
   }
 
   (String exePath, String workingDir)? _resolveBackendExe() {
-    final name = Platform.isWindows ? 'varManager_backend.exe' : 'varManager_backend';
+    final name = Platform.isWindows
+        ? 'varManager_backend.exe'
+        : 'varManager_backend';
 
     final exeDir = p.dirname(Platform.resolvedExecutable);
 

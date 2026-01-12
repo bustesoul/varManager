@@ -22,17 +22,17 @@ final initialThemeProvider = Provider<AppThemeType>((ref) {
 });
 
 class InitialLocaleConfig {
-  const InitialLocaleConfig({
-    required this.tag,
-    required this.persistOnStart,
-  });
+  const InitialLocaleConfig({required this.tag, required this.persistOnStart});
 
   final String tag;
   final bool persistOnStart;
 }
 
 final initialLocaleConfigProvider = Provider<InitialLocaleConfig>((ref) {
-  return const InitialLocaleConfig(tag: kFallbackLocaleTag, persistOnStart: false);
+  return const InitialLocaleConfig(
+    tag: kFallbackLocaleTag,
+    persistOnStart: false,
+  );
 });
 
 class NavIndexNotifier extends Notifier<int> {
@@ -150,7 +150,10 @@ final backendClientProvider = Provider<BackendClient>((ref) {
 
 final backendProcessManagerProvider = Provider<BackendProcessManager>((ref) {
   final client = ref.watch(backendClientProvider);
-  final manager = BackendProcessManager(client: client, workDir: Directory.current);
+  final manager = BackendProcessManager(
+    client: client,
+    workDir: Directory.current,
+  );
   ref.onDispose(manager.shutdown);
   return manager;
 });
@@ -164,11 +167,9 @@ final jobRunnerProvider = Provider<JobRunner>((ref) {
       final message = (job.error == null || job.error!.isEmpty)
           ? 'Unknown error'
           : job.error!;
-      errors.report(JobErrorNotice(
-        jobId: job.id,
-        kind: job.kind,
-        message: message,
-      ));
+      errors.report(
+        JobErrorNotice(jobId: job.id, kind: job.kind, message: message),
+      );
     },
   );
 });

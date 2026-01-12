@@ -27,17 +27,13 @@ class _BootstrapGateState extends ConsumerState<BootstrapGate> {
     }
     final l10n = context.l10n;
     if (state.isTourStep) {
-      return Positioned.fill(
-        child: BootstrapTourCoach(step: state.step),
-      );
+      return Positioned.fill(child: BootstrapTourCoach(step: state.step));
     }
     return Positioned.fill(
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Container(
-            color: Colors.black.withValues(alpha: 0.35),
-          ),
+          Container(color: Colors.black.withValues(alpha: 0.35)),
           Positioned.fill(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
@@ -91,8 +87,6 @@ class _BootstrapGateState extends ConsumerState<BootstrapGate> {
         return const SizedBox.shrink();
     }
   }
-
-  
 }
 
 class BootstrapTourData {
@@ -192,9 +186,9 @@ Future<bool> confirmBootstrapSkip(
   if (result != true) return false;
   final ok = await ref.read(bootstrapProvider.notifier).skip();
   if (!ok && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.bootstrapFinishDeleteFailed)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.bootstrapFinishDeleteFailed)));
   }
   return true;
 }
@@ -223,7 +217,9 @@ class _BootstrapTourCoachState extends ConsumerState<BootstrapTourCoach> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _showForStep(widget.step));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _showForStep(widget.step),
+    );
   }
 
   @override
@@ -304,13 +300,12 @@ class _BootstrapTourCoachState extends ConsumerState<BootstrapTourCoach> {
   TargetFocus _buildTarget(
     BootstrapStep step,
     BootstrapTourData data,
-    ContentAlign align,
-    {GlobalKey? keyTarget, TargetPosition? targetPosition}
-  ) {
+    ContentAlign align, {
+    GlobalKey? keyTarget,
+    TargetPosition? targetPosition,
+  }) {
     final l10n = context.l10n;
-    final onBack = hasPreviousBootstrapStep(step)
-        ? () => _handleBack()
-        : null;
+    final onBack = hasPreviousBootstrapStep(step) ? () => _handleBack() : null;
     return TargetFocus(
       identify: step.name,
       keyTarget: keyTarget,
@@ -428,7 +423,9 @@ class _BootstrapTourCoachState extends ConsumerState<BootstrapTourCoach> {
   Rect? _resolveTargetRect(GlobalKey key) {
     final targetContext = key.currentContext;
     final renderObject = targetContext?.findRenderObject();
-    if (renderObject is RenderBox && renderObject.hasSize && renderObject.attached) {
+    if (renderObject is RenderBox &&
+        renderObject.hasSize &&
+        renderObject.attached) {
       final offset = renderObject.localToGlobal(Offset.zero);
       return offset & renderObject.size;
     }
@@ -496,10 +493,7 @@ class _CoachBubble extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                TextButton(
-                  onPressed: onSkip,
-                  child: Text(skipLabel),
-                ),
+                TextButton(onPressed: onSkip, child: Text(skipLabel)),
                 const Spacer(),
                 if (onBack != null)
                   OutlinedButton(
@@ -507,10 +501,7 @@ class _CoachBubble extends StatelessWidget {
                     child: Text(backLabel ?? ''),
                   ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: onNext,
-                  child: Text(nextLabel),
-                ),
+                FilledButton(onPressed: onNext, child: Text(nextLabel)),
               ],
             ),
           ],
@@ -521,10 +512,7 @@ class _CoachBubble extends StatelessWidget {
 }
 
 class _WelcomeStep extends ConsumerStatefulWidget {
-  const _WelcomeStep({
-    required this.onSkip,
-    required this.onNext,
-  });
+  const _WelcomeStep({required this.onSkip, required this.onNext});
 
   final VoidCallback onSkip;
   final VoidCallback onNext;
@@ -543,8 +531,9 @@ class _WelcomeStepState extends ConsumerState<_WelcomeStep> {
       future: _versionFuture,
       builder: (context, snapshot) {
         final version = snapshot.data?.trim() ?? '';
-        final appLabel =
-            version.isEmpty || version == 'unknown' ? 'varManager' : 'varManager $version';
+        final appLabel = version.isEmpty || version == 'unknown'
+            ? 'varManager'
+            : 'varManager $version';
         return BootstrapDialogFrame(
           key: const ValueKey('welcome'),
           title: l10n.bootstrapWelcomeTitle(appLabel),
@@ -565,7 +554,9 @@ class _WelcomeStepState extends ConsumerState<_WelcomeStep> {
               const SizedBox(height: 16),
               Text(
                 l10n.bootstrapWelcomeHint,
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -576,10 +567,7 @@ class _WelcomeStepState extends ConsumerState<_WelcomeStep> {
 }
 
 class _FeaturesStep extends ConsumerWidget {
-  const _FeaturesStep({
-    required this.onBack,
-    required this.onNext,
-  });
+  const _FeaturesStep({required this.onBack, required this.onNext});
 
   final VoidCallback onBack;
   final VoidCallback onNext;
@@ -591,21 +579,17 @@ class _FeaturesStep extends ConsumerWidget {
       _FeatureItem(Icons.inventory_2_outlined, l10n.bootstrapFeatureVars),
       _FeatureItem(Icons.photo_library_outlined, l10n.bootstrapFeatureScenes),
       _FeatureItem(Icons.cloud_download_outlined, l10n.bootstrapFeatureHub),
-      _FeatureItem(Icons.switch_access_shortcut_outlined,
-          l10n.bootstrapFeaturePacks),
+      _FeatureItem(
+        Icons.switch_access_shortcut_outlined,
+        l10n.bootstrapFeaturePacks,
+      ),
     ];
     return BootstrapDialogFrame(
       key: const ValueKey('features'),
       title: l10n.bootstrapFeaturesTitle,
       actions: [
-        TextButton(
-          onPressed: onBack,
-          child: Text(l10n.commonBack),
-        ),
-        FilledButton(
-          onPressed: onNext,
-          child: Text(l10n.commonNext),
-        ),
+        TextButton(onPressed: onBack, child: Text(l10n.commonBack)),
+        FilledButton(onPressed: onNext, child: Text(l10n.commonNext)),
       ],
       child: Column(
         children: [
@@ -695,7 +679,8 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     if (_downloaderSavePath.text.trim().isEmpty) {
       _downloaderSavePath.text = p.join(path.trim(), 'AddonPackages');
     }
-    if (_vamExec.text.trim().isEmpty || _vamExec.text.trim() == 'VaM (Desktop Mode).bat') {
+    if (_vamExec.text.trim().isEmpty ||
+        _vamExec.text.trim() == 'VaM (Desktop Mode).bat') {
       _vamExec.text = 'VaM (Desktop Mode).bat';
     }
   }
@@ -807,8 +792,10 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
               onBrowse: () => _pickDirectory(_downloaderSavePath),
             ),
             const SizedBox(height: 4),
-            Text(l10n.proxySectionLabel,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              l10n.proxySectionLabel,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: _proxyMode,
@@ -835,10 +822,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
             ),
             const SizedBox(height: 12),
             if (manualProxy) ...[
-              _textField(
-                controller: _proxyHost,
-                label: l10n.proxyHostLabel,
-              ),
+              _textField(controller: _proxyHost, label: l10n.proxyHostLabel),
               _textField(
                 controller: _proxyPort,
                 label: l10n.proxyPortLabel,
@@ -896,10 +880,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
             ),
           ),
           const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: onBrowse,
-            child: Text(l10n.commonBrowse),
-          ),
+          OutlinedButton(onPressed: onBrowse, child: Text(l10n.commonBrowse)),
         ],
       ),
     );
@@ -1008,19 +989,21 @@ class _ChecksStep extends ConsumerWidget {
             child: FilledButton.icon(
               onPressed: state.checksRunning
                   ? null
-                  : () => ref.read(bootstrapProvider.notifier).runChecks(
-                        l10n.bootstrapCheckBackendLabel,
-                        l10n.bootstrapCheckVarspathLabel,
-                        l10n.bootstrapCheckDownloaderLabel,
-                        l10n.bootstrapCheckFileOpsLabel,
-                        l10n.bootstrapCheckSymlinkLabel,
-                        l10n.bootstrapCheckVamExecLabel,
-                        varspathHint: l10n.bootstrapCheckVarspathHint,
-                        downloaderHint: l10n.bootstrapCheckDownloaderHint,
-                        fileOpsHint: l10n.bootstrapCheckFileOpsHint,
-                        symlinkHint: l10n.bootstrapCheckSymlinkHint,
-                        vamExecHint: l10n.bootstrapCheckVamExecHint,
-                      ),
+                  : () => ref
+                        .read(bootstrapProvider.notifier)
+                        .runChecks(
+                          l10n.bootstrapCheckBackendLabel,
+                          l10n.bootstrapCheckVarspathLabel,
+                          l10n.bootstrapCheckDownloaderLabel,
+                          l10n.bootstrapCheckFileOpsLabel,
+                          l10n.bootstrapCheckSymlinkLabel,
+                          l10n.bootstrapCheckVamExecLabel,
+                          varspathHint: l10n.bootstrapCheckVarspathHint,
+                          downloaderHint: l10n.bootstrapCheckDownloaderHint,
+                          fileOpsHint: l10n.bootstrapCheckFileOpsHint,
+                          symlinkHint: l10n.bootstrapCheckSymlinkHint,
+                          vamExecHint: l10n.bootstrapCheckVamExecHint,
+                        ),
               icon: state.checksRunning
                   ? const SizedBox(
                       width: 18,
@@ -1093,24 +1076,35 @@ class _CheckTile extends StatelessWidget {
   ) {
     switch (status) {
       case BootstrapCheckStatus.pass:
-        return (Icons.check_circle, Colors.green.shade700, l10n.bootstrapCheckStatusPass);
+        return (
+          Icons.check_circle,
+          Colors.green.shade700,
+          l10n.bootstrapCheckStatusPass,
+        );
       case BootstrapCheckStatus.warn:
-        return (Icons.warning_amber_rounded, Colors.orange.shade700,
-            l10n.bootstrapCheckStatusWarn);
+        return (
+          Icons.warning_amber_rounded,
+          Colors.orange.shade700,
+          l10n.bootstrapCheckStatusWarn,
+        );
       case BootstrapCheckStatus.fail:
-        return (Icons.error_outline, Colors.red.shade700, l10n.bootstrapCheckStatusFail);
+        return (
+          Icons.error_outline,
+          Colors.red.shade700,
+          l10n.bootstrapCheckStatusFail,
+        );
       case BootstrapCheckStatus.pending:
-        return (Icons.hourglass_empty, Colors.blueGrey.shade400,
-            l10n.bootstrapCheckStatusPending);
+        return (
+          Icons.hourglass_empty,
+          Colors.blueGrey.shade400,
+          l10n.bootstrapCheckStatusPending,
+        );
     }
   }
 }
 
 class _FinishStep extends ConsumerWidget {
-  const _FinishStep({
-    required this.onBack,
-    required this.onFinish,
-  });
+  const _FinishStep({required this.onBack, required this.onFinish});
 
   final VoidCallback onBack;
   final VoidCallback onFinish;
@@ -1122,10 +1116,7 @@ class _FinishStep extends ConsumerWidget {
       key: const ValueKey('finish'),
       title: l10n.bootstrapFinishTitle,
       actions: [
-        TextButton(
-          onPressed: onBack,
-          child: Text(l10n.commonBack),
-        ),
+        TextButton(onPressed: onBack, child: Text(l10n.commonBack)),
         FilledButton(
           onPressed: onFinish,
           child: Text(l10n.bootstrapFinishStart),
@@ -1138,7 +1129,9 @@ class _FinishStep extends ConsumerWidget {
           const SizedBox(height: 12),
           Text(
             l10n.bootstrapFinishHint,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -1173,7 +1166,13 @@ class BootstrapDialogFrame extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 child,
                 const SizedBox(height: 16),

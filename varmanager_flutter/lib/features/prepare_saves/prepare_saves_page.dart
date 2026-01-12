@@ -68,7 +68,11 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
   Future<void> _analyze() async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    final result = await runner.runJob('saves_deps', args: {}, onLog: log.addEntry);
+    final result = await runner.runJob(
+      'saves_deps',
+      args: {},
+      onLog: log.addEntry,
+    );
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null) return;
     setState(() {
@@ -90,9 +94,11 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
     final l10n = context.l10n;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(response.ok
-            ? l10n.outputFolderReady
-            : response.reason ?? l10n.outputFolderValidationFailed),
+        content: Text(
+          response.ok
+              ? l10n.outputFolderReady
+              : response.reason ?? l10n.outputFolderValidationFailed,
+        ),
       ),
     );
   }
@@ -161,18 +167,13 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
             Expanded(
               child: Row(
                 children: [
-                  SizedBox(
-                    width: 360,
-                    child: _buildTreePanel(),
-                  ),
+                  SizedBox(width: 360, child: _buildTreePanel()),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _listPanel(l10n.missingDependenciesTitle, _missing),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _listPanel(l10n.statusInstalled, _installed),
-                  ),
+                  Expanded(child: _listPanel(l10n.statusInstalled, _installed)),
                 ],
               ),
             ),
@@ -190,17 +191,17 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.savesTreeTitle,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              l10n.savesTreeTitle,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             if (_loadingTree) const LinearProgressIndicator(minHeight: 2),
             const SizedBox(height: 8),
             Expanded(
               child: _groups.isEmpty
                   ? Center(child: Text(l10n.noSavesFound))
-                  : ListView(
-                      children: _groups.map(_buildGroupNode).toList(),
-                    ),
+                  : ListView(children: _groups.map(_buildGroupNode).toList()),
             ),
             const SizedBox(height: 8),
             Text(l10n.selectedFilesCount(_selectedPaths.length)),
@@ -229,7 +230,11 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
               value: _selectedPaths.contains(item.path),
               onChanged: (value) => _toggleItem(item.path, value ?? false),
               title: Text(item.name),
-              subtitle: Text(item.path, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                item.path,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           )
           .toList(),
@@ -238,7 +243,9 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
 
   bool? _groupState(SavesTreeGroup group) {
     if (group.items.isEmpty) return false;
-    final selected = group.items.where((item) => _selectedPaths.contains(item.path));
+    final selected = group.items.where(
+      (item) => _selectedPaths.contains(item.path),
+    );
     if (selected.length == group.items.length) return true;
     if (selected.isEmpty) return false;
     return null;
@@ -286,9 +293,8 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
           Expanded(
             child: ListView.builder(
               itemCount: items.length,
-              itemBuilder: (context, index) => ListTile(
-                title: Text(items[index]),
-              ),
+              itemBuilder: (context, index) =>
+                  ListTile(title: Text(items[index])),
             ),
           ),
         ],

@@ -47,9 +47,10 @@ class SelectedVarsNotifier extends Notifier<Set<String>> {
   }
 }
 
-final selectedVarsProvider = NotifierProvider<SelectedVarsNotifier, Set<String>>(
-  SelectedVarsNotifier.new,
-);
+final selectedVarsProvider =
+    NotifierProvider<SelectedVarsNotifier, Set<String>>(
+      SelectedVarsNotifier.new,
+    );
 
 class FocusedVarNotifier extends Notifier<String?> {
   @override
@@ -68,27 +69,28 @@ final focusedVarProvider = NotifierProvider<FocusedVarNotifier, String?>(
   FocusedVarNotifier.new,
 );
 
-final previewItemsProvider =
-    FutureProvider.autoDispose.family<List<PreviewItem>, String>(
-        (ref, varName) async {
-  final link = ref.keepAlive();
-  final timer = Timer(const Duration(minutes: 3), link.close);
-  ref.onDispose(timer.cancel);
-  final client = ref.watch(backendClientProvider);
-  try {
-    final previews = await client.listVarPreviews([varName]);
-    return previews.items
-        .map((item) => PreviewItem(
-              varName: item.varName,
-              atomType: item.atomType,
-              previewPic: item.previewPic,
-              scenePath: item.scenePath,
-              isPreset: item.isPreset,
-              isLoadable: item.isLoadable,
-              installed: item.installed,
-            ))
-        .toList();
-  } catch (_) {
-    return <PreviewItem>[];
-  }
-});
+final previewItemsProvider = FutureProvider.autoDispose
+    .family<List<PreviewItem>, String>((ref, varName) async {
+      final link = ref.keepAlive();
+      final timer = Timer(const Duration(minutes: 3), link.close);
+      ref.onDispose(timer.cancel);
+      final client = ref.watch(backendClientProvider);
+      try {
+        final previews = await client.listVarPreviews([varName]);
+        return previews.items
+            .map(
+              (item) => PreviewItem(
+                varName: item.varName,
+                atomType: item.atomType,
+                previewPic: item.previewPic,
+                scenePath: item.scenePath,
+                isPreset: item.isPreset,
+                isLoadable: item.isLoadable,
+                installed: item.installed,
+              ),
+            )
+            .toList();
+      } catch (_) {
+        return <PreviewItem>[];
+      }
+    });

@@ -183,6 +183,8 @@
   "targetDirLabel": "目标目录",
   "exportInstalledLabel": "导出已安装",
   "exportInstalledTooltip": "导出已安装 Vars 到文本文件。",
+  "exportMissingLabel": "导出缺失",
+  "exportMissingTooltip": "导出缺失 Vars 到文本文件。",
   "exportPathTitle": "导出路径",
   "installFromListLabel": "从列表安装",
   "installFromListTooltip": "从文本列表安装 Vars。",

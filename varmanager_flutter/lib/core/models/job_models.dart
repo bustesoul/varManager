@@ -12,13 +12,7 @@ class StartJobResponse {
   }
 }
 
-enum JobLogLevel {
-  info,
-  warn,
-  error,
-  debug,
-  unknown,
-}
+enum JobLogLevel { info, warn, error, debug, unknown }
 
 JobLogLevel _parseJobLogLevel(String? raw) {
   switch (raw?.toLowerCase()) {
@@ -163,12 +157,15 @@ class JobLogsResponse {
     final linesRaw = json['lines'] as List<dynamic>?;
     final entries = entriesRaw != null
         ? entriesRaw
-            .whereType<Map>()
-            .map((entry) => JobLogEntry.fromJson(
-                  Map<String, dynamic>.from(entry),
-                ))
-            .toList()
-        : (linesRaw ?? []).map((line) => JobLogEntry.fromLine('$line')).toList();
+              .whereType<Map>()
+              .map(
+                (entry) =>
+                    JobLogEntry.fromJson(Map<String, dynamic>.from(entry)),
+              )
+              .toList()
+        : (linesRaw ?? [])
+              .map((line) => JobLogEntry.fromLine('$line'))
+              .toList();
     return JobLogsResponse(
       id: (json['id'] as num).toInt(),
       from: (json['from'] as num?)?.toInt() ?? 0,
@@ -180,10 +177,7 @@ class JobLogsResponse {
 }
 
 class JobResult<T> {
-  JobResult({
-    required this.job,
-    required this.result,
-  });
+  JobResult({required this.job, required this.result});
 
   final JobView job;
   final T? result;

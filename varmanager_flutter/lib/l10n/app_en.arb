@@ -183,6 +183,8 @@
   "targetDirLabel": "Target dir",
   "exportInstalledLabel": "Export Installed",
   "exportInstalledTooltip": "Export installed vars to a text file.",
+  "exportMissingLabel": "Export Missing",
+  "exportMissingTooltip": "Export missing vars to a text file.",
   "exportPathTitle": "Export path",
   "installFromListLabel": "Install from List",
   "installFromListTooltip": "Install vars from a text list.",

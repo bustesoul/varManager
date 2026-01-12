@@ -12,12 +12,7 @@ enum BootstrapStep {
   finish,
 }
 
-enum BootstrapCheckStatus {
-  pending,
-  pass,
-  warn,
-  fail,
-}
+enum BootstrapCheckStatus { pending, pass, warn, fail }
 
 class BootstrapConfig {
   const BootstrapConfig({

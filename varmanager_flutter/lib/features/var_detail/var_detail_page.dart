@@ -12,10 +12,11 @@ import '../../l10n/l10n.dart';
 import '../missing_vars/missing_vars_page.dart';
 import '../home/providers.dart';
 
-final varDetailProvider = FutureProvider.autoDispose.family<VarDetailResponse, String>((ref, name) async {
-  final client = ref.watch(backendClientProvider);
-  return client.getVarDetail(name);
-});
+final varDetailProvider = FutureProvider.autoDispose
+    .family<VarDetailResponse, String>((ref, name) async {
+      final client = ref.watch(backendClientProvider);
+      return client.getVarDetail(name);
+    });
 
 class VarDetailPage extends ConsumerWidget {
   const VarDetailPage({super.key, required this.varName});
@@ -25,20 +26,24 @@ class VarDetailPage extends ConsumerWidget {
   Future<void> _runLocate(WidgetRef ref) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob('vars_locate',
-        args: {'var_name': varName}, onLog: log.addEntry);
+    await runner.runJob(
+      'vars_locate',
+      args: {'var_name': varName},
+      onLog: log.addEntry,
+    );
   }
 
-  Future<void> _runJob(WidgetRef ref, String kind, Map<String, dynamic> args) async {
+  Future<void> _runJob(
+    WidgetRef ref,
+    String kind,
+    Map<String, dynamic> args,
+  ) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
     await runner.runJob(kind, args: args, onLog: log.addEntry);
   }
 
-  Future<void> _runMissingDeps(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _runMissingDeps(BuildContext context, WidgetRef ref) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
     final result = await runner.runJob(
@@ -58,9 +63,7 @@ class VarDetailPage extends ConsumerWidget {
         .toList();
     if (!context.mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MissingVarsPage(missing: missing),
-      ),
+      MaterialPageRoute(builder: (_) => MissingVarsPage(missing: missing)),
     );
   }
 
@@ -79,7 +82,10 @@ class VarDetailPage extends ConsumerWidget {
   }
 
   Widget _buildDetail(
-      BuildContext context, WidgetRef ref, VarDetailResponse detail) {
+    BuildContext context,
+    WidgetRef ref,
+    VarDetailResponse detail,
+  ) {
     final l10n = context.l10n;
     final client = ref.read(backendClientProvider);
     return Padding(
@@ -125,8 +131,7 @@ class VarDetailPage extends ConsumerWidget {
                 _buildSection(
                   title: l10n.dependenciesTitle,
                   child: Column(
-                    children: detail.dependencies
-                        .map((dep) {
+                    children: detail.dependencies.map((dep) {
                       final resolved = dep.resolved;
                       return ListTile(
                         title: Text(dep.name),
@@ -134,15 +139,18 @@ class VarDetailPage extends ConsumerWidget {
                         tileColor: dep.missing
                             ? Colors.red.shade50
                             : dep.closest
-                                ? Colors.orange.shade50
-                                : null,
+                            ? Colors.orange.shade50
+                            : null,
                         trailing: Wrap(
                           spacing: 8,
                           children: [
                             if (dep.missing)
                               TextButton(
                                 onPressed: () {
-                                  final search = dep.name.replaceAll('.latest', '.1');
+                                  final search = dep.name.replaceAll(
+                                    '.latest',
+                                    '.1',
+                                  );
                                   _runJob(ref, 'open_url', {
                                     'url':
                                         'https://www.google.com/search?q=$search var',
@@ -153,7 +161,9 @@ class VarDetailPage extends ConsumerWidget {
                             else
                               TextButton(
                                 onPressed: () {
-                                  ref.read(varsQueryProvider.notifier).update(
+                                  ref
+                                      .read(varsQueryProvider.notifier)
+                                      .update(
                                         (state) => state.copyWith(
                                           page: 1,
                                           search: resolved,
@@ -166,8 +176,7 @@ class VarDetailPage extends ConsumerWidget {
                           ],
                         ),
                       );
-                    })
-                        .toList(),
+                    }).toList(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -180,11 +189,11 @@ class VarDetailPage extends ConsumerWidget {
                             title: Text(name),
                             trailing: TextButton(
                               onPressed: () {
-                                ref.read(varsQueryProvider.notifier).update(
-                                      (state) => state.copyWith(
-                                        page: 1,
-                                        search: name,
-                                      ),
+                                ref
+                                    .read(varsQueryProvider.notifier)
+                                    .update(
+                                      (state) =>
+                                          state.copyWith(page: 1, search: name),
                                     );
                                 Navigator.pop(context);
                               },
@@ -332,7 +341,9 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final items = widget.scenes
-        .where((scene) => scene.previewPic != null && scene.previewPic!.isNotEmpty)
+        .where(
+          (scene) => scene.previewPic != null && scene.previewPic!.isNotEmpty,
+        )
         .toList();
     if (items.isEmpty) {
       return Text(l10n.noPreviews);
@@ -407,11 +418,13 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
-            final crossAxisCount =
-                (constraints.maxWidth / 140).floor().clamp(2, 6).toInt();
+            final crossAxisCount = (constraints.maxWidth / 140)
+                .floor()
+                .clamp(2, 6)
+                .toInt();
             const spacing = 8.0;
-            final tileSize = (constraints.maxWidth -
-                    (crossAxisCount - 1) * spacing) /
+            final tileSize =
+                (constraints.maxWidth - (crossAxisCount - 1) * spacing) /
                 crossAxisCount;
             final cacheSize =
                 (tileSize * MediaQuery.of(context).devicePixelRatio).round();
@@ -434,8 +447,10 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                   child: previewPath == null
                       ? const PreviewPlaceholder()
                       : Image.network(
-                          widget.client
-                              .previewUrl(root: 'varspath', path: previewPath),
+                          widget.client.previewUrl(
+                            root: 'varspath',
+                            path: previewPath,
+                          ),
                           fit: BoxFit.cover,
                           cacheWidth: cacheSize,
                           cacheHeight: cacheSize,
@@ -449,10 +464,10 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
                   child: GestureDetector(
                     onDoubleTap: canPreview
                         ? () => _openPreviewDialog(
-                              context,
-                              items,
-                              startIndex + index,
-                            )
+                            context,
+                            items,
+                            startIndex + index,
+                          )
                         : null,
                     child: previewImage,
                   ),
@@ -465,4 +480,3 @@ class _VarPreviewGridState extends State<_VarPreviewGrid> {
     );
   }
 }
-

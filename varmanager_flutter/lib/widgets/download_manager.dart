@@ -13,7 +13,8 @@ class DownloadManagerBubble extends ConsumerStatefulWidget {
   const DownloadManagerBubble({super.key});
 
   @override
-  ConsumerState<DownloadManagerBubble> createState() => _DownloadManagerBubbleState();
+  ConsumerState<DownloadManagerBubble> createState() =>
+      _DownloadManagerBubbleState();
 }
 
 class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
@@ -83,8 +84,9 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
     final downloads = ref.watch(downloadListProvider);
     final data = downloads.value ?? DownloadListResponse.empty();
     final total = data.items.length;
-    final completed =
-        data.items.where((item) => item.status == 'completed').length;
+    final completed = data.items
+        .where((item) => item.status == 'completed')
+        .length;
     final progress = total == 0 || completed >= total
         ? 1.0
         : (completed / total).clamp(0.0, 1.0);
@@ -132,8 +134,9 @@ class _DownloadManagerBubbleState extends ConsumerState<DownloadManagerBubble> {
                   child: CircularProgressIndicator(
                     value: progress,
                     strokeWidth: 4,
-                    backgroundColor:
-                        colorScheme.primary.withValues(alpha: 0.15),
+                    backgroundColor: colorScheme.primary.withValues(
+                      alpha: 0.15,
+                    ),
                     valueColor: AlwaysStoppedAnimation(colorScheme.primary),
                   ),
                 ),
@@ -292,8 +295,7 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
                       child: Text(
                         l10n.downloadNoActive,
                         style: TextStyle(
-                          color:
-                              colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     )
@@ -340,9 +342,11 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
 
   Future<void> _importFromFile() async {
     final l10n = context.l10n;
-    final file = await openFile(acceptedTypeGroups: [
-      XTypeGroup(label: l10n.textFileTypeLabel, extensions: const ['txt'])
-    ]);
+    final file = await openFile(
+      acceptedTypeGroups: [
+        XTypeGroup(label: l10n.textFileTypeLabel, extensions: const ['txt']),
+      ],
+    );
     if (file == null) return;
 
     final content = await file.readAsString();
@@ -352,7 +356,8 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
       if (trimmed.isEmpty) continue;
       // 格式: "名字 链接" 或纯链接
       final lastSpace = trimmed.lastIndexOf(' ');
-      if (lastSpace > 0 && trimmed.substring(lastSpace + 1).startsWith('http')) {
+      if (lastSpace > 0 &&
+          trimmed.substring(lastSpace + 1).startsWith('http')) {
         items.add({
           'name': trimmed.substring(0, lastSpace),
           'url': trimmed.substring(lastSpace + 1),
@@ -365,15 +370,19 @@ class _DownloadManagerPanelState extends ConsumerState<_DownloadManagerPanel> {
     if (!mounted) return;
 
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.downloadImportEmpty)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.downloadImportEmpty)));
       return;
     }
 
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob('hub_download_all', args: {'items': items}, onLog: log.addEntry);
+    await runner.runJob(
+      'hub_download_all',
+      args: {'items': items},
+      onLog: log.addEntry,
+    );
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -401,8 +410,10 @@ class _SummaryRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(l10n.downloadItemsProgress(completed, total),
-                style: const TextStyle(fontSize: 12)),
+            Text(
+              l10n.downloadItemsProgress(completed, total),
+              style: const TextStyle(fontSize: 12),
+            ),
             const Spacer(),
             Text(sizeLabel, style: const TextStyle(fontSize: 12)),
           ],
@@ -434,7 +445,9 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+    final muted = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.6);
     return Row(
       children: [
         Text(selectionLabel, style: TextStyle(fontSize: 11, color: muted)),
@@ -521,8 +534,10 @@ class _DownloadRow extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
@@ -538,17 +553,17 @@ class _DownloadRow extends StatelessWidget {
                   ),
                   if (speedLabel.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    Text(speedLabel,
-                        style:
-                            TextStyle(fontSize: 11, color: statusColor)),
+                    Text(
+                      speedLabel,
+                      style: TextStyle(fontSize: 11, color: statusColor),
+                    ),
                   ],
                 ],
               ),
               const SizedBox(height: 6),
               Text(sizeLabel, style: const TextStyle(fontSize: 11)),
               const SizedBox(height: 6),
-              if (progress != null)
-                LinearProgressIndicator(value: progress),
+              if (progress != null) LinearProgressIndicator(value: progress),
             ],
           ),
         ),

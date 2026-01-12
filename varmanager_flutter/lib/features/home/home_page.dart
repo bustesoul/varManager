@@ -65,8 +65,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.dispose();
   }
 
-  Future<JobResult<dynamic>> _runJob(String kind,
-      {Map<String, dynamic>? args}) async {
+  Future<JobResult<dynamic>> _runJob(
+    String kind, {
+    Map<String, dynamic>? args,
+  }) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
     final busy = ref.read(jobBusyProvider.notifier);
@@ -99,10 +101,10 @@ class _HomePageState extends ConsumerState<HomePage> {
       case 'filtered':
         final names = await _fetchFilteredVarNames(query);
         if (names.isEmpty) return;
-        result = await _runJob('missing_deps', args: {
-          'scope': 'filtered',
-          'var_names': names,
-        });
+        result = await _runJob(
+          'missing_deps',
+          args: {'scope': 'filtered', 'var_names': names},
+        );
         break;
       case 'saves':
         result = await _runJob('saves_deps');
@@ -207,11 +209,17 @@ class _HomePageState extends ConsumerState<HomePage> {
                     value: query.installed,
                     items: [
                       DropdownMenuItem(
-                          value: 'all', child: Text(l10n.statusAllLabel)),
+                        value: 'all',
+                        child: Text(l10n.statusAllLabel),
+                      ),
                       DropdownMenuItem(
-                          value: 'true', child: Text(l10n.statusInstalled)),
+                        value: 'true',
+                        child: Text(l10n.statusInstalled),
+                      ),
                       DropdownMenuItem(
-                          value: 'false', child: Text(l10n.statusNotInstalled)),
+                        value: 'false',
+                        child: Text(l10n.statusNotInstalled),
+                      ),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -224,16 +232,29 @@ class _HomePageState extends ConsumerState<HomePage> {
                     value: query.sort,
                     items: [
                       DropdownMenuItem(
-                          value: 'meta_date', child: Text(l10n.sortMetaDate)),
+                        value: 'meta_date',
+                        child: Text(l10n.sortMetaDate),
+                      ),
                       DropdownMenuItem(
-                          value: 'var_date', child: Text(l10n.sortVarDate)),
+                        value: 'var_date',
+                        child: Text(l10n.sortVarDate),
+                      ),
                       DropdownMenuItem(
-                          value: 'var_name', child: Text(l10n.sortVarName)),
+                        value: 'var_name',
+                        child: Text(l10n.sortVarName),
+                      ),
                       DropdownMenuItem(
-                          value: 'creator', child: Text(l10n.sortCreator)),
+                        value: 'creator',
+                        child: Text(l10n.sortCreator),
+                      ),
                       DropdownMenuItem(
-                          value: 'package', child: Text(l10n.sortPackage)),
-                      DropdownMenuItem(value: 'size', child: Text(l10n.sortSize)),
+                        value: 'package',
+                        child: Text(l10n.sortPackage),
+                      ),
+                      DropdownMenuItem(
+                        value: 'size',
+                        child: Text(l10n.sortSize),
+                      ),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -245,7 +266,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                   DropdownButton<String>(
                     value: query.order,
                     items: [
-                      DropdownMenuItem(value: 'desc', child: Text(l10n.sortDesc)),
+                      DropdownMenuItem(
+                        value: 'desc',
+                        child: Text(l10n.sortDesc),
+                      ),
                       DropdownMenuItem(value: 'asc', child: Text(l10n.sortAsc)),
                     ],
                     onChanged: (value) {
@@ -258,10 +282,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                   DropdownButton<int>(
                     value: query.perPage,
                     items: const [25, 50, 100, 200]
-                        .map((value) => DropdownMenuItem(
-                              value: value,
-                              child: Text(l10n.perPageLabel(value)),
-                            ))
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(l10n.perPageLabel(value)),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) return;
@@ -279,7 +305,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                         if (items.isEmpty) return;
                         final pageNames = items.map((e) => e.varName).toSet();
                         final next = <String>{...selected, ...pageNames};
-                        ref.read(selectedVarsProvider.notifier).setSelection(next);
+                        ref
+                            .read(selectedVarsProvider.notifier)
+                            .setSelection(next);
                       },
                       child: Text(l10n.selectPageLabel),
                     ),
@@ -415,11 +443,17 @@ class _HomePageState extends ConsumerState<HomePage> {
                       value: query.disabled,
                       items: [
                         DropdownMenuItem(
-                            value: 'all', child: Text(l10n.enabledAllLabel)),
+                          value: 'all',
+                          child: Text(l10n.enabledAllLabel),
+                        ),
                         DropdownMenuItem(
-                            value: 'false', child: Text(l10n.enabledOnlyLabel)),
+                          value: 'false',
+                          child: Text(l10n.enabledOnlyLabel),
+                        ),
                         DropdownMenuItem(
-                            value: 'true', child: Text(l10n.disabledOnlyLabel)),
+                          value: 'true',
+                          child: Text(l10n.disabledOnlyLabel),
+                        ),
                       ],
                       onChanged: (value) {
                         if (value == null) return;
@@ -512,45 +546,98 @@ class _HomePageState extends ConsumerState<HomePage> {
                         },
                       ),
                     ),
-                    _presenceFilter(l10n.categoryScenes, query.hasScene,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasScene: value))),
-                    _presenceFilter(l10n.categoryLooks, query.hasLook,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasLook: value))),
-                    _presenceFilter(l10n.categoryClothing, query.hasCloth,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasCloth: value))),
-                    _presenceFilter(l10n.categoryHair, query.hasHair,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasHair: value))),
-                    _presenceFilter(l10n.categorySkin, query.hasSkin,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasSkin: value))),
-                    _presenceFilter(l10n.categoryPose, query.hasPose,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasPose: value))),
-                    _presenceFilter(l10n.categoryMorphs, query.hasMorph,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasMorph: value))),
-                    _presenceFilter(l10n.categoryPlugins, query.hasPlugin,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasPlugin: value))),
-                    _presenceFilter(l10n.categoryScripts, query.hasScript,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasScript: value))),
-                    _presenceFilter(l10n.categoryAssets, query.hasAsset,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasAsset: value))),
-                    _presenceFilter(l10n.categoryTextures, query.hasTexture,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasTexture: value))),
-                    _presenceFilter(l10n.categorySubScene, query.hasSubScene,
-                        (value) => _updateQuery(
-                            (state) => state.copyWith(page: 1, hasSubScene: value))),
-                    _presenceFilter(l10n.categoryAppearance, query.hasAppearance,
-                        (value) => _updateQuery((state) =>
-                            state.copyWith(page: 1, hasAppearance: value))),
+                    _presenceFilter(
+                      l10n.categoryScenes,
+                      query.hasScene,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasScene: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryLooks,
+                      query.hasLook,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasLook: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryClothing,
+                      query.hasCloth,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasCloth: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryHair,
+                      query.hasHair,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasHair: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categorySkin,
+                      query.hasSkin,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasSkin: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryPose,
+                      query.hasPose,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasPose: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryMorphs,
+                      query.hasMorph,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasMorph: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryPlugins,
+                      query.hasPlugin,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasPlugin: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryScripts,
+                      query.hasScript,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasScript: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryAssets,
+                      query.hasAsset,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasAsset: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryTextures,
+                      query.hasTexture,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasTexture: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categorySubScene,
+                      query.hasSubScene,
+                      (value) => _updateQuery(
+                        (state) => state.copyWith(page: 1, hasSubScene: value),
+                      ),
+                    ),
+                    _presenceFilter(
+                      l10n.categoryAppearance,
+                      query.hasAppearance,
+                      (value) => _updateQuery(
+                        (state) =>
+                            state.copyWith(page: 1, hasAppearance: value),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -564,7 +651,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 1200;
                     final tall = constraints.maxHeight >= 600;
-                    final list = _buildList(context, data, selected, query, focusedVar);
+                    final list = _buildList(
+                      context,
+                      data,
+                      selected,
+                      query,
+                      focusedVar,
+                    );
                     const preview = PreviewPanel();
                     final packSwitch = _buildPackSwitchPanel(context);
                     if (wide) {
@@ -599,9 +692,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(
-                child: Text(l10n.loadFailed(err.toString())),
-              ),
+              error: (err, _) =>
+                  Center(child: Text(l10n.loadFailed(err.toString()))),
             ),
           ),
         ],
@@ -616,8 +708,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   ) {
     final l10n = context.l10n;
     final isBusy = ref.watch(jobBusyProvider);
-    final compactPadding =
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+    final compactPadding = const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 8,
+    );
 
     return Card(
       child: Padding(
@@ -727,7 +821,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 onPressed: isBusy
                     ? null
                     : () async {
-                      await _runJob('update_db');
+                        await _runJob('update_db');
                         ref.invalidate(varsListProvider);
                       },
                 icon: const Icon(Icons.sync),
@@ -759,9 +853,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const PrepareSavesPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const PrepareSavesPage()),
                   );
                 },
                 icon: const Icon(Icons.build_circle),
@@ -844,8 +936,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                 onPressed: isBusy
                     ? null
                     : () async {
-                        await _runJob('rebuild_links',
-                            args: {'include_missing': true});
+                        await _runJob(
+                          'rebuild_links',
+                          args: {'include_missing': true},
+                        );
                       },
                 icon: const Icon(Icons.link),
                 label: Text(l10n.rebuildLinksLabel),
@@ -909,15 +1003,17 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildList(
-      BuildContext context,
-      VarsListResponse data,
-      Set<String> selected,
-      VarsQueryParams query,
-      String? focusedVar) {
+    BuildContext context,
+    VarsListResponse data,
+    Set<String> selected,
+    VarsQueryParams query,
+    String? focusedVar,
+  ) {
     final l10n = context.l10n;
     final isBusy = ref.watch(jobBusyProvider);
-    final totalPages =
-        data.total == 0 ? 1 : (data.total + query.perPage - 1) ~/ query.perPage;
+    final totalPages = data.total == 0
+        ? 1
+        : (data.total + query.perPage - 1) ~/ query.perPage;
     if (data.total > 0 && data.page > totalPages) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateQuery((state) => state.copyWith(page: totalPages));
@@ -967,7 +1063,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 IconButton(
                   onPressed: data.page < totalPages
                       ? () {
-                          _updateQuery((state) => state.copyWith(page: totalPages));
+                          _updateQuery(
+                            (state) => state.copyWith(page: totalPages),
+                          );
                         }
                       : null,
                   icon: const Icon(Icons.last_page),
@@ -1003,11 +1101,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                         } else {
                           next.remove(item.varName);
                         }
-                        ref.read(selectedVarsProvider.notifier).setSelection(next);
+                        ref
+                            .read(selectedVarsProvider.notifier)
+                            .setSelection(next);
                       },
                     ),
                     onTap: () {
-                      ref.read(focusedVarProvider.notifier).setFocused(item.varName);
+                      ref
+                          .read(focusedVarProvider.notifier)
+                          .setFocused(item.varName);
                     },
                     title: Text(item.varName),
                     subtitle: Text(
@@ -1018,7 +1120,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                       children: [
                         Builder(
                           builder: (context) {
-                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            final isDark =
+                                Theme.of(context).brightness == Brightness.dark;
                             return Chip(
                               label: Text(
                                 item.installed
@@ -1027,20 +1130,20 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 style: TextStyle(
                                   color: isDark
                                       ? (item.installed
-                                          ? Colors.green.shade200
-                                          : Colors.grey.shade300)
+                                            ? Colors.green.shade200
+                                            : Colors.grey.shade300)
                                       : (item.installed
-                                          ? Colors.green.shade800
-                                          : Colors.grey.shade700),
+                                            ? Colors.green.shade800
+                                            : Colors.grey.shade700),
                                 ),
                               ),
                               backgroundColor: isDark
                                   ? (item.installed
-                                      ? Colors.green.shade900
-                                      : Colors.grey.shade800)
+                                        ? Colors.green.shade900
+                                        : Colors.grey.shade800)
                                   : (item.installed
-                                      ? Colors.green.shade100
-                                      : Colors.grey.shade200),
+                                        ? Colors.green.shade100
+                                        : Colors.grey.shade200),
                             );
                           },
                         ),
@@ -1048,7 +1151,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onPressed: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => VarDetailPage(varName: item.varName),
+                                builder: (_) =>
+                                    VarDetailPage(varName: item.varName),
                               ),
                             );
                           },
@@ -1074,10 +1178,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                       onPressed: isBusy
                           ? null
                           : () async {
-                              await _runJob('install_vars', args: {
-                                'var_names': selected.toList(),
-                                'include_dependencies': true,
-                              });
+                              await _runJob(
+                                'install_vars',
+                                args: {
+                                  'var_names': selected.toList(),
+                                  'include_dependencies': true,
+                                },
+                              );
                               ref.invalidate(varsListProvider);
                             },
                       child: Text(l10n.installSelectedLabel),
@@ -1089,27 +1196,32 @@ class _HomePageState extends ConsumerState<HomePage> {
                       onPressed: isBusy
                           ? null
                           : () async {
-                              final preview =
-                                  await _runJob('preview_uninstall', args: {
-                                'var_names': selected.toList(),
-                                'include_implicated': true,
-                              });
+                              final preview = await _runJob(
+                                'preview_uninstall',
+                                args: {
+                                  'var_names': selected.toList(),
+                                  'include_implicated': true,
+                                },
+                              );
                               if (!context.mounted) return;
                               final result =
                                   preview.result as Map<String, dynamic>?;
                               if (result == null) return;
-                              final confirmed =
-                                  await Navigator.of(context).push<bool>(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      UninstallVarsPage(payload: result),
-                                ),
-                              );
+                              final confirmed = await Navigator.of(context)
+                                  .push<bool>(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          UninstallVarsPage(payload: result),
+                                    ),
+                                  );
                               if (confirmed == true) {
-                                await _runJob('uninstall_vars', args: {
-                                  'var_names': selected.toList(),
-                                  'include_implicated': true,
-                                });
+                                await _runJob(
+                                  'uninstall_vars',
+                                  args: {
+                                    'var_names': selected.toList(),
+                                    'include_implicated': true,
+                                  },
+                                );
                                 ref.invalidate(varsListProvider);
                               }
                             },
@@ -1122,10 +1234,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                       onPressed: isBusy
                           ? null
                           : () async {
-                              await _runJob('delete_vars', args: {
-                                'var_names': selected.toList(),
-                                'include_implicated': true,
-                              });
+                              await _runJob(
+                                'delete_vars',
+                                args: {
+                                  'var_names': selected.toList(),
+                                  'include_implicated': true,
+                                },
+                              );
                               ref.invalidate(varsListProvider);
                             },
                       child: Text(l10n.deleteSelectedLabel),
@@ -1137,15 +1252,20 @@ class _HomePageState extends ConsumerState<HomePage> {
                       onPressed: isBusy
                           ? null
                           : () async {
-                              final target =
-                                  await _askText(context, l10n.targetDirLabel);
+                              final target = await _askText(
+                                context,
+                                l10n.targetDirLabel,
+                              );
                               if (target == null || target.trim().isEmpty) {
                                 return;
                               }
-                              await _runJob('links_move', args: {
-                                'var_names': selected.toList(),
-                                'target_dir': target.trim(),
-                              });
+                              await _runJob(
+                                'links_move',
+                                args: {
+                                  'var_names': selected.toList(),
+                                  'target_dir': target.trim(),
+                                },
+                              );
                             },
                       child: Text(l10n.moveLinksLabel),
                     ),
@@ -1162,9 +1282,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 hint: 'installed_vars.txt',
                               );
                               if (path == null || path.trim().isEmpty) return;
-                              await _runJob('vars_export_installed', args: {
-                                'path': path.trim(),
-                              });
+                              await _runJob(
+                                'vars_export_installed',
+                                args: {'path': path.trim()},
+                              );
                             },
                       child: Text(l10n.exportInstalledLabel),
                     ),
@@ -1181,9 +1302,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 hint: 'install_list.txt',
                               );
                               if (path == null || path.trim().isEmpty) return;
-                              await _runJob('vars_install_batch', args: {
-                                'path': path.trim(),
-                              });
+                              await _runJob(
+                                'vars_install_batch',
+                                args: {'path': path.trim()},
+                              );
                               ref.invalidate(varsListProvider);
                             },
                       child: Text(l10n.installFromListLabel),
@@ -1198,7 +1320,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<bool> _confirmAction(
-      BuildContext context, String title, String message) async {
+    BuildContext context,
+    String title,
+    String message,
+  ) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -1226,14 +1351,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     final client = ref.read(backendClientProvider);
     const perPage = 200;
     final names = <String>[];
-    final first =
-        await client.listVars(query.copyWith(page: 1, perPage: perPage));
+    final first = await client.listVars(
+      query.copyWith(page: 1, perPage: perPage),
+    );
     names.addAll(first.items.map((e) => e.varName));
-    final totalPages =
-        first.total == 0 ? 1 : (first.total + perPage - 1) ~/ perPage;
+    final totalPages = first.total == 0
+        ? 1
+        : (first.total + perPage - 1) ~/ perPage;
     for (var page = 2; page <= totalPages; page += 1) {
-      final resp =
-          await client.listVars(query.copyWith(page: page, perPage: perPage));
+      final resp = await client.listVars(
+        query.copyWith(page: page, perPage: perPage),
+      );
       names.addAll(resp.items.map((e) => e.varName));
     }
     return names.toSet().toList();
@@ -1249,14 +1377,15 @@ class _HomePageState extends ConsumerState<HomePage> {
         .toList();
     if (!mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MissingVarsPage(missing: missing),
-      ),
+      MaterialPageRoute(builder: (_) => MissingVarsPage(missing: missing)),
     );
   }
 
-  Future<String?> _askText(BuildContext context, String title,
-      {String hint = ''}) {
+  Future<String?> _askText(
+    BuildContext context,
+    String title, {
+    String hint = '',
+  }) {
     final controller = TextEditingController(text: hint);
     return showDialog<String>(
       context: context,
@@ -1307,35 +1436,37 @@ class _HomePageState extends ConsumerState<HomePage> {
                 value: selectedSwitch,
                 isExpanded: true,
                 items: switches
-                    .map((name) => DropdownMenuItem(
-                          value: name,
-                          child: Row(
-                            children: [
-                              Expanded(
+                    .map(
+                      (name) => DropdownMenuItem(
+                        value: name,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (name == current)
+                              Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                                 child: Text(
-                                  name,
-                                  overflow: TextOverflow.ellipsis,
+                                  l10n.activeLabel,
+                                  style: const TextStyle(fontSize: 10),
                                 ),
                               ),
-                              if (name == current)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 4),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    l10n.activeLabel,
-                                    style: const TextStyle(fontSize: 10),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ))
+                          ],
+                        ),
+                      ),
+                    )
                     .toList(),
                 onChanged: (value) {
                   if (value != null) {
@@ -1346,8 +1477,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                 },
               )
             else
-              Text(l10n.noSwitchesAvailable,
-                  style: const TextStyle(fontSize: 12)),
+              Text(
+                l10n.noSwitchesAvailable,
+                style: const TextStyle(fontSize: 12),
+              ),
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: () => _addPackSwitch(context),
@@ -1387,7 +1520,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: selectedSwitch != null &&
+              onPressed:
+                  selectedSwitch != null &&
                       selectedSwitch != current &&
                       selectedSwitch.toLowerCase() != 'default'
                   ? () => _deletePackSwitch(selectedSwitch)
@@ -1406,15 +1540,19 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _addPackSwitch(BuildContext context) async {
-    final name = await _askText(context, context.l10n.newSwitchNameTitle, hint: '');
+    final name = await _askText(
+      context,
+      context.l10n.newSwitchNameTitle,
+      hint: '',
+    );
     if (name == null || name.trim().isEmpty) return;
     final trimmed = name.trim();
     final switches = _packSwitchData?.switches ?? [];
     if (switches.any((s) => s.toLowerCase() == trimmed.toLowerCase())) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.switchAlreadyExists)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.switchAlreadyExists)));
       return;
     }
     await _runJob('packswitch_add', args: {'name': trimmed});
@@ -1422,8 +1560,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _renamePackSwitch(BuildContext context, String oldName) async {
-    final newName =
-        await _askText(context, context.l10n.renameSwitchTitle, hint: oldName);
+    final newName = await _askText(
+      context,
+      context.l10n.renameSwitchTitle,
+      hint: oldName,
+    );
     if (newName == null || newName.trim().isEmpty) return;
     final trimmed = newName.trim();
     if (trimmed.toLowerCase() == oldName.toLowerCase()) {
@@ -1441,10 +1582,10 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
       return;
     }
-    await _runJob('packswitch_rename', args: {
-      'old_name': oldName,
-      'new_name': trimmed,
-    });
+    await _runJob(
+      'packswitch_rename',
+      args: {'old_name': oldName, 'new_name': trimmed},
+    );
     await _loadPackSwitches();
   }
 
@@ -1505,7 +1646,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _presenceFilter(
-      String label, String value, ValueChanged<String> onChanged) {
+    String label,
+    String value,
+    ValueChanged<String> onChanged,
+  ) {
     final l10n = context.l10n;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1519,7 +1663,10 @@ class _HomePageState extends ConsumerState<HomePage> {
           items: [
             DropdownMenuItem(value: 'all', child: Text(l10n.presenceAllLabel)),
             DropdownMenuItem(value: 'true', child: Text(l10n.presenceHasLabel)),
-            DropdownMenuItem(value: 'false', child: Text(l10n.presenceNoneLabel)),
+            DropdownMenuItem(
+              value: 'false',
+              child: Text(l10n.presenceNoneLabel),
+            ),
           ],
           onChanged: (next) {
             if (next == null) return;
@@ -1561,4 +1708,3 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 }
-

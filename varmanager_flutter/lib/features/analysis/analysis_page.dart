@@ -58,7 +58,9 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     });
     _dependencySearchController.addListener(() {
       setState(() {
-        _dependencyQuery = _dependencySearchController.text.trim().toLowerCase();
+        _dependencyQuery = _dependencySearchController.text
+            .trim()
+            .toLowerCase();
       });
     });
     Future.microtask(_loadSummary);
@@ -106,7 +108,8 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Future<void> _clearCache() async {
-    final varName = _summary?.varName ?? widget.payload['var_name']?.toString() ?? '';
+    final varName =
+        _summary?.varName ?? widget.payload['var_name']?.toString() ?? '';
     final entryName =
         _summary?.entryName ?? widget.payload['entry_name']?.toString() ?? '';
     await _runJob('cache_clear', {
@@ -254,16 +257,16 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
       body: _loading && summary == null
           ? const Center(child: CircularProgressIndicator())
           : summary == null
-              ? _buildErrorState()
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: _buildHeader(summary),
-                    ),
-                    Expanded(child: _buildTabs(summary)),
-                  ],
+          ? _buildErrorState()
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildHeader(summary),
                 ),
+                Expanded(child: _buildTabs(summary)),
+              ],
+            ),
     );
   }
 
@@ -333,11 +336,17 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                 _chip(l10n.atomsLabel, atomCount.toString()),
                 _chip(l10n.depsLabel, depsCount.toString()),
                 if (missingCount > 0)
-                  _chip(l10n.missingLabel, missingCount.toString(),
-                      color: Colors.redAccent),
+                  _chip(
+                    l10n.missingLabel,
+                    missingCount.toString(),
+                    color: Colors.redAccent,
+                  ),
                 if (mismatchCount > 0)
-                  _chip(l10n.mismatchLabel, mismatchCount.toString(),
-                      color: Colors.orangeAccent),
+                  _chip(
+                    l10n.mismatchLabel,
+                    mismatchCount.toString(),
+                    color: Colors.orangeAccent,
+                  ),
               ],
             ),
           ],
@@ -358,8 +367,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: fg.withValues(alpha: 0.2)),
       ),
-      child: Text(context.l10n.labelValue(label, value),
-          style: TextStyle(color: fg)),
+      child: Text(
+        context.l10n.labelValue(label, value),
+        style: TextStyle(color: fg),
+      ),
     );
   }
 
@@ -380,9 +391,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
       child: Column(
         children: [
           TabBar(tabs: tabs),
-          Expanded(
-            child: TabBarView(children: views),
-          ),
+          Expanded(child: TabBarView(children: views)),
         ],
       ),
     );
@@ -398,11 +407,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           final actions = _buildPersonActions(summary);
           if (isNarrow) {
             return ListView(
-              children: [
-                personList,
-                const SizedBox(height: 12),
-                actions,
-              ],
+              children: [personList, const SizedBox(height: 12), actions],
             );
           }
           return Row(
@@ -447,8 +452,9 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                   if (person.hasPlugin) _tag(l10n.pluginTag),
                 ],
               ),
-              trailing:
-                  selected ? const Icon(Icons.check_circle, size: 20) : null,
+              trailing: selected
+                  ? const Icon(Icons.check_circle, size: 20)
+                  : null,
               selected: selected,
               onTap: () {
                 setState(() {
@@ -486,8 +492,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
         children: [
           _buildTargetOptions(),
           const SizedBox(height: 12),
-          Text(l10n.lookOptionsTitle,
-              style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            l10n.lookOptionsTitle,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -526,8 +534,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
             ],
           ),
           const SizedBox(height: 16),
-          Text(l10n.actionsTitle,
-              style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            l10n.actionsTitle,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -675,15 +685,20 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                                 (type) => PopupMenuItem(
                                   value: type,
                                   child: Text(
-                                      l10n.selectTypeWithCount(
-                                          type, _typeToPaths[type]!.length)),
+                                    l10n.selectTypeWithCount(
+                                      type,
+                                      _typeToPaths[type]!.length,
+                                    ),
+                                  ),
                                 ),
                               )
                               .toList();
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
@@ -809,11 +824,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     return false;
   }
 
-  Widget _buildAtomNode(
-    AtomTreeNode node,
-    String key,
-    List<Widget> children,
-  ) {
+  Widget _buildAtomNode(AtomTreeNode node, String key, List<Widget> children) {
     final state = _nodeState(key);
     final hasChildren = node.children.isNotEmpty;
     final title = Row(
@@ -827,10 +838,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
       ],
     );
     if (!hasChildren) {
-      return Padding(
-        padding: const EdgeInsets.only(left: 16),
-        child: title,
-      );
+      return Padding(padding: const EdgeInsets.only(left: 16), child: title);
     }
     return ExpansionTile(
       key: PageStorageKey<String>(key),
@@ -845,8 +853,9 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     if (leaves == null || leaves.isEmpty) {
       return false;
     }
-    final selectedCount =
-        leaves.where((path) => _selectedAtomPaths.contains(path)).length;
+    final selectedCount = leaves
+        .where((path) => _selectedAtomPaths.contains(path))
+        .length;
     if (selectedCount == 0) {
       return false;
     }
@@ -1055,8 +1064,8 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           Text(
             context.l10n.ignoreGenderHint,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),

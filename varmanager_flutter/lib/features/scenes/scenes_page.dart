@@ -29,8 +29,8 @@ class ScenesQueryNotifier extends Notifier<ScenesQueryParams> {
 
 final scenesQueryProvider =
     NotifierProvider<ScenesQueryNotifier, ScenesQueryParams>(
-  ScenesQueryNotifier.new,
-);
+      ScenesQueryNotifier.new,
+    );
 
 final scenesListProvider = FutureProvider<ScenesListResponse>((ref) async {
   final client = ref.watch(backendClientProvider);
@@ -51,11 +51,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   bool _ignoreGender = false;
   bool _forMale = false;
   int _personOrder = 1;
-  final Set<String> _locationFilter = {
-    'installed',
-    'not_installed',
-    'save',
-  };
+  final Set<String> _locationFilter = {'installed', 'not_installed', 'save'};
   final Set<int> _hideFavFilter = {-1, 0, 1};
 
   @override
@@ -124,9 +120,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         ..clear()
         ..addAll([-1, 0, 1]);
     });
-    _updateQuery(
-      (state) => ScenesQueryParams(location: _locationQueryValue()),
-    );
+    _updateQuery((state) => ScenesQueryParams(location: _locationQueryValue()));
   }
 
   @override
@@ -149,21 +143,24 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                 children: [
                   DropdownButton<String>(
                     value: query.category,
-                    items: [
-                      'scenes',
-                      'looks',
-                      'clothing',
-                      'hairstyle',
-                      'assets',
-                      'morphs',
-                      'pose',
-                      'skin',
-                    ]
-                        .map((item) => DropdownMenuItem(
-                              value: item,
-                              child: Text(_categoryLabel(l10n, item)),
-                            ))
-                        .toList(),
+                    items:
+                        [
+                              'scenes',
+                              'looks',
+                              'clothing',
+                              'hairstyle',
+                              'assets',
+                              'morphs',
+                              'pose',
+                              'skin',
+                            ]
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: item,
+                                child: Text(_categoryLabel(l10n, item)),
+                              ),
+                            )
+                            .toList(),
                     onChanged: (value) {
                       if (value == null) return;
                       _updateQuery(
@@ -213,13 +210,21 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                     value: query.sort,
                     items: [
                       DropdownMenuItem(
-                          value: 'var_date', child: Text(l10n.sortNewToOld)),
+                        value: 'var_date',
+                        child: Text(l10n.sortNewToOld),
+                      ),
                       DropdownMenuItem(
-                          value: 'meta_date', child: Text(l10n.sortMetaDate)),
+                        value: 'meta_date',
+                        child: Text(l10n.sortMetaDate),
+                      ),
                       DropdownMenuItem(
-                          value: 'var_name', child: Text(l10n.sortVarName)),
+                        value: 'var_name',
+                        child: Text(l10n.sortVarName),
+                      ),
                       DropdownMenuItem(
-                          value: 'scene_name', child: Text(l10n.sortSceneName)),
+                        value: 'scene_name',
+                        child: Text(l10n.sortSceneName),
+                      ),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -231,10 +236,12 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   DropdownButton<int>(
                     value: query.perPage,
                     items: const [24, 48, 96, 200]
-                        .map((value) => DropdownMenuItem(
-                              value: value,
-                              child: Text(l10n.perPageLabel(value)),
-                            ))
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(l10n.perPageLabel(value)),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) return;
@@ -257,12 +264,14 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   FilterChip(
                     label: Text(l10n.locationNotInstalled),
                     selected: _locationFilter.contains('not_installed'),
-                    onSelected: (value) => _toggleLocation('not_installed', value),
+                    onSelected: (value) =>
+                        _toggleLocation('not_installed', value),
                   ),
                   FilterChip(
                     label: Text(l10n.locationMissingLink),
                     selected: _locationFilter.contains('missinglink'),
-                    onSelected: (value) => _toggleLocation('missinglink', value),
+                    onSelected: (value) =>
+                        _toggleLocation('missinglink', value),
                   ),
                   FilterChip(
                     label: Text(l10n.locationSave),
@@ -317,10 +326,12 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   DropdownButton<int>(
                     value: _personOrder,
                     items: [1, 2, 3, 4, 5, 6, 7, 8]
-                        .map((value) => DropdownMenuItem(
-                              value: value,
-                              child: Text(l10n.personLabel(value)),
-                            ))
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(l10n.personLabel(value)),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) return;
@@ -348,7 +359,10 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   Widget _buildColumns(
-      BuildContext context, ScenesListResponse data, ScenesQueryParams query) {
+    BuildContext context,
+    ScenesListResponse data,
+    ScenesQueryParams query,
+  ) {
     final l10n = context.l10n;
     final totalPages = data.total == 0
         ? 1
@@ -402,8 +416,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
             IconButton(
               onPressed: data.page > 1
                   ? () => _updateQuery(
-                        (state) => state.copyWith(page: data.page - 1),
-                      )
+                      (state) => state.copyWith(page: data.page - 1),
+                    )
                   : null,
               icon: const Icon(Icons.chevron_left),
               tooltip: l10n.paginationPreviousPageTooltip,
@@ -411,8 +425,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
             IconButton(
               onPressed: data.page < totalPages
                   ? () => _updateQuery(
-                        (state) => state.copyWith(page: data.page + 1),
-                      )
+                      (state) => state.copyWith(page: data.page + 1),
+                    )
                   : null,
               icon: const Icon(Icons.chevron_right),
               tooltip: l10n.paginationNextPageTooltip,
@@ -420,8 +434,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
             IconButton(
               onPressed: data.page < totalPages
                   ? () => _updateQuery(
-                        (state) => state.copyWith(page: totalPages),
-                      )
+                      (state) => state.copyWith(page: totalPages),
+                    )
                   : null,
               icon: const Icon(Icons.last_page),
               tooltip: l10n.paginationLastPageTooltip,
@@ -457,27 +471,32 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }) {
     return DragTarget<SceneListItem>(
       onAcceptWithDetails: (details) => _moveScene(details.data, targetHideFav),
-        builder: (context, candidate, rejected) {
-          final l10n = context.l10n;
-          final titleWidget = Text(l10n.columnTitleWithCount(title, items.length));
-          final headerTitle = targetHideFav == 0
-              ? KeyedSubtree(key: BootstrapKeys.scenesColumnHeader, child: titleWidget)
-              : titleWidget;
-          return Card(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      headerTitle,
-                      if (candidate.isNotEmpty) ...[
-                        const Spacer(),
-                        const Icon(Icons.arrow_downward, size: 18),
-                      ],
+      builder: (context, candidate, rejected) {
+        final l10n = context.l10n;
+        final titleWidget = Text(
+          l10n.columnTitleWithCount(title, items.length),
+        );
+        final headerTitle = targetHideFav == 0
+            ? KeyedSubtree(
+                key: BootstrapKeys.scenesColumnHeader,
+                child: titleWidget,
+              )
+            : titleWidget;
+        return Card(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    headerTitle,
+                    if (candidate.isNotEmpty) ...[
+                      const Spacer(),
+                      const Icon(Icons.arrow_downward, size: 18),
                     ],
-                  ),
+                  ],
                 ),
+              ),
               const Divider(height: 1),
               Expanded(
                 child: ListView.builder(
@@ -538,8 +557,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     final previewUrl = _previewUrl(client, item);
     final canPreview = previewUrl != null && previewUrl.isNotEmpty;
     final title = p.basenameWithoutExtension(item.scenePath);
-    final cacheSize =
-        (72 * MediaQuery.of(context).devicePixelRatio).round();
+    final cacheSize = (72 * MediaQuery.of(context).devicePixelRatio).round();
     final previewImage = ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: previewUrl == null
@@ -563,8 +581,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         Tooltip(
           message: l10n.previewOpenDoubleClickTooltip,
           child: GestureDetector(
-            onDoubleTap:
-                canPreview ? () => _openScenePreview(context, item) : null,
+            onDoubleTap: canPreview
+                ? () => _openScenePreview(context, item)
+                : null,
             child: previewImage,
           ),
         ),
@@ -580,11 +599,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
-              Text(
-                item.varName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              Text(item.varName, maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 6,
@@ -664,7 +679,10 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   Widget _sceneCardContent(
-      BuildContext context, SceneListItem item, Widget header) {
+    BuildContext context,
+    SceneListItem item,
+    Widget header,
+  ) {
     final l10n = context.l10n;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -773,8 +791,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         'resources': [
           {
             'type': item.atomType,
-            'saveName': '${item.varName}:/${item.scenePath.replaceAll('\\', '/')}',
-          }
+            'saveName':
+                '${item.varName}:/${item.scenePath.replaceAll('\\', '/')}',
+          },
         ],
       },
       'merge': _merge,
@@ -787,19 +806,19 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   Future<void> _analyzeScene(BuildContext context, SceneListItem item) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    final result = await runner.runJob('scene_analyze',
-        args: {
-          'save_name': '${item.varName}:/${item.scenePath.replaceAll('\\', '/')}',
-          'character_gender': _forMale ? 'male' : 'female',
-        },
-        onLog: log.addEntry);
+    final result = await runner.runJob(
+      'scene_analyze',
+      args: {
+        'save_name': '${item.varName}:/${item.scenePath.replaceAll('\\', '/')}',
+        'character_gender': _forMale ? 'male' : 'female',
+      },
+      onLog: log.addEntry,
+    );
     final payload = result.result as Map<String, dynamic>?;
     if (payload == null || !context.mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AnalysisPage(payload: payload),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => AnalysisPage(payload: payload)));
   }
 
   Future<void> _locateScene(SceneListItem item) async {
@@ -865,4 +884,3 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     ref.invalidate(scenesListProvider);
   }
 }
-

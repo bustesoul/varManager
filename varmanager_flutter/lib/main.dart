@@ -56,10 +56,7 @@ Future<void> _configureDesktopWindow() async {
   final screenSize = display.size;
   final targetSize = Size(screenSize.width * 0.8, screenSize.height * 0.8);
 
-  final windowOptions = WindowOptions(
-    size: targetSize,
-    center: true,
-  );
+  final windowOptions = WindowOptions(size: targetSize, center: true);
 
   unawaited(
     windowManager.waitUntilReadyToShow(windowOptions, () async {

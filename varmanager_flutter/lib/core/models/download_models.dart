@@ -94,10 +94,7 @@ class DownloadSummary {
 }
 
 class DownloadListResponse {
-  DownloadListResponse({
-    required this.items,
-    required this.summary,
-  });
+  DownloadListResponse({required this.items, required this.summary});
 
   final List<DownloadItem> items;
   final DownloadSummary summary;
@@ -107,9 +104,9 @@ class DownloadListResponse {
     return DownloadListResponse(
       items: itemsRaw
           .whereType<Map>()
-          .map((entry) => DownloadItem.fromJson(
-                Map<String, dynamic>.from(entry),
-              ))
+          .map(
+            (entry) => DownloadItem.fromJson(Map<String, dynamic>.from(entry)),
+          )
           .toList(),
       summary: DownloadSummary.fromJson(
         Map<String, dynamic>.from(json['summary'] as Map? ?? {}),

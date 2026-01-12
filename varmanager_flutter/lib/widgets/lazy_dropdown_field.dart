@@ -23,7 +23,7 @@ class LazyDropdownField extends StatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
   final Future<List<String>> Function(String query, int offset, int limit)
-      optionsLoader;
+  optionsLoader;
   final int pageSize;
   final int minQueryLength;
   final String allValue;
@@ -176,8 +176,7 @@ class _LazyDropdownFieldState extends State<LazyDropdownField> {
       _offset = 0;
     });
     _openOverlay();
-    final items =
-        await widget.optionsLoader(_query, _offset, widget.pageSize);
+    final items = await widget.optionsLoader(_query, _offset, widget.pageSize);
     if (!mounted || requestId != _queryVersion) return;
     setState(() {
       _options = items;
@@ -193,8 +192,7 @@ class _LazyDropdownFieldState extends State<LazyDropdownField> {
     _loading = true;
     _overlayEntry?.markNeedsBuild();
     final requestId = _queryVersion;
-    final items =
-        await widget.optionsLoader(_query, _offset, widget.pageSize);
+    final items = await widget.optionsLoader(_query, _offset, widget.pageSize);
     if (!mounted || requestId != _queryVersion) return;
     setState(() {
       _options = [..._options, ...items];
@@ -261,9 +259,8 @@ class _LazyDropdownFieldState extends State<LazyDropdownField> {
       displayItems.add(widget.allValue);
     }
     displayItems.addAll(items);
-    final itemCount = displayItems.length +
-        (showEmpty ? 1 : 0) +
-        (_loading ? 1 : 0);
+    final itemCount =
+        displayItems.length + (showEmpty ? 1 : 0) + (_loading ? 1 : 0);
     return ListView.builder(
       controller: _scrollController,
       itemCount: itemCount,
@@ -283,10 +280,7 @@ class _LazyDropdownFieldState extends State<LazyDropdownField> {
           );
         }
         if (showEmpty && index == displayItems.length) {
-          return ListTile(
-            dense: true,
-            title: Text(context.l10n.noMatches),
-          );
+          return ListTile(dense: true, title: Text(context.l10n.noMatches));
         }
         return const Padding(
           padding: EdgeInsets.all(12),

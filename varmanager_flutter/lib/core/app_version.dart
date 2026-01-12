@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
-const String _buildVersion =
-    String.fromEnvironment('APP_VERSION', defaultValue: '');
+const String _buildVersion = String.fromEnvironment(
+  'APP_VERSION',
+  defaultValue: '',
+);
 
 Future<String> loadAppVersion() async {
   if (_buildVersion.isNotEmpty) {

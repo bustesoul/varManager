@@ -5,8 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../models/download_models.dart';
 
-final downloadListProvider =
-    StreamProvider.autoDispose<DownloadListResponse>((ref) async* {
+final downloadListProvider = StreamProvider.autoDispose<DownloadListResponse>((
+  ref,
+) async* {
   final client = ref.read(backendClientProvider);
   DownloadListResponse last;
 

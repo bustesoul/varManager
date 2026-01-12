@@ -179,11 +179,8 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final dependencies = _dependencies
-        .map((item) => item.dependency)
-        .toSet()
-        .toList()
-      ..sort();
+    final dependencies =
+        _dependencies.map((item) => item.dependency).toSet().toList()..sort();
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.uninstallPreviewTitle)),
@@ -204,7 +201,9 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(l10n.uninstallPackageCount(_varList.length)),
+                                Text(
+                                  l10n.uninstallPackageCount(_varList.length),
+                                ),
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
@@ -225,7 +224,8 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                           Expanded(
                             child: ListView.separated(
                               itemCount: _varList.length,
-                              separatorBuilder: (_, _) => const Divider(height: 1),
+                              separatorBuilder: (_, _) =>
+                                  const Divider(height: 1),
                               itemBuilder: (context, index) {
                                 final name = _varList[index];
                                 final tags = <String>[];
@@ -238,9 +238,12 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                 final selected = _selectedVars.contains(name);
                                 return CheckboxListTile(
                                   value: selected,
-                                  onChanged: (value) => _toggleVar(name, value ?? false),
+                                  onChanged: (value) =>
+                                      _toggleVar(name, value ?? false),
                                   title: Text(name),
-                                  subtitle: tags.isEmpty ? null : Text(tags.join(' - ')),
+                                  subtitle: tags.isEmpty
+                                      ? null
+                                      : Text(tags.join(' - ')),
                                 );
                               },
                             ),
@@ -263,13 +266,19 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                 children: [
                                   Row(
                                     children: [
-                                      Text(l10n.previewsCount(_filteredPreviews.length)),
+                                      Text(
+                                        l10n.previewsCount(
+                                          _filteredPreviews.length,
+                                        ),
+                                      ),
                                       const Spacer(),
                                       if (_loadingDetails)
                                         const SizedBox(
                                           width: 18,
                                           height: 18,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -280,23 +289,29 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                         value: _previewType,
                                         items: [
                                           DropdownMenuItem(
-                                              value: 'all',
-                                              child: Text(l10n.allTypesLabel)),
+                                            value: 'all',
+                                            child: Text(l10n.allTypesLabel),
+                                          ),
                                           DropdownMenuItem(
-                                              value: 'scenes',
-                                              child: Text(l10n.categoryScenes)),
+                                            value: 'scenes',
+                                            child: Text(l10n.categoryScenes),
+                                          ),
                                           DropdownMenuItem(
-                                              value: 'looks',
-                                              child: Text(l10n.categoryLooks)),
+                                            value: 'looks',
+                                            child: Text(l10n.categoryLooks),
+                                          ),
                                           DropdownMenuItem(
-                                              value: 'clothing',
-                                              child: Text(l10n.categoryClothing)),
+                                            value: 'clothing',
+                                            child: Text(l10n.categoryClothing),
+                                          ),
                                           DropdownMenuItem(
-                                              value: 'hairstyle',
-                                              child: Text(l10n.categoryHairstyle)),
+                                            value: 'hairstyle',
+                                            child: Text(l10n.categoryHairstyle),
+                                          ),
                                           DropdownMenuItem(
-                                              value: 'assets',
-                                              child: Text(l10n.categoryAssets)),
+                                            value: 'assets',
+                                            child: Text(l10n.categoryAssets),
+                                          ),
                                         ],
                                         onChanged: (value) {
                                           if (value == null) return;
@@ -307,7 +322,12 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                         },
                                       ),
                                       const Spacer(),
-                                      Text(l10n.pageOf(_previewPage, _previewTotalPages)),
+                                      Text(
+                                        l10n.pageOf(
+                                          _previewPage,
+                                          _previewTotalPages,
+                                        ),
+                                      ),
                                       IconButton(
                                         onPressed: _previewPage <= 1
                                             ? null
@@ -317,7 +337,8 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                 });
                                               },
                                         icon: const Icon(Icons.first_page),
-                                        tooltip: l10n.paginationFirstPageTooltip,
+                                        tooltip:
+                                            l10n.paginationFirstPageTooltip,
                                       ),
                                       IconButton(
                                         onPressed: _previewPage <= 1
@@ -328,10 +349,12 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                                 });
                                               },
                                         icon: const Icon(Icons.chevron_left),
-                                        tooltip: l10n.paginationPreviousPageTooltip,
+                                        tooltip:
+                                            l10n.paginationPreviousPageTooltip,
                                       ),
                                       IconButton(
-                                        onPressed: _previewPage >= _previewTotalPages
+                                        onPressed:
+                                            _previewPage >= _previewTotalPages
                                             ? null
                                             : () {
                                                 setState(() {
@@ -342,11 +365,13 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                         tooltip: l10n.paginationNextPageTooltip,
                                       ),
                                       IconButton(
-                                        onPressed: _previewPage >= _previewTotalPages
+                                        onPressed:
+                                            _previewPage >= _previewTotalPages
                                             ? null
                                             : () {
                                                 setState(() {
-                                                  _previewPage = _previewTotalPages;
+                                                  _previewPage =
+                                                      _previewTotalPages;
                                                 });
                                               },
                                         icon: const Icon(Icons.last_page),
@@ -360,52 +385,78 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                                         ? Center(child: Text(l10n.noPreviews))
                                         : LayoutBuilder(
                                             builder: (context, constraints) {
-                                              final columns = constraints.maxWidth > 1200
+                                              final columns =
+                                                  constraints.maxWidth > 1200
                                                   ? 6
                                                   : constraints.maxWidth > 900
-                                                      ? 5
-                                                      : constraints.maxWidth > 700
-                                                          ? 4
-                                                          : 3;
+                                                  ? 5
+                                                  : constraints.maxWidth > 700
+                                                  ? 4
+                                                  : 3;
                                               final spacing = 8.0;
-                                              final tileSize = (constraints.maxWidth -
+                                              final tileSize =
+                                                  (constraints.maxWidth -
                                                       (columns - 1) * spacing) /
                                                   columns;
-                                              final cacheSize = (tileSize *
-                                                      MediaQuery.of(context)
-                                                          .devicePixelRatio)
-                                                  .round();
+                                              final cacheSize =
+                                                  (tileSize *
+                                                          MediaQuery.of(
+                                                            context,
+                                                          ).devicePixelRatio)
+                                                      .round();
                                               return GridView.builder(
                                                 gridDelegate:
                                                     SliverGridDelegateWithFixedCrossAxisCount(
-                                                  crossAxisCount: columns,
-                                                  crossAxisSpacing: 8,
-                                                  mainAxisSpacing: 8,
-                                                  childAspectRatio: 1,
-                                                ),
-                                                itemCount: _pagedPreviews.length,
+                                                      crossAxisCount: columns,
+                                                      crossAxisSpacing: 8,
+                                                      mainAxisSpacing: 8,
+                                                      childAspectRatio: 1,
+                                                    ),
+                                                itemCount:
+                                                    _pagedPreviews.length,
                                                 itemBuilder: (context, index) {
-                                                  final item = _pagedPreviews[index];
-                                                  final client = ref.read(backendClientProvider);
-                                                  final path = _previewPath(item);
+                                                  final item =
+                                                      _pagedPreviews[index];
+                                                  final client = ref.read(
+                                                    backendClientProvider,
+                                                  );
+                                                  final path = _previewPath(
+                                                    item,
+                                                  );
                                                   return Tooltip(
-                                                    message: l10n.previewOpenTooltip,
+                                                    message:
+                                                        l10n.previewOpenTooltip,
                                                     child: InkWell(
-                                                      onTap: () => _showPreview(item),
+                                                      onTap: () =>
+                                                          _showPreview(item),
                                                       child: ClipRRect(
-                                                        borderRadius: BorderRadius.circular(8),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
+                                                            ),
                                                         child: path == null
                                                             ? const PreviewPlaceholder()
                                                             : Image.network(
                                                                 client.previewUrl(
-                                                                    root: 'varspath', path: path),
-                                                                fit: BoxFit.cover,
-                                                                cacheWidth: cacheSize,
-                                                                cacheHeight: cacheSize,
-                                                                errorBuilder: (_, _, _) =>
-                                                                    const PreviewPlaceholder(
-                                                                  icon: Icons.broken_image,
+                                                                  root:
+                                                                      'varspath',
+                                                                  path: path,
                                                                 ),
+                                                                fit: BoxFit
+                                                                    .cover,
+                                                                cacheWidth:
+                                                                    cacheSize,
+                                                                cacheHeight:
+                                                                    cacheSize,
+                                                                errorBuilder:
+                                                                    (
+                                                                      _,
+                                                                      _,
+                                                                      _,
+                                                                    ) => const PreviewPlaceholder(
+                                                                      icon: Icons
+                                                                          .broken_image,
+                                                                    ),
                                                               ),
                                                       ),
                                                     ),
@@ -428,17 +479,23 @@ class _UninstallVarsPageState extends ConsumerState<UninstallVarsPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(l10n.dependenciesCount(dependencies.length)),
+                                  Text(
+                                    l10n.dependenciesCount(dependencies.length),
+                                  ),
                                   const SizedBox(height: 8),
                                   Expanded(
                                     child: dependencies.isEmpty
-                                        ? Center(child: Text(l10n.noDependencies))
+                                        ? Center(
+                                            child: Text(l10n.noDependencies),
+                                          )
                                         : ListView.builder(
                                             itemCount: dependencies.length,
                                             itemBuilder: (context, index) {
                                               return ListTile(
                                                 dense: true,
-                                                title: Text(dependencies[index]),
+                                                title: Text(
+                                                  dependencies[index],
+                                                ),
                                               );
                                             },
                                           ),

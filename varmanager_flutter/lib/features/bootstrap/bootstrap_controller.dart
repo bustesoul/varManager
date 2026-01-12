@@ -8,8 +8,9 @@ import '../../core/backend/backend_client.dart';
 import '../../core/models/config.dart';
 import 'bootstrap_state.dart';
 
-final bootstrapProvider =
-    NotifierProvider<BootstrapController, BootstrapState>(BootstrapController.new);
+final bootstrapProvider = NotifierProvider<BootstrapController, BootstrapState>(
+  BootstrapController.new,
+);
 
 class BootstrapController extends Notifier<BootstrapState> {
   static const String _installMarkerName = 'INSTALL.txt';
@@ -91,10 +92,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       state = state.copyWith(config: config, savingConfig: false);
       return true;
     } catch (err) {
-      state = state.copyWith(
-        savingConfig: false,
-        errorMessage: err.toString(),
-      );
+      state = state.copyWith(savingConfig: false, errorMessage: err.toString());
       return false;
     }
   }
@@ -112,7 +110,11 @@ class BootstrapController extends Notifier<BootstrapState> {
     required String symlinkHint,
     required String vamExecHint,
   }) async {
-    state = state.copyWith(checksRunning: true, checksRan: true, errorMessage: null);
+    state = state.copyWith(
+      checksRunning: true,
+      checksRan: true,
+      errorMessage: null,
+    );
 
     final checks = <BootstrapCheckItem>[];
     checks.add(_pending('backend', backendLabel));
@@ -129,23 +131,27 @@ class BootstrapController extends Notifier<BootstrapState> {
     _setCheck(backendCheck);
 
     final config = state.config;
-    final varspathCheck = await _checkVarspath(config, varspathLabel, varspathHint);
+    final varspathCheck = await _checkVarspath(
+      config,
+      varspathLabel,
+      varspathHint,
+    );
     _setCheck(varspathCheck);
 
-    final downloaderCheck =
-        await _checkDownloaderPath(config, downloaderLabel, downloaderHint);
+    final downloaderCheck = await _checkDownloaderPath(
+      config,
+      downloaderLabel,
+      downloaderHint,
+    );
     _setCheck(downloaderCheck);
 
-    final fileOpsCheck =
-        await _checkFileOps(config, fileOpsLabel, fileOpsHint);
+    final fileOpsCheck = await _checkFileOps(config, fileOpsLabel, fileOpsHint);
     _setCheck(fileOpsCheck);
 
-    final symlinkCheck =
-        await _checkSymlink(config, symlinkLabel, symlinkHint);
+    final symlinkCheck = await _checkSymlink(config, symlinkLabel, symlinkHint);
     _setCheck(symlinkCheck);
 
-    final vamExecCheck =
-        await _checkVamExec(config, vamExecLabel, vamExecHint);
+    final vamExecCheck = await _checkVamExec(config, vamExecLabel, vamExecHint);
     _setCheck(vamExecCheck);
 
     state = state.copyWith(checksRunning: false);
@@ -492,8 +498,9 @@ class BootstrapController extends Notifier<BootstrapState> {
       );
     }
     final vampath = config.vampath.trim();
-    final resolvedPath =
-        p.isAbsolute(path) ? path : (vampath.isEmpty ? path : p.join(vampath, path));
+    final resolvedPath = p.isAbsolute(path)
+        ? path
+        : (vampath.isEmpty ? path : p.join(vampath, path));
     final file = File(resolvedPath);
     if (await file.exists()) {
       return BootstrapCheckItem(
@@ -530,7 +537,9 @@ class BootstrapController extends Notifier<BootstrapState> {
     if (await exeCandidate.exists()) {
       return exeCandidate.path;
     }
-    final workCandidate = File(p.join(Directory.current.path, _installMarkerName));
+    final workCandidate = File(
+      p.join(Directory.current.path, _installMarkerName),
+    );
     if (await workCandidate.exists()) {
       return workCandidate.path;
     }

@@ -1196,6 +1196,18 @@ abstract class AppLocalizations {
   /// **'Export installed vars to a text file.'**
   String get exportInstalledTooltip;
 
+  /// No description provided for @exportMissingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Export Missing'**
+  String get exportMissingLabel;
+
+  /// No description provided for @exportMissingTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Export missing vars to a text file.'**
+  String get exportMissingTooltip;
+
   /// No description provided for @exportPathTitle.
   ///
   /// In en, this message translates to:

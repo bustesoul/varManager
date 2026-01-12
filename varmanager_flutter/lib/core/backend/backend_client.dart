@@ -12,7 +12,7 @@ import 'query_params.dart';
 
 class BackendClient {
   BackendClient({required this.baseUrl, http.Client? httpClient})
-      : _client = httpClient ?? http.Client();
+    : _client = httpClient ?? http.Client();
 
   String baseUrl;
   final http.Client _client;
@@ -21,8 +21,10 @@ class BackendClient {
     return Uri.parse(baseUrl).replace(path: path, queryParameters: query);
   }
 
-  Future<Map<String, dynamic>> _getJson(String path,
-      [Map<String, String>? query]) async {
+  Future<Map<String, dynamic>> _getJson(
+    String path, [
+    Map<String, String>? query,
+  ]) async {
     final resp = await _client.get(_uri(path, query));
     if (resp.statusCode >= 400) {
       throw Exception('GET $path failed: ${resp.body}');
@@ -30,8 +32,10 @@ class BackendClient {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> _postJson(String path,
-      [Map<String, dynamic>? body]) async {
+  Future<Map<String, dynamic>> _postJson(
+    String path, [
+    Map<String, dynamic>? body,
+  ]) async {
     final resp = await _client.post(
       _uri(path),
       headers: {'Content-Type': 'application/json'},
@@ -43,8 +47,10 @@ class BackendClient {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> _putJson(String path,
-      Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _putJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     final resp = await _client.put(
       _uri(path),
       headers: {'Content-Type': 'application/json'},
@@ -96,8 +102,7 @@ class BackendClient {
     if (limit != null) {
       params['limit'] = limit.toString();
     }
-    final json =
-        await _getJson('/creators', params.isEmpty ? null : params);
+    final json = await _getJson('/creators', params.isEmpty ? null : params);
     final creators = json['creators'] as List<dynamic>? ?? [];
     return creators.map((item) => item.toString()).toList();
   }
@@ -108,9 +113,7 @@ class BackendClient {
     int? offset,
     int? limit,
   }) async {
-    final params = <String, String>{
-      'kind': kind,
-    };
+    final params = <String, String>{'kind': kind};
     if (query != null) {
       params['q'] = query;
     }
@@ -131,7 +134,9 @@ class BackendClient {
   }
 
   Future<AnalysisAtomsResponse> listAnalysisAtoms(
-      String varName, String entryName) async {
+    String varName,
+    String entryName,
+  ) async {
     final json = await _getJson('/analysis/atoms', {
       'var_name': varName,
       'entry_name': entryName,
@@ -140,7 +145,9 @@ class BackendClient {
   }
 
   Future<AnalysisSummaryResponse> getAnalysisSummary(
-      String varName, String entryName) async {
+    String varName,
+    String entryName,
+  ) async {
     final json = await _getJson('/analysis/summary', {
       'var_name': varName,
       'entry_name': entryName,
@@ -159,7 +166,9 @@ class BackendClient {
   }
 
   Future<MissingMapResponse> saveMissingMap(
-      String path, List<MissingMapItem> links) async {
+    String path,
+    List<MissingMapItem> links,
+  ) async {
     final json = await _postJson('/missing/map/save', {
       'path': path,
       'links': links.map((item) => item.toJson()).toList(),
@@ -188,7 +197,8 @@ class BackendClient {
   }
 
   Future<VarDependenciesResponse> listVarDependencies(
-      List<String> varNames) async {
+    List<String> varNames,
+  ) async {
     final json = await _postJson('/vars/dependencies', {'var_names': varNames});
     return VarDependenciesResponse.fromJson(json);
   }
@@ -198,8 +208,10 @@ class BackendClient {
     return VarPreviewsResponse.fromJson(json);
   }
 
-  Future<StartJobResponse> startJob(String kind,
-      [Map<String, dynamic>? args]) async {
+  Future<StartJobResponse> startJob(
+    String kind, [
+    Map<String, dynamic>? args,
+  ]) async {
     final json = await _postJson('/jobs', {
       'kind': kind,
       if (args != null) 'args': args,
@@ -232,10 +244,7 @@ class BackendClient {
   }
 
   Future<void> downloadAction(String action, List<int> ids) async {
-    await _postJson('/downloads/actions', {
-      'action': action,
-      'ids': ids,
-    });
+    await _postJson('/downloads/actions', {'action': action, 'ids': ids});
   }
 
   Future<void> shutdown() async {
@@ -246,12 +255,7 @@ class BackendClient {
     return _getJson('/health');
   }
 
-  String previewUrl({
-    String? root,
-    String? path,
-    String? source,
-    String? url,
-  }) {
+  String previewUrl({String? root, String? path, String? source, String? url}) {
     final query = <String, String>{};
     if (source != null) {
       query['source'] = source;

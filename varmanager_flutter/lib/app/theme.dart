@@ -124,15 +124,11 @@ class AppTheme {
     final primaryContainer = isDark
         ? const Color(0xFF004D47)
         : primary.withValues(alpha: 0.12);
-    final onPrimaryContainer = isDark
-        ? const Color(0xFFA4F3EC)
-        : primary;
+    final onPrimaryContainer = isDark ? const Color(0xFFA4F3EC) : primary;
     final secondaryContainer = isDark
         ? const Color(0xFF5D4037)
         : secondary.withValues(alpha: 0.12);
-    final onSecondaryContainer = isDark
-        ? const Color(0xFFFFDBCF)
-        : secondary;
+    final onSecondaryContainer = isDark ? const Color(0xFFFFDBCF) : secondary;
 
     // Surface变体
     final surfaceContainerHighest = isDark
@@ -162,8 +158,12 @@ class AppTheme {
       outlineVariant: outlineVariant,
       error: isDark ? const Color(0xFFFFB4AB) : const Color(0xFFB3261E),
       onError: isDark ? const Color(0xFF690005) : Colors.white,
-      errorContainer: isDark ? const Color(0xFF93000A) : const Color(0xFFF9DEDC),
-      onErrorContainer: isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410E0B),
+      errorContainer: isDark
+          ? const Color(0xFF93000A)
+          : const Color(0xFFF9DEDC),
+      onErrorContainer: isDark
+          ? const Color(0xFFFFDAD6)
+          : const Color(0xFF410E0B),
     );
 
     final base = ThemeData(
@@ -180,7 +180,9 @@ class AppTheme {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isDark ? outlineVariant : scheme.onSurface.withValues(alpha: 0.08),
+          color: isDark
+              ? outlineVariant
+              : scheme.onSurface.withValues(alpha: 0.08),
         ),
       ),
     );
@@ -196,14 +198,14 @@ class AppTheme {
     final outlinedButtonTheme = OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: isDark ? primary : primary,
-        side: BorderSide(color: isDark ? outline : primary.withValues(alpha: 0.5)),
+        side: BorderSide(
+          color: isDark ? outline : primary.withValues(alpha: 0.5),
+        ),
       ),
     );
 
     final textButtonTheme = TextButtonThemeData(
-      style: TextButton.styleFrom(
-        foregroundColor: primary,
-      ),
+      style: TextButton.styleFrom(foregroundColor: primary),
     );
 
     // Chip主题
@@ -226,9 +228,7 @@ class AppTheme {
       filled: isDark,
       fillColor: isDark ? surfaceContainerHighest : null,
       border: const OutlineInputBorder(),
-      enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: outline),
-      ),
+      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: outline)),
       focusedBorder: OutlineInputBorder(
         borderSide: BorderSide(color: primary, width: 2),
       ),

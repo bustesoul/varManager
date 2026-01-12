@@ -117,7 +117,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final proxyPort = int.tryParse(_proxyPort.text.trim()) ?? 0;
     final proxyUsername = _proxyUsername.text.trim();
     final proxyPassword = _proxyPassword.text.trim();
-    final needsRestartHint = previous.listenHost != listenHost ||
+    final needsRestartHint =
+        previous.listenHost != listenHost ||
         previous.listenPort != listenPort ||
         previous.proxyMode != proxyMode ||
         previous.proxy.host != proxyHost ||
@@ -149,9 +150,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(needsRestartHint
-            ? context.l10n.configSavedRestartHint
-            : context.l10n.configSaved),
+        content: Text(
+          needsRestartHint
+              ? context.l10n.configSavedRestartHint
+              : context.l10n.configSaved,
+        ),
       ),
     );
   }
@@ -219,14 +222,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: Column(
                 children: [
                   _field(_listenHost, l10n.listenHostLabel),
-                  _field(_listenPort, l10n.listenPortLabel,
-                      keyboard: TextInputType.number),
+                  _field(
+                    _listenPort,
+                    l10n.listenPortLabel,
+                    keyboard: TextInputType.number,
+                  ),
                   _field(_logLevel, l10n.logLevelLabel),
-                  _field(_jobConcurrency, l10n.jobConcurrencyLabel,
-                      keyboard: TextInputType.number),
+                  _field(
+                    _jobConcurrency,
+                    l10n.jobConcurrencyLabel,
+                    keyboard: TextInputType.number,
+                  ),
                   const SizedBox(height: 4),
-                  Text(l10n.proxySectionLabel,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    l10n.proxySectionLabel,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<ProxyMode>(
                     initialValue: _proxyMode,
@@ -254,8 +265,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   const SizedBox(height: 12),
                   if (manualProxy) ...[
                     _field(_proxyHost, l10n.proxyHostLabel),
-                    _field(_proxyPort, l10n.proxyPortLabel,
-                        keyboard: TextInputType.number),
+                    _field(
+                      _proxyPort,
+                      l10n.proxyPortLabel,
+                      keyboard: TextInputType.number,
+                    ),
                     _field(_proxyUsername, l10n.proxyUserLabel),
                     _field(
                       _proxyPassword,
@@ -339,12 +353,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _field(TextEditingController controller, String label,
-      {TextInputType keyboard = TextInputType.text,
-      bool obscureText = false,
-      bool enableSuggestions = true,
-      bool autocorrect = true,
-      bool enabled = true}) {
+  Widget _field(
+    TextEditingController controller,
+    String label, {
+    TextInputType keyboard = TextInputType.text,
+    bool obscureText = false,
+    bool enableSuggestions = true,
+    bool autocorrect = true,
+    bool enabled = true,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
@@ -392,10 +409,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           if (onBrowse != null) ...[
             const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: onBrowse,
-              child: Text(l10n.commonBrowse),
-            ),
+            OutlinedButton(onPressed: onBrowse, child: Text(l10n.commonBrowse)),
           ],
         ],
       ),
@@ -557,7 +571,9 @@ class _ThemeCard extends StatelessWidget {
               border: Border.all(
                 color: isSelected
                     ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    : Theme.of(
+                        context,
+                      ).colorScheme.outline.withValues(alpha: 0.3),
                 width: isSelected ? 2 : 1,
               ),
             ),
@@ -567,7 +583,9 @@ class _ThemeCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: isDarkTheme ? _previewColor : _previewColor.withValues(alpha: 0.1),
+                    color: isDarkTheme
+                        ? _previewColor
+                        : _previewColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: _previewColor, width: 3),
                   ),
@@ -595,7 +613,9 @@ class _ThemeCard extends StatelessWidget {
                   label,
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.onSurface,

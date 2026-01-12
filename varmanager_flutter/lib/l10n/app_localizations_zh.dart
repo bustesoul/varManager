@@ -578,6 +578,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get exportInstalledTooltip => '导出已安装 Vars 到文本文件。';
 
   @override
+  String get exportMissingLabel => '导出缺失';
+
+  @override
+  String get exportMissingTooltip => '导出缺失 Vars 到文本文件。';
+
+  @override
   String get exportPathTitle => '导出路径';
 
   @override

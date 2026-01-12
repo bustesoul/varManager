@@ -48,7 +48,9 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
     return IconButton(
       onPressed: _toggleExpanded,
       icon: Icon(_isExpanded ? Icons.expand_more : Icons.expand_less),
-      tooltip: _isExpanded ? l10n.jobLogCollapseTooltip : l10n.jobLogExpandTooltip,
+      tooltip: _isExpanded
+          ? l10n.jobLogCollapseTooltip
+          : l10n.jobLogExpandTooltip,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints.tightFor(width: 32, height: 32),
       visualDensity: VisualDensity.compact,
@@ -102,7 +104,8 @@ class _JobLogPanelState extends ConsumerState<JobLogPanel> {
                     _buildToggleButton(),
                     const SizedBox(width: 4),
                     TextButton(
-                      onPressed: () => ref.read(jobLogProvider.notifier).clear(),
+                      onPressed: () =>
+                          ref.read(jobLogProvider.notifier).clear(),
                       style: buttonStyle,
                       child: Text(l10n.commonClear),
                     ),

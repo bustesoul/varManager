@@ -6,8 +6,12 @@ class ProxyConfig {
     this.password,
   });
 
-  static const ProxyConfig empty =
-      ProxyConfig(host: '', port: 0, username: null, password: null);
+  static const ProxyConfig empty = ProxyConfig(
+    host: '',
+    port: 0,
+    username: null,
+    password: null,
+  );
 
   final String host;
   final int port;

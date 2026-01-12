@@ -175,7 +175,9 @@ class VarDetailResponse {
     return VarDetailResponse(
       varInfo: VarListItem.fromJson(json['var_info'] as Map<String, dynamic>),
       dependencies: (json['dependencies'] as List<dynamic>? ?? [])
-          .map((item) => DependencyStatus.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => DependencyStatus.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
       dependents: (json['dependents'] as List<dynamic>? ?? [])
           .map((item) => item as String)
@@ -184,7 +186,9 @@ class VarDetailResponse {
           .map((item) => item as String)
           .toList(),
       scenes: (json['scenes'] as List<dynamic>? ?? [])
-          .map((item) => ScenePreviewItem.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => ScenePreviewItem.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
     );
   }

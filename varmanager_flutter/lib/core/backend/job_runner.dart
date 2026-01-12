@@ -34,7 +34,8 @@ class JobRunner {
     JobView job;
     while (true) {
       job = await client.getJob(start.id);
-      final hasLogChanges = onLog != null &&
+      final hasLogChanges =
+          onLog != null &&
           (job.logOffset != lastLogOffset || job.logCount != lastLogCount);
       if (hasLogChanges) {
         final logs = await client.getJobLogs(start.id, from: logOffset);
@@ -49,7 +50,9 @@ class JobRunner {
         break;
       }
       final stateChanged =
-          hasLogChanges || job.progress != lastProgress || job.status != lastStatus;
+          hasLogChanges ||
+          job.progress != lastProgress ||
+          job.status != lastStatus;
       if (stateChanged) {
         idleTicks = 0;
       } else {

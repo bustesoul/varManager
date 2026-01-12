@@ -592,6 +592,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get exportInstalledTooltip => 'Export installed vars to a text file.';
 
   @override
+  String get exportMissingLabel => 'Export Missing';
+
+  @override
+  String get exportMissingTooltip => 'Export missing vars to a text file.';
+
+  @override
   String get exportPathTitle => 'Export path';
 
   @override

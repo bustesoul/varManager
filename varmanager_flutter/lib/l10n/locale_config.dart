@@ -4,10 +4,7 @@ const String kFallbackLocaleTag = 'en';
 const String kChineseLocaleTag = 'zh';
 const String kEnglishLocaleTag = 'en';
 
-const List<Locale> kSupportedLocales = [
-  Locale('en'),
-  Locale('zh'),
-];
+const List<Locale> kSupportedLocales = [Locale('en'), Locale('zh')];
 
 class LocaleInitResult {
   const LocaleInitResult(this.tag, this.persistOnStart);

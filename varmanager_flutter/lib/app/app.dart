@@ -55,10 +55,26 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   List<_NavEntry> _buildPages(AppLocalizations l10n) {
     return [
-      _NavEntry(label: l10n.navHome, icon: Icons.dashboard, page: const HomePage()),
-      _NavEntry(label: l10n.navScenes, icon: Icons.photo_library, page: const ScenesPage()),
-      _NavEntry(label: l10n.navHub, icon: Icons.cloud_download, page: const HubPage()),
-      _NavEntry(label: l10n.navSettings, icon: Icons.tune, page: const SettingsPage()),
+      _NavEntry(
+        label: l10n.navHome,
+        icon: Icons.dashboard,
+        page: const HomePage(),
+      ),
+      _NavEntry(
+        label: l10n.navScenes,
+        icon: Icons.photo_library,
+        page: const ScenesPage(),
+      ),
+      _NavEntry(
+        label: l10n.navHub,
+        icon: Icons.cloud_download,
+        page: const HubPage(),
+      ),
+      _NavEntry(
+        label: l10n.navSettings,
+        icon: Icons.tune,
+        page: const SettingsPage(),
+      ),
     ];
   }
 
@@ -119,7 +135,9 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_appVersion.isNotEmpty ? 'varManager $_appVersion' : 'varManager'),
+        title: Text(
+          _appVersion.isNotEmpty ? 'varManager $_appVersion' : 'varManager',
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -128,14 +146,14 @@ class _AppShellState extends ConsumerState<AppShell> {
                 _ready
                     ? l10n.backendReady
                     : _error != null
-                        ? l10n.backendError
-                        : l10n.backendStarting,
+                    ? l10n.backendError
+                    : l10n.backendStarting,
                 style: TextStyle(
                   color: _ready
                       ? Colors.green.shade700
                       : _error != null
-                          ? Colors.red.shade700
-                          : Colors.orange.shade700,
+                      ? Colors.red.shade700
+                      : Colors.orange.shade700,
                 ),
               ),
             ),
@@ -158,9 +176,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                           ]
                         : [
                             Theme.of(context).scaffoldBackgroundColor,
-                            HSLColor.fromColor(Theme.of(context).scaffoldBackgroundColor)
-                                .withLightness(0.88)
-                                .toColor(),
+                            HSLColor.fromColor(
+                              Theme.of(context).scaffoldBackgroundColor,
+                            ).withLightness(0.88).toColor(),
                           ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -175,15 +193,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                               child: _error != null
                                   ? _ErrorPane(message: _error!)
                                   : !_ready
-                                      ? const _LoadingPane()
-                                      : pages[index].page,
+                                  ? const _LoadingPane()
+                                  : pages[index].page,
                             ),
                           ),
                           const JobLogPanel(),
                           NavigationBar(
                             selectedIndex: index,
                             onDestinationSelected: (value) {
-                              ref.read(navIndexProvider.notifier).setIndex(value);
+                              ref
+                                  .read(navIndexProvider.notifier)
+                                  .setIndex(value);
                             },
                             destinations: pages
                                 .map(
@@ -207,7 +227,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     selectedIndex: index,
                                     labelType: NavigationRailLabelType.all,
                                     onDestinationSelected: (value) {
-                                      ref.read(navIndexProvider.notifier)
+                                      ref
+                                          .read(navIndexProvider.notifier)
                                           .setIndex(value);
                                     },
                                     destinations: pages
@@ -238,8 +259,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     child: _error != null
                                         ? _ErrorPane(message: _error!)
                                         : !_ready
-                                            ? const _LoadingPane()
-                                            : pages[index].page,
+                                        ? const _LoadingPane()
+                                        : pages[index].page,
                                   ),
                                 ),
                                 const JobLogPanel(),
@@ -259,7 +280,11 @@ class _AppShellState extends ConsumerState<AppShell> {
 }
 
 class _NavEntry {
-  const _NavEntry({required this.label, required this.icon, required this.page});
+  const _NavEntry({
+    required this.label,
+    required this.icon,
+    required this.page,
+  });
 
   final String label;
   final IconData icon;
@@ -293,8 +318,6 @@ class _ErrorPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Center(
-      child: Text(l10n.backendStartFailed(message)),
-    );
+    return Center(child: Text(l10n.backendStartFailed(message)));
   }
 }

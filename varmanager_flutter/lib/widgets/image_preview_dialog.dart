@@ -70,7 +70,8 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
   }
 
   bool _handleKeyMessage(KeyEvent event) {
-    final isCtrl = event.logicalKey == LogicalKeyboardKey.controlLeft ||
+    final isCtrl =
+        event.logicalKey == LogicalKeyboardKey.controlLeft ||
         event.logicalKey == LogicalKeyboardKey.controlRight;
     if (!isCtrl) return false;
 
@@ -92,10 +93,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
     }
   }
 
-  void _handlePointerSignal(
-    BuildContext context,
-    PointerSignalEvent event,
-  ) {
+  void _handlePointerSignal(BuildContext context, PointerSignalEvent event) {
     if (event is! PointerScrollEvent) {
       return;
     }
@@ -121,7 +119,10 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
     final localFocal = renderBox.globalToLocal(event.position);
     final currentScale = transformationController.value.getMaxScaleOnAxis();
     final delta = -event.scrollDelta.dy * 0.001;
-    final targetScale = (currentScale * (1 + delta)).clamp(_minScale, _maxScale);
+    final targetScale = (currentScale * (1 + delta)).clamp(
+      _minScale,
+      _maxScale,
+    );
     if (targetScale == currentScale) {
       return;
     }
@@ -179,15 +180,15 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
     final canNavigate = widget.items.length > 1;
     final showSideNavigation = !widget.showFooter && canNavigate;
     final canGoPrev = widget.wrapNavigation || currentIndex > 0;
-    final canGoNext = widget.wrapNavigation || currentIndex < widget.items.length - 1;
+    final canGoNext =
+        widget.wrapNavigation || currentIndex < widget.items.length - 1;
 
     return Shortcuts(
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.escape): const _DismissIntent(),
         LogicalKeySet(LogicalKeyboardKey.arrowLeft):
             const _PreviousImageIntent(),
-        LogicalKeySet(LogicalKeyboardKey.arrowRight):
-            const _NextImageIntent(),
+        LogicalKeySet(LogicalKeyboardKey.arrowRight): const _NextImageIntent(),
       },
       child: Actions(
         actions: {
@@ -265,9 +266,9 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                       return Listener(
                                         onPointerSignal: (event) =>
                                             _handlePointerSignal(
-                                          viewerContext,
-                                          event,
-                                        ),
+                                              viewerContext,
+                                              event,
+                                            ),
                                         child: InteractiveViewer(
                                           transformationController:
                                               transformationController,
@@ -280,8 +281,8 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                             fit: BoxFit.contain,
                                             errorBuilder: (_, _, _) =>
                                                 const PreviewPlaceholder(
-                                              icon: Icons.broken_image,
-                                            ),
+                                                  icon: Icons.broken_image,
+                                                ),
                                           ),
                                         ),
                                       );
@@ -319,7 +320,9 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                       tooltip: l10n.imagePreviewPrevious,
                                     ),
                                   Icon(
-                                    _ctrlPressed ? Icons.swap_vert : Icons.zoom_in,
+                                    _ctrlPressed
+                                        ? Icons.swap_vert
+                                        : Icons.zoom_in,
                                     color: Colors.white70,
                                     size: 20,
                                   ),
@@ -327,7 +330,9 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                   Text(
                                     '${currentZoom.toStringAsFixed(2)}x',
                                     style: TextStyle(
-                                      color: _ctrlPressed ? Colors.white38 : Colors.white,
+                                      color: _ctrlPressed
+                                          ? Colors.white38
+                                          : Colors.white,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 14,
                                     ),
@@ -336,7 +341,9 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                                   Text(
                                     l10n.imagePreviewScroll,
                                     style: TextStyle(
-                                      color: _ctrlPressed ? Colors.white70 : Colors.white54,
+                                      color: _ctrlPressed
+                                          ? Colors.white70
+                                          : Colors.white54,
                                       fontSize: 10,
                                     ),
                                   ),
@@ -370,8 +377,9 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                       child: Row(
                         children: [
                           IconButton(
-                            onPressed:
-                                currentIndex > 0 ? () => _setIndex(0) : null,
+                            onPressed: currentIndex > 0
+                                ? () => _setIndex(0)
+                                : null,
                             icon: const Icon(Icons.first_page),
                             tooltip: l10n.paginationFirstPageTooltip,
                           ),
@@ -384,9 +392,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                           ),
                           Text(
                             '${currentIndex + 1}/${widget.items.length}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           IconButton(
                             onPressed: currentIndex < widget.items.length - 1
@@ -397,8 +403,7 @@ class _ImagePreviewDialogState extends State<ImagePreviewDialog> {
                           ),
                           IconButton(
                             onPressed: currentIndex < widget.items.length - 1
-                                ? () =>
-                                    _setIndex(widget.items.length - 1)
+                                ? () => _setIndex(widget.items.length - 1)
                                 : null,
                             icon: const Icon(Icons.last_page),
                             tooltip: l10n.paginationLastPageTooltip,

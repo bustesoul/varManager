@@ -44,8 +44,10 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     });
   }
 
-  Future<JobResult<dynamic>> _runJob(String kind,
-      {Map<String, dynamic>? args}) async {
+  Future<JobResult<dynamic>> _runJob(
+    String kind, {
+    Map<String, dynamic>? args,
+  }) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
     final busy = ref.read(jobBusyProvider.notifier);
@@ -137,7 +139,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
   ) {
     if (totalItems <= 0) return;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final isDoubleTap = _previewTapLastIndex == index &&
+    final isDoubleTap =
+        _previewTapLastIndex == index &&
         nowMs - _previewTapLastMs <= _previewTapDoubleMs;
     if (isDoubleTap) {
       _previewTapLastMs = 0;
@@ -169,7 +172,10 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     }
     final totalPages = (totalItems + _previewPerPage - 1) ~/ _previewPerPage;
     final nextPage = page.clamp(1, totalPages);
-    final nextIndex = ((nextPage - 1) * _previewPerPage).clamp(0, totalItems - 1);
+    final nextIndex = ((nextPage - 1) * _previewPerPage).clamp(
+      0,
+      totalItems - 1,
+    );
     setState(() {
       _previewPage = nextPage;
       _previewSelectedIndex = nextIndex;
@@ -177,25 +183,31 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
   }
 
   Future<void> _togglePreviewInstall(
-      BuildContext context, PreviewItem item) async {
+    BuildContext context,
+    PreviewItem item,
+  ) async {
     if (item.installed) {
-      final preview = await _runJob('preview_uninstall', args: {
-        'var_names': [item.varName],
-        'include_implicated': true,
-      });
+      final preview = await _runJob(
+        'preview_uninstall',
+        args: {
+          'var_names': [item.varName],
+          'include_implicated': true,
+        },
+      );
       if (!context.mounted) return;
       final payload = preview.result as Map<String, dynamic>?;
       if (payload == null) return;
       final confirmed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => UninstallVarsPage(payload: payload),
-        ),
+        MaterialPageRoute(builder: (_) => UninstallVarsPage(payload: payload)),
       );
       if (confirmed == true) {
-        await _runJob('uninstall_vars', args: {
-          'var_names': [item.varName],
-          'include_implicated': true,
-        });
+        await _runJob(
+          'uninstall_vars',
+          args: {
+            'var_names': [item.varName],
+            'include_implicated': true,
+          },
+        );
       } else {
         return;
       }
@@ -207,11 +219,14 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
         l10n.installVarConfirm(item.varName),
       );
       if (!confirmed) return;
-      await _runJob('vars_toggle_install', args: {
-        'var_name': item.varName,
-        'include_dependencies': true,
-        'include_implicated': true,
-      });
+      await _runJob(
+        'vars_toggle_install',
+        args: {
+          'var_name': item.varName,
+          'include_dependencies': true,
+          'include_implicated': true,
+        },
+      );
     }
     ref.invalidate(varsListProvider);
     final focusedVar = ref.read(focusedVarProvider);
@@ -221,7 +236,10 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
   }
 
   Future<bool> _confirmAction(
-      BuildContext context, String title, String message) async {
+    BuildContext context,
+    String title,
+    String message,
+  ) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -297,9 +315,9 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
             final selectedIndex = totalItems == 0
                 ? null
                 : (_previewSelectedIndex != null &&
-                        _previewSelectedIndex! < totalItems)
-                    ? _previewSelectedIndex
-                    : 0;
+                      _previewSelectedIndex! < totalItems)
+                ? _previewSelectedIndex
+                : 0;
             if (_previewPage != currentPage) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (!mounted) return;
@@ -335,7 +353,12 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
               children: [
                 _buildControls(totalItems),
                 const SizedBox(height: 8),
-                _buildNavigation(selectedIndex, totalItems, currentPage, totalPages),
+                _buildNavigation(
+                  selectedIndex,
+                  totalItems,
+                  currentPage,
+                  totalPages,
+                ),
                 const Divider(height: 16),
                 Expanded(
                   child: NotificationListener<ScrollNotification>(
@@ -391,9 +414,14 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
             DropdownMenuItem(value: 'all', child: Text(l10n.allTypesLabel)),
             DropdownMenuItem(value: 'scenes', child: Text(l10n.categoryScenes)),
             DropdownMenuItem(value: 'looks', child: Text(l10n.categoryLooks)),
-            DropdownMenuItem(value: 'clothing', child: Text(l10n.categoryClothing)),
             DropdownMenuItem(
-                value: 'hairstyle', child: Text(l10n.categoryHairstyle)),
+              value: 'clothing',
+              child: Text(l10n.categoryClothing),
+            ),
+            DropdownMenuItem(
+              value: 'hairstyle',
+              child: Text(l10n.categoryHairstyle),
+            ),
             DropdownMenuItem(value: 'assets', child: Text(l10n.categoryAssets)),
             DropdownMenuItem(value: 'morphs', child: Text(l10n.categoryMorphs)),
             DropdownMenuItem(value: 'pose', child: Text(l10n.categoryPose)),
@@ -422,10 +450,12 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
         DropdownButton<int>(
           value: _previewPerPage,
           items: const [12, 24, 36, 48]
-              .map((value) => DropdownMenuItem(
-                    value: value,
-                    child: Text(l10n.perPageLabel(value)),
-                  ))
+              .map(
+                (value) => DropdownMenuItem(
+                  value: value,
+                  child: Text(l10n.perPageLabel(value)),
+                ),
+              )
               .toList(),
           onChanged: (value) {
             if (value == null) return;
@@ -442,7 +472,12 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     );
   }
 
-  Widget _buildNavigation(int? selectedIndex, int totalItems, int currentPage, int totalPages) {
+  Widget _buildNavigation(
+    int? selectedIndex,
+    int totalItems,
+    int currentPage,
+    int totalPages,
+  ) {
     final l10n = context.l10n;
     return Row(
       children: [
@@ -526,11 +561,13 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount =
-            (constraints.maxWidth / 140).floor().clamp(2, 6).toInt();
+        final crossAxisCount = (constraints.maxWidth / 140)
+            .floor()
+            .clamp(2, 6)
+            .toInt();
         final tileWidth = constraints.maxWidth / crossAxisCount;
-        final cacheWidth =
-            (tileWidth * MediaQuery.of(context).devicePixelRatio).round();
+        final cacheWidth = (tileWidth * MediaQuery.of(context).devicePixelRatio)
+            .round();
         return GridView.builder(
           itemCount: items.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -548,11 +585,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
               message: context.l10n.previewSelectOrOpenTooltip,
               child: InkWell(
                 key: ValueKey('preview_${item.varName}_${item.scenePath}'),
-                onTap: () => _handlePreviewTap(
-                  globalIndex,
-                  totalItems,
-                  onOpenPreview,
-                ),
+                onTap: () =>
+                    _handlePreviewTap(globalIndex, totalItems, onOpenPreview),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -581,8 +615,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
                                   filterQuality: FilterQuality.low,
                                   errorBuilder: (_, _, _) =>
                                       const PreviewPlaceholder(
-                                    icon: Icons.broken_image,
-                                  ),
+                                        icon: Icons.broken_image,
+                                      ),
                                 ),
                         ),
                       ),
@@ -615,8 +649,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     if (item == null) {
       return Center(child: Text(l10n.selectPreviewHint));
     }
-    final detailCacheWidth =
-        (360 * MediaQuery.of(context).devicePixelRatio).round();
+    final detailCacheWidth = (360 * MediaQuery.of(context).devicePixelRatio)
+        .round();
     final previewPath = _previewPath(item);
     return Row(
       children: [
@@ -671,7 +705,8 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
                       item.installed ? Icons.delete_outline : Icons.download,
                     ),
                     label: Text(
-                        item.installed ? l10n.uninstallLabel : l10n.installLabel),
+                      item.installed ? l10n.uninstallLabel : l10n.installLabel,
+                    ),
                   ),
                   OutlinedButton(
                     onPressed: isBusy
@@ -691,4 +726,3 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
     );
   }
 }
-
