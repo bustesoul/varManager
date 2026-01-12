@@ -55,7 +55,6 @@ This directory contains C# scripts designed to run inside **Virt-A-Mate (VaM)** 
 These scripts are maintained as part of the varManager project:
 - **Main Repository:** https://github.com/bustesoul/varManager
 - **LoadScene Library:** `../../LoadScene/src/`
-- **Archived C# Project:** `../../_archived/varManager/Custom/Scripts/`
 
 ## Note
 

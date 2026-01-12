@@ -49,12 +49,6 @@ varManager/
 ├── MMDLoader/                   # Standalone WPF tool (optional)
 │   └── *.xaml, *.cs             # WPF application
 │
-└── _archived/                   # Legacy C# WinForms code (v1.0.4.x)
-    ├── varManager/              # Old main program
-    ├── DragNDrop/               # Old custom controls
-    ├── StarRatingControl/
-    ├── ThreeStateTreeView/
-    └── ...                      # For reference only
 ```
 
 ## Technology Stack
@@ -124,7 +118,6 @@ varManager_v2.0.0/
 | `Custom/Scripts/` | ✅ Active | Yes | VaM plugins |
 | `LoadScene/` | ✅ Active | Yes | Plugin library source |
 | `MMDLoader/` | ⚠️ Optional | Yes | Standalone tool |
-| `_archived/` | 📦 Legacy | Yes | Old C# code |
 
 ## Documentation
 
@@ -132,11 +125,9 @@ varManager_v2.0.0/
 - **README_CN.md** - 中文文档
 - **PROJECT_STRUCTURE.md** - This file
 - **Custom/Scripts/README.md** - VaM plugin guide
-- **_archived/README.md** - Legacy code reference
 
 ## Notes
 
 1. **VaM Plugins:** Source files committed to Git, no compilation needed
 2. **config.json:** Generated on first run, not stored in the repository
-3. **_archived/:** Historical reference, not part of active development
-4. **LoadScene/MMDLoader:** Source available for manual building if needed
+3. **LoadScene/MMDLoader:** Source available for manual building if needed

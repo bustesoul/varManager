@@ -126,10 +126,9 @@ The varManager backend has built-in support for downloading var packages directl
 
 #### What Happened to the C# Version?
 
-The legacy C# WinForms application (v1.0.4.x) has been **archived** to the `_archived/` folder for reference. All functionality has been migrated to the new Flutter + Rust architecture with feature parity and improvements.
+The legacy C# WinForms application (v1.0.4.x) has been retired. All functionality has been migrated to the new Flutter + Rust architecture with feature parity and improvements.
 
 **If you need the old C# version:**
-- You can find it in the `_archived/varManager/` directory
 - Requires .NET 9.0 Runtime
 - No longer actively maintained
 

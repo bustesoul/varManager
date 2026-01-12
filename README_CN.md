@@ -126,10 +126,9 @@ varManager 后端内置了从 VaM Hub 下载 var 包的支持：
 
 #### C# 版本去哪了？
 
-旧版 C# WinForms 应用程序（v1.0.4.x）已被**归档**到 `_archived/` 文件夹供参考。所有功能已迁移到新的 Flutter + Rust 架构，并保持功能对等和改进。
+旧版 C# WinForms 应用程序（v1.0.4.x）已停止维护。所有功能已迁移到新的 Flutter + Rust 架构，并保持功能对等和改进。
 
 **如果你需要旧版 C# 程序：**
-- 可在 `_archived/varManager/` 目录中找到
 - 需要 .NET 9.0 Runtime
 - 不再积极维护
 
