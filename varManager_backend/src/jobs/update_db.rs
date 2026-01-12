@@ -154,7 +154,17 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                     move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
                     continue;
                 }
-                Err(ProcessError::Io(err)) => return Err(err),
+                Err(ProcessError::Io(err)) => {
+                    if is_invalid_var_archive(&err) {
+                        reporter_async.log(format!(
+                            "Skipping invalid VAR archive {} ({})",
+                            var_file.display(),
+                            err
+                        ));
+                        continue;
+                    }
+                    return Err(err);
+                }
             }
 
             let progress = 10 + ((idx + 1) * 80 / total_vars) as u8;
@@ -649,6 +659,14 @@ enum ProcessError {
     NotComply(String),
     InvalidPackage(String),
     Io(String),
+}
+
+
+fn is_invalid_var_archive(err: &str) -> bool {
+    let err_lc = err.to_lowercase();
+    err_lc.contains("invalid local file header")
+        || err_lc.contains("invalid zip archive")
+        || err_lc.contains("invalid zip")
 }
 
 fn process_var_file(
