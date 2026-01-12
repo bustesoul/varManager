@@ -235,6 +235,14 @@ function Stage-BackendRelease {
             Copy-Item -LiteralPath $pdb -Destination $dest -Force
         }
     }
+
+    $aria2 = Join-Path $root "data\\aria2c.exe"
+    if (Test-Path -LiteralPath $aria2) {
+        Copy-Item -LiteralPath $aria2 -Destination $dest -Force
+    }
+    else {
+        Write-Warning "aria2c.exe not found: $aria2"
+    }
 }
 
 function Stage-VaMPlugins {
@@ -288,6 +296,43 @@ Full source code with LibMMD library is available in the ``LoadScene/`` director
     Set-Content -Path (Join-Path $dest "README.txt") -Value $readmeContent -Encoding UTF8
 }
 
+function Stage-ExternalLinks {
+    # Copy external download link files to release
+    $linksSrc = Join-Path $root "data\\links"
+    if (-not (Test-Path -LiteralPath $linksSrc)) {
+        Write-Warning "External links folder not found: $linksSrc"
+        return
+    }
+
+    $dest = Join-Path $releaseRoot "links"
+    Ensure-EmptyDir $dest
+
+    # Copy all .txt files
+    $txtFiles = Get-ChildItem -Path $linksSrc -File -Filter "*.txt"
+    foreach ($file in $txtFiles) {
+        Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+    }
+    Write-Host "Copied $($txtFiles.Count) link files"
+
+    # Copy torrents folder if it exists
+    $torrentsSrc = Join-Path $linksSrc "torrents"
+    if (Test-Path -LiteralPath $torrentsSrc) {
+        $torrentsDest = Join-Path $dest "torrents"
+        New-Item -ItemType Directory -Path $torrentsDest -Force | Out-Null
+        $torrentFiles = Get-ChildItem -Path $torrentsSrc -File -Filter "*.torrent"
+        foreach ($file in $torrentFiles) {
+            Copy-Item -LiteralPath $file.FullName -Destination $torrentsDest -Force
+        }
+        Write-Host "Copied $($torrentFiles.Count) torrent files"
+    }
+
+    # Copy README.md
+    $readmeSrc = Join-Path $linksSrc "README.md"
+    if (Test-Path -LiteralPath $readmeSrc) {
+        Copy-Item -LiteralPath $readmeSrc -Destination $dest -Force
+    }
+}
+
 function Assemble-ReleasePackage {
     if (-not $script:ProjectVersion) {
         $script:ProjectVersion = Get-ProjectVersion
@@ -328,6 +373,18 @@ function Assemble-ReleasePackage {
     }
     else {
         Write-Warning "VaM plugins folder not found: $vamPluginsSrc"
+    }
+
+    # Copy external links to data/links/
+    $linksSrc = Join-Path $releaseRoot "links"
+    if (Test-Path -LiteralPath $linksSrc) {
+        $linksDest = Join-Path $dataDir "links"
+        New-Item -ItemType Directory -Path $linksDest -Force | Out-Null
+        Copy-Item -Path (Join-Path $linksSrc "*") -Destination $linksDest -Recurse -Force
+        Write-Host "External links staged to: data\links\"
+    }
+    else {
+        Write-Warning "External links folder not found: $linksSrc"
     }
 
     # Copy documentation files
@@ -401,12 +458,14 @@ switch ($Action) {
         if ($doFlutter) { Stage-FlutterRelease }
         if ($doBackend) { Stage-BackendRelease }
         Stage-VaMPlugins
+        Stage-ExternalLinks
         Assemble-ReleasePackage
         Write-Host "`nRelease package created at: release\varManager_$script:ProjectVersion"
         Write-Host "Package contents:"
         Write-Host "  - Flutter frontend (varManager.exe)"
         Write-Host "  - Rust backend (varManager_backend.exe)"
         Write-Host "  - VaM plugins (VaM_Plugins\*.cs)"
+        Write-Host "  - External links (data\links\*.txt, torrents)"
         Write-Host "  - Documentation (README.md, README_CN.md, INSTALL.txt)"
     }
 }

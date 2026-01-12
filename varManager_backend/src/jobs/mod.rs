@@ -7,6 +7,7 @@ pub mod packswitch;
 pub mod preview_jobs;
 pub mod stale_jobs;
 pub mod system_jobs;
+pub mod torrents;
 pub mod update_db;
 pub mod vars_jobs;
 pub mod vars_misc;
@@ -122,6 +123,9 @@ pub async fn dispatch(
         "hub_find_packages" => {
             hub::run_hub_find_packages_job(state.clone(), reporter.clone(), args).await
         }
+        "torrent_download" => {
+            torrents::run_torrent_download_job(state.clone(), reporter.clone(), args).await
+        }
         "scene_load" => scenes::run_scene_load_job(state.clone(), reporter.clone(), args).await,
         "scene_analyze" => scenes::run_scene_analyze_job(state.clone(), reporter.clone(), args).await,
         "scene_preset_look" => {
@@ -153,6 +157,9 @@ pub async fn dispatch(
             system_jobs::run_rescan_packages_job(state.clone(), reporter.clone(), args).await
         }
         "open_url" => system_jobs::run_open_url_job(state.clone(), reporter.clone(), args).await,
+        "open_torrents" => {
+            system_jobs::run_open_torrents_job(state.clone(), reporter.clone(), args).await
+        }
         _ => Err(format!("job kind not implemented: {}", kind)),
     }
 }

@@ -64,6 +64,7 @@ varManager_v2.0.0/
 ├── varManager.exe              # 主程序（Flutter）
 ├── data/                        # 运行时数据和后端
 │   ├── varManager_backend.exe  # 后端服务（Rust）
+│   ├── aria2c.exe              # Torrent downloader (required for torrent downloads)
 │   ├── flutter_windows.dll     # Flutter 运行时
 │   ├── *_plugin.dll            # 插件 DLL
 │   └── flutter_assets/         # Flutter 资源
@@ -104,6 +105,41 @@ varManager 后端内置了从 VaM Hub 下载 var 包的支持：
 - 支持批量下载
 - 自动处理 VaM Hub 身份验证
 - 首次使用下载功能时在设置中配置 VaM Hub 凭据
+
+**外部下载源（高级功能）：**
+
+varManager 可以从外部源（Pixeldrain、Mediafire）和本地种子文件搜索缺失的 var 包，作为 Hub 的补充：
+
+1. **链接文件设置：**
+   - 在 varManager 目录下创建 `data/links/` 文件夹
+   - 添加包含 var 包链接的 `.txt` 文件（每行一个）
+   - 格式：`VarName.var [空格或制表符] URL`
+   - 示例：`Creator.PackageName.1.var https://pixeldrain.com/u/ABC123`
+
+2. **种子文件设置：**
+   - 创建 `data/links/torrents/` 子文件夹
+   - 放置包含 var 包的 `.torrent` 文件
+   - 扫描器会检测种子元数据中的 var 名称（仅供参考）
+
+3. **预置链接文件：**
+   - 仓库中包含可用的链接文件，位于 `data/links/` 文件夹（已加入 gitignore）
+   - 这些是真实的、经过整理的链接数据库，可直接使用
+   - 文件包含在仓库中，但不包含在公开发布版本中
+
+4. **使用方法：**
+   - 进入缺失 Var 页面
+   - 勾选 "Enable External Sources"（启用外部源）
+   - 选择所需的源（Pixeldrain、Mediafire）
+   - 点击 "Fetch Links (Hub + External)"（获取链接）
+   - Hub 结果始终优先，外部源用于补充
+
+**Torrent Downloads (aria2):**
+- æ¾ç½® `aria2c.exe` å° `data/aria2c.exe`
+- å½æ²¡æç´é¾ä½æ torrent å½ä¸­æ¶ï¼ä½¿ç¨ aria2 åªä¸è½½æé `.var`
+- ä¸è½½è·¯å¾ `varspath\AddonPackages\tmp`ï¼å®æåç§»å¨å° `varspath`
+- `data/links/torrents/` ä¸ç `.torrent` ä¸ä¼è¢«å é¤
+
+**注意：** `data/links/` 中的链接文件已加入 gitignore，不会包含在公开发布版本中。需要克隆完整仓库才能访问。
 
 **无需额外运行时：**
 - ❌ 无需安装 .NET Runtime

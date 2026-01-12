@@ -10,6 +10,11 @@ varManager/
 ├── README.md                    # Main documentation
 ├── README_CN.md                 # 中文文档
 ├── PROJECT_STRUCTURE.md         # This file
+├── data/
+│   └── links/                   # External link files (gitignored)
+│       ├── *.txt                # Var package download links (537 files)
+│       ├── torrents/            # Torrent files (78 files)
+│       └── README.md            # Usage instructions
 ├── varmanager_flutter/          # Flutter frontend (Dart)
 │   ├── lib/
 │   │   ├── app/                 # App shell, theme, routing
@@ -115,6 +120,7 @@ varManager_v2.0.0/
 |-----------|--------|-------------|---------|
 | `varmanager_flutter/` | ✅ Active | Yes | Main UI |
 | `varManager_backend/` | ✅ Active | Yes | Backend service |
+| `data/links/` | ✅ Active | No (gitignored) | External download link database |
 | `Custom/Scripts/` | ✅ Active | Yes | VaM plugins |
 | `LoadScene/` | ✅ Active | Yes | Plugin library source |
 | `MMDLoader/` | ⚠️ Optional | Yes | Standalone tool |
@@ -131,3 +137,4 @@ varManager_v2.0.0/
 1. **VaM Plugins:** Source files committed to Git, no compilation needed
 2. **config.json:** Generated on first run, not stored in the repository
 3. **LoadScene/MMDLoader:** Source available for manual building if needed
+4. **data/links/:** Contains real link files for external download sources (Pixeldrain, Mediafire, torrents). Gitignored to avoid committing third-party URLs. Ready to use without copying.

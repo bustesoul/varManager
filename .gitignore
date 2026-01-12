@@ -390,3 +390,8 @@ varmanager_flutter/android/app/profile
 varmanager_flutter/android/app/release
 CLAUDE.md
 AGENTS.md
+SharpVaMTools/
+
+# External link files (not distributed with build)
+data/links/
+data/aria2c.exe

@@ -64,6 +64,7 @@ varManager_v2.0.0/
 ├── varManager.exe              # Main application (Flutter)
 ├── data/                        # Runtime data and backend
 │   ├── varManager_backend.exe  # Backend service (Rust)
+│   ├── aria2c.exe              # Torrent downloader (required for torrent downloads)
 │   ├── flutter_windows.dll     # Flutter runtime
 │   ├── *_plugin.dll            # Plugin DLLs
 │   └── flutter_assets/         # Flutter assets
@@ -104,6 +105,41 @@ The varManager backend has built-in support for downloading var packages directl
 - Supports batch downloads
 - Handles authentication with VaM Hub automatically
 - Configure your VaM Hub credentials in Settings when first using the download feature
+
+**External Download Sources (Advanced):**
+
+varManager can search for missing var packages from external sources (Pixeldrain, Mediafire) and local torrent files as a fallback when Hub doesn't have them:
+
+1. **Link Files Setup:**
+   - Create a `data/links/` folder in your varManager directory
+   - Add `.txt` files containing var package links (one per line)
+   - Format: `VarName.var [whitespace] URL`
+   - Example: `Creator.PackageName.1.var https://pixeldrain.com/u/ABC123`
+
+2. **Torrent Files Setup:**
+   - Create a `data/links/torrents/` subfolder
+   - Place `.torrent` files that contain var packages
+   - The scanner detects var names in torrent metadata and can download missing vars via aria2
+
+3. **Pre-populated Link Files:**
+   - The repo includes working link files in `data/links/` folder (gitignored)
+   - These are real, curated link databases ready to use
+   - Files are included in the repository but not in public releases
+
+4. **Usage:**
+   - Go to Missing Vars page
+   - Enable "External Sources" checkbox
+   - Select desired sources (Pixeldrain, Mediafire)
+   - Click "Fetch Links (Hub + External)"
+   - Hub results always take priority; external sources fill gaps
+
+**Torrent Downloads (aria2):**
+- Place `aria2c.exe` in `data/aria2c.exe`
+- When a missing var has torrent hits and no direct URL, varManager uses aria2 to download only the required `.var` files
+- Downloads go to `varspath\AddonPackages\tmp` and completed `.var` files are moved to `varspath`
+- `.torrent` files in `data/links/torrents/` are never deleted
+
+**Note:** Link files in `data/links/` are gitignored and not included in public releases. Clone the full repository to access them.
 
 **No Additional Runtime Required:**
 - ❌ No .NET Runtime installation needed

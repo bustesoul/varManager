@@ -1,6 +1,13 @@
 use crate::jobs::job_channel::JobReporter;
 use crate::domain::var_logic::resolve_var_exist_name;
 use crate::app::AppState;
+use crate::infra::external_links::{
+    scan_external_links,
+    scan_torrents_only,
+    ExternalLinksOptions,
+    ExternalLinksResult,
+    ExternalSource,
+};
 use reqwest::blocking::Client;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
@@ -22,6 +29,14 @@ type DownloadUrlMapsWithSizes =
 #[derive(Deserialize)]
 pub struct HubFindPackagesArgs {
     pub packages: Vec<String>,
+    #[serde(default)]
+    pub include_external: bool,
+    #[serde(default)]
+    pub external_sources: Vec<String>,
+    #[serde(default)]
+    pub pixeldrain_bypass: bool,
+    #[serde(default)]
+    pub include_torrents: bool,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +75,10 @@ pub struct HubDownloadList {
     pub download_urls: HashMap<String, String>,
     pub download_urls_no_version: HashMap<String, String>,
     pub download_sizes: HashMap<String, i64>,
+    pub download_sources: HashMap<String, String>,
+    pub download_sources_no_version: HashMap<String, String>,
+    pub torrent_hits: HashMap<String, Vec<String>>,
+    pub torrent_hits_no_version: HashMap<String, Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -94,8 +113,19 @@ pub async fn run_hub_missing_scan_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args: HubFindPackagesArgs =
-            args.map_or_else(|| Ok(HubFindPackagesArgs { packages: Vec::new() }), serde_json::from_value)
-                .map_err(|err| err.to_string())?;
+            args.map_or_else(
+                || {
+                    Ok(HubFindPackagesArgs {
+                        packages: Vec::new(),
+                        include_external: false,
+                        external_sources: Vec::new(),
+                        pixeldrain_bypass: false,
+                        include_torrents: false,
+                    })
+                },
+                serde_json::from_value,
+            )
+            .map_err(|err| err.to_string())?;
         missing_scan_blocking(&state, &reporter, args)
     })
     .await
@@ -181,6 +211,10 @@ pub async fn run_hub_resource_detail_job(
                 download_urls,
                 download_urls_no_version,
                 download_sizes,
+                download_sources: HashMap::new(),
+                download_sources_no_version: HashMap::new(),
+                torrent_hits: HashMap::new(),
+                torrent_hits_no_version: HashMap::new(),
             })
             .map_err(|err| err.to_string())?,
         );
@@ -219,12 +253,100 @@ pub async fn run_hub_find_packages_job(
         let args = args.ok_or_else(|| "hub_find_packages args required".to_string())?;
         let args: HubFindPackagesArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
-        let (download_urls, download_urls_no_version) = find_packages_maps(&args.packages)?;
+
+        // Step 1: Fetch Hub results
+        let (hub_urls, hub_urls_no_version) = find_packages_maps(&args.packages)?;
+
+        // Step 2: Initialize result with Hub data
+        let mut download_urls = hub_urls.clone();
+        let mut download_urls_no_version = hub_urls_no_version.clone();
+        let mut download_sources = HashMap::new();
+        let mut download_sources_no_version = HashMap::new();
+        let mut torrent_hits = HashMap::new();
+        let mut torrent_hits_no_version = HashMap::new();
+
+        if args.include_torrents {
+            match scan_torrents_only(&args.packages) {
+                Ok(result) => {
+                    merge_torrent_hits(&mut torrent_hits, result.torrent_hits);
+                    merge_torrent_hits(&mut torrent_hits_no_version, result.torrent_hits_no_version);
+                }
+                Err(err) => {
+                    reporter.log(format!("Torrent scan warning: {}", err));
+                }
+            }
+        }
+
+        // Mark Hub sources
+        for key in hub_urls.keys() {
+            download_sources.insert(key.clone(), "hub".to_string());
+        }
+        for key in hub_urls_no_version.keys() {
+            download_sources_no_version.insert(key.clone(), "hub".to_string());
+        }
+
+        // Step 3: Fetch external sources if enabled
+        if args.include_external {
+            let mut external_sources = HashSet::new();
+            for source_str in &args.external_sources {
+                match source_str.as_str() {
+                    "pixeldrain" => { external_sources.insert(ExternalSource::Pixeldrain); }
+                    "mediafire" => { external_sources.insert(ExternalSource::Mediafire); }
+                    _ => { reporter.log(format!("Unknown external source: {}", source_str)); }
+                }
+            }
+
+            let external_options = ExternalLinksOptions {
+                sources: external_sources,
+                pixeldrain_bypass: args.pixeldrain_bypass,
+                include_torrents: args.include_torrents,
+            };
+
+            let external_result = match scan_external_links(&args.packages, &external_options) {
+                Ok(result) => result,
+                Err(err) => {
+                    reporter.log(format!("External scan warning: {}", err));
+                    ExternalLinksResult::default()
+                }
+            };
+
+            // Step 4: Merge with fallback-only logic (Hub takes priority)
+
+            // Exact matches: only add if Hub doesn't have it
+            for (pkg, url) in external_result.download_urls {
+                if !download_urls.contains_key(&pkg) {
+                    download_urls.insert(pkg.clone(), url);
+                    if let Some(source) = external_result.download_sources.get(&pkg) {
+                        download_sources.insert(pkg, source.clone());
+                    }
+                }
+            }
+
+            // No-version matches: only add if Hub doesn't have it
+            for (pkg, url) in external_result.download_urls_no_version {
+                if !download_urls_no_version.contains_key(&pkg) {
+                    download_urls_no_version.insert(pkg.clone(), url);
+                    if let Some(source) = external_result.download_sources_no_version.get(&pkg) {
+                        download_sources_no_version.insert(pkg, source.clone());
+                    }
+                }
+            }
+
+            // Torrent hits: always include (informational only)
+            merge_torrent_hits(&mut torrent_hits, external_result.torrent_hits);
+            merge_torrent_hits(&mut torrent_hits_no_version, external_result.torrent_hits_no_version);
+        }
+
+        // Step 5: Return merged result
         reporter.set_result(
             serde_json::to_value(HubDownloadList {
                 download_urls,
                 download_urls_no_version,
                 download_sizes: HashMap::new(),
+                download_sources,
+                download_sources_no_version,
+                torrent_hits,
+                torrent_hits_no_version,
             })
             .map_err(|err| err.to_string())?,
         );
@@ -232,6 +354,21 @@ pub async fn run_hub_find_packages_job(
     })
     .await
     .map_err(|err| err.to_string())?
+}
+
+fn merge_torrent_hits(
+    target: &mut HashMap<String, Vec<String>>,
+    incoming: HashMap<String, Vec<String>>,
+) {
+    for (key, values) in incoming {
+        let entry = target.entry(key).or_insert_with(Vec::new);
+        for value in values {
+            if entry.iter().any(|existing| existing.eq_ignore_ascii_case(&value)) {
+                continue;
+            }
+            entry.push(value);
+        }
+    }
 }
 
 fn missing_scan_blocking(
@@ -257,6 +394,10 @@ fn missing_scan_blocking(
             download_urls,
             download_urls_no_version,
             download_sizes: HashMap::new(),
+            download_sources: HashMap::new(),
+            download_sources_no_version: HashMap::new(),
+            torrent_hits: HashMap::new(),
+            torrent_hits_no_version: HashMap::new(),
         })
         .map_err(|err| err.to_string())?,
     );
@@ -307,6 +448,10 @@ fn updates_scan_blocking(state: &AppState, reporter: &JobReporter) -> Result<(),
             download_urls,
             download_urls_no_version,
             download_sizes: HashMap::new(),
+            download_sources: HashMap::new(),
+            download_sources_no_version: HashMap::new(),
+            torrent_hits: HashMap::new(),
+            torrent_hits_no_version: HashMap::new(),
         })
         .map_err(|err| err.to_string())?,
     );

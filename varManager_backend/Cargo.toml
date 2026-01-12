@@ -36,6 +36,7 @@ percent-encoding = "2"
 url = "2"
 scraper = "0.25"
 headers = "0.3"
+serde_bencode = "0.2"
 
 [profile.release]
 opt-level = 3

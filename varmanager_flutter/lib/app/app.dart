@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:varmanager_flutter/l10n/app_localizations.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../core/app_version.dart';
 import '../core/backend/job_log_controller.dart';
@@ -48,10 +52,11 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   bool _ready = false;
   String? _error;
   String _appVersion = '';
+  bool _closing = false;
 
   List<_NavEntry> _buildPages(AppLocalizations l10n) {
     return [
@@ -81,7 +86,37 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      windowManager.addListener(this);
+      unawaited(windowManager.setPreventClose(true));
+    }
     Future.microtask(_initBackend);
+  }
+
+  @override
+  void dispose() {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      windowManager.removeListener(this);
+      unawaited(windowManager.setPreventClose(false));
+    }
+    super.dispose();
+  }
+
+  @override
+  void onWindowClose() {
+    if (_closing) return;
+    _closing = true;
+    () async {
+      try {
+        await ref.read(backendProcessManagerProvider).shutdown();
+      } catch (_) {}
+      try {
+        await windowManager.setPreventClose(false);
+        await windowManager.destroy();
+      } catch (_) {
+        exit(0);
+      }
+    }();
   }
 
   Future<void> _initBackend() async {

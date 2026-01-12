@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/backend/query_params.dart';
+import '../../core/models/job_models.dart';
 import '../../core/models/extra_models.dart';
 import '../home/providers.dart';
 import '../../widgets/lazy_dropdown_field.dart';
@@ -24,7 +25,7 @@ class MissingEntry {
   final bool versionMismatch;
 }
 
-enum _DownloadStatus { direct, noVersion, none }
+enum _DownloadStatus { direct, noVersion, torrent, none }
 
 class MissingVarsPage extends ConsumerStatefulWidget {
   const MissingVarsPage({super.key, required this.missing});
@@ -59,7 +60,19 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   String _pickerValue = '';
   Map<String, String> _downloadUrls = {};
   Map<String, String> _downloadUrlsNoVersion = {};
+  Map<String, String> _downloadSources = {};
+  Map<String, String> _downloadSourcesNoVersion = {};
+  Map<String, List<String>> _torrentHits = {};
+  Map<String, List<String>> _torrentHitsNoVersion = {};
   Map<String, String> _resolved = {};
+
+  // External source options
+  bool _enableExternal = true;
+  bool _enablePixeldrain = true;
+  bool _enableMediafire = true;
+  bool _pixeldrainBypass = false;
+  bool _enableTorrents = true;
+  bool _fetchingDownloads = false;
 
   List<String> _dependents = [];
   List<String> _dependentSaves = [];
@@ -374,10 +387,43 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     return response.items.map((item) => item.varName).toList();
   }
 
-  Future<void> _runJob(String kind, Map<String, dynamic> args) async {
+  Future<JobResult<dynamic>> _runJob(
+    String kind,
+    Map<String, dynamic> args, {
+    void Function(JobLogEntry entry)? onLog,
+  }) async {
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
-    await runner.runJob(kind, args: args, onLog: log.addEntry);
+    return runner.runJob(
+      kind,
+      args: args,
+      onLog: onLog ?? log.addEntry,
+    );
+  }
+
+  Future<void> _openTorrentInExternalClient(String torrentFileName) async {
+    final trimmed = torrentFileName.trim();
+    if (trimmed.isEmpty) return;
+    try {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final torrentPath = '$exeDir\\data\\links\\torrents\\$trimmed';
+      final file = File(torrentPath);
+      if (!file.existsSync()) {
+        _showSnackBar('Torrent file not found: $trimmed');
+        return;
+      }
+      if (Platform.isWindows) {
+        await Process.start('explorer.exe', [torrentPath]);
+        return;
+      }
+      if (Platform.isMacOS) {
+        await Process.start('open', [torrentPath]);
+        return;
+      }
+      await Process.start('xdg-open', [torrentPath]);
+    } catch (e) {
+      _showSnackBar('Failed to open torrent: $e');
+    }
   }
 
   Future<void> _refreshResolved() async {
@@ -448,6 +494,7 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     if (_downloadUrlsNoVersion.containsKey(_noVersionKey(name))) {
       return _DownloadStatus.noVersion;
     }
+    if (_hasTorrentHit(name)) return _DownloadStatus.torrent;
     return _DownloadStatus.none;
   }
 
@@ -458,6 +505,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
         return l10n.downloadStatusDirect;
       case _DownloadStatus.noVersion:
         return l10n.downloadStatusNoVersion;
+      case _DownloadStatus.torrent:
+        return 'Torrent';
       case _DownloadStatus.none:
         return l10n.downloadStatusNone;
     }
@@ -470,6 +519,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
         return Icons.cloud_done;
       case _DownloadStatus.noVersion:
         return Icons.cloud_download;
+      case _DownloadStatus.torrent:
+        return Icons.folder_zip;
       default:
         return Icons.block;
     }
@@ -482,9 +533,114 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
         return Colors.green;
       case _DownloadStatus.noVersion:
         return Colors.orange;
+      case _DownloadStatus.torrent:
+        return Colors.blue;
       default:
         return Colors.grey;
     }
+  }
+
+  String _downloadSource(String name) {
+    return _downloadSources[name] ??
+        _downloadSourcesNoVersion[_noVersionKey(name)] ??
+        'none';
+  }
+
+  bool _hasTorrentHit(String name) {
+    return (_torrentHits[name]?.isNotEmpty ?? false) ||
+        (_torrentHitsNoVersion[_noVersionKey(name)]?.isNotEmpty ?? false);
+  }
+
+  List<String> _torrentFilesFor(String name) {
+    final hits = <String>{};
+    hits.addAll(_torrentHits[name] ?? const []);
+    hits.addAll(_torrentHitsNoVersion[_noVersionKey(name)] ?? const []);
+    final list = hits.toList();
+    list.sort();
+    return list;
+  }
+
+  Future<void> _downloadTorrents(Map<String, List<String>> items) async {
+    setState(() {
+      _fetchingDownloads = true;
+    });
+    if (items.isEmpty) {
+      _showSnackBar('No torrent files available.');
+      setState(() {
+        _fetchingDownloads = false;
+      });
+      return;
+    }
+    final log = ref.read(jobLogProvider.notifier);
+    final payload = <Map<String, dynamic>>[];
+    for (final entry in items.entries) {
+      final name = entry.key.trim();
+      if (name.isEmpty) continue;
+      final torrents = entry.value
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList();
+      if (torrents.isEmpty) continue;
+      payload.add({'var_name': name, 'torrents': torrents});
+    }
+    if (payload.isEmpty) {
+      _showSnackBar('No torrent files available.');
+      setState(() {
+        _fetchingDownloads = false;
+      });
+      return;
+    }
+    final result = await _runJob(
+      'torrent_download',
+      {'items': payload},
+      onLog: log.addEntry,
+    );
+    final resMap = result.result as Map<String, dynamic>? ?? {};
+    final downloaded = resMap['downloaded'] ?? 0;
+    final skipped = resMap['skipped'] ?? 0;
+    final failed = (resMap['failed'] as List?)?.length ?? 0;
+    final missing = (resMap['missing'] as List?)?.length ?? 0;
+    setState(() {
+      _fetchingDownloads = false;
+    });
+    _showSnackBar(
+      'Torrent job: downloaded $downloaded, skipped $skipped, failed $failed, missing $missing',
+    );
+  }
+
+  String _downloadTooltip(String name) {
+    final status = _downloadStatus(name);
+    final source = _downloadSource(name);
+    final hasTorrent = _hasTorrentHit(name);
+
+    String statusText = _downloadStatusLabel(status);
+    String sourceText = source != 'none' ? ' ($source)' : '';
+    String torrentText =
+        hasTorrent && status != _DownloadStatus.torrent
+            ? '\nTorrent available'
+            : '';
+
+    return '$statusText$sourceText$torrentText';
+  }
+
+  Widget _torrentBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Text(
+        'TOR',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          color: Colors.blue.shade700,
+        ),
+      ),
+    );
   }
 
   String _resolvedDisplay(String name) {
@@ -498,25 +654,59 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
   }
 
   Future<void> _fetchDownload() async {
+    setState(() {
+      _fetchingDownloads = true;
+    });
     final packages = _missingEntries
         .map((entry) => entry.displayName)
         .toSet()
         .toList();
     if (packages.isEmpty) return;
+
     final runner = ref.read(jobRunnerProvider);
     final log = ref.read(jobLogProvider.notifier);
+
+    // Build external sources list
+    final externalSources = <String>[];
+    if (_enablePixeldrain) externalSources.add('pixeldrain');
+    if (_enableMediafire) externalSources.add('mediafire');
+
     final result = await runner.runJob(
       'hub_find_packages',
-      args: {'packages': packages},
+      args: {
+        'packages': packages,
+        'include_external': _enableExternal,
+        'external_sources': externalSources,
+        'pixeldrain_bypass': _pixeldrainBypass,
+        'include_torrents': _enableTorrents,
+      },
       onLog: log.addEntry,
     );
-    final payload = result.result as Map<String, dynamic>?;
-    if (payload == null) return;
+
+    final payload = result.result as Map<String, dynamic>? ?? {};
+    setState(() {
+      _fetchingDownloads = false;
+    });
+    if (payload.isEmpty) return;
+
     final direct = payload['download_urls'] as Map<String, dynamic>? ?? {};
     final noVersion =
         payload['download_urls_no_version'] as Map<String, dynamic>? ?? {};
+    final sources = payload['download_sources'] as Map<String, dynamic>? ?? {};
+    final sourcesNoVersion =
+        payload['download_sources_no_version'] as Map<String, dynamic>? ?? {};
+    final torrents = payload['torrent_hits'] as Map<String, dynamic>? ?? {};
+    final torrentsNoVersion =
+        payload['torrent_hits_no_version'] as Map<String, dynamic>? ?? {};
+
+    // Parse into typed maps
     final urls = <String, String>{};
     final urlsNoVersion = <String, String>{};
+    final downloadSources = <String, String>{};
+    final downloadSourcesNoVersion = <String, String>{};
+    final torrentHitsMap = <String, List<String>>{};
+    final torrentHitsNoVersionMap = <String, List<String>>{};
+
     for (final entry in direct.entries) {
       final value = entry.value?.toString() ?? '';
       if (value.isNotEmpty) {
@@ -529,15 +719,43 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
         urlsNoVersion[entry.key] = value;
       }
     }
+    for (final entry in sources.entries) {
+      final value = entry.value?.toString() ?? '';
+      if (value.isNotEmpty) {
+        downloadSources[entry.key] = value;
+      }
+    }
+    for (final entry in sourcesNoVersion.entries) {
+      final value = entry.value?.toString() ?? '';
+      if (value.isNotEmpty) {
+        downloadSourcesNoVersion[entry.key] = value;
+      }
+    }
+    for (final entry in torrents.entries) {
+      if (entry.value is List) {
+        torrentHitsMap[entry.key] = (entry.value as List)
+            .map((e) => e.toString())
+            .toList();
+      }
+    }
+    for (final entry in torrentsNoVersion.entries) {
+      if (entry.value is List) {
+        torrentHitsNoVersionMap[entry.key] = (entry.value as List)
+            .map((e) => e.toString())
+            .toList();
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _downloadUrls = urls;
       _downloadUrlsNoVersion = urlsNoVersion;
+      _downloadSources = downloadSources;
+      _downloadSourcesNoVersion = downloadSourcesNoVersion;
+      _torrentHits = torrentHitsMap;
+      _torrentHitsNoVersion = torrentHitsNoVersionMap;
     });
   }
-
-  bool get _hasHubLinks =>
-      _downloadUrls.isNotEmpty || _downloadUrlsNoVersion.isNotEmpty;
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(
@@ -552,14 +770,15 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
       _showSnackBar(l10n.missingSelectFirst);
       return;
     }
-    if (!_hasHubLinks) {
-      _showSnackBar(l10n.missingFetchHubLinksFirst);
-      return;
-    }
     final url =
         _downloadUrls[name] ?? _downloadUrlsNoVersion[_noVersionKey(name)];
     if (url == null || url.isEmpty) {
-      _showSnackBar(l10n.missingNoDownloadUrlForSelected);
+      final torrents = _torrentFilesFor(name);
+      if (torrents.isEmpty) {
+        _showSnackBar(l10n.missingNoDownloadUrlForSelected);
+        return;
+      }
+      await _downloadTorrents({name: torrents});
       return;
     }
     await _runJob('hub_download_all', {
@@ -572,10 +791,6 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
 
   Future<void> _downloadAll() async {
     final l10n = context.l10n;
-    if (!_hasHubLinks) {
-      _showSnackBar(l10n.missingFetchHubLinksFirst);
-      return;
-    }
     final items = <Map<String, String>>[];
     final seen = <String>{};
     for (final entry in _downloadUrls.entries) {
@@ -590,12 +805,29 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
       seen.add(url);
       items.add({'url': url, 'name': entry.key});
     }
-    if (items.isEmpty) {
+    final torrentItems = <String, List<String>>{};
+    for (final entry in _viewEntries) {
+      final name = entry.displayName;
+      final hasUrl = _downloadUrls.containsKey(name) ||
+          _downloadUrlsNoVersion.containsKey(_noVersionKey(name));
+      if (hasUrl) continue;
+      final torrents = _torrentFilesFor(name);
+      if (torrents.isNotEmpty) {
+        torrentItems[name] = torrents;
+      }
+    }
+
+    if (items.isEmpty && torrentItems.isEmpty) {
       _showSnackBar(l10n.missingNoDownloadUrlsAvailable);
       return;
     }
-    await _runJob('hub_download_all', {'items': items});
-    _showSnackBar(l10n.missingAddedDownloads(items.length));
+    if (items.isNotEmpty) {
+      await _runJob('hub_download_all', {'items': items});
+      _showSnackBar(l10n.missingAddedDownloads(items.length));
+    }
+    if (torrentItems.isNotEmpty) {
+      await _downloadTorrents(torrentItems);
+    }
   }
 
   void _setDraftLink(String name, String value) {
@@ -870,6 +1102,8 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
         : hasDraft
         ? (draftLink.isEmpty ? l10n.draftClearLabel : draftLink)
         : '-';
+    final selectedTorrentFiles =
+        selectedVar == null ? const <String>[] : _torrentFilesFor(selectedVar);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.missingDependenciesTitle)),
@@ -1093,12 +1327,27 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             ),
                           ),
                           SizedBox(
-                            width: 32,
-                            child: Text(
-                              l10n.downloadHeaderShort,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
+                            width: 80,
+                            child: Row(
+                              children: [
+                                Text(
+                                  l10n.downloadHeaderShort,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (_fetchingDownloads)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 4),
+                                    child: SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ],
@@ -1176,13 +1425,32 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                       ),
                                     ),
                                     SizedBox(
-                                      width: 32,
-                                      child: Icon(
-                                        _downloadIcon(entry.displayName),
-                                        color: _downloadColor(
+                                      width: 72,
+                                      child: Tooltip(
+                                        message: _downloadTooltip(
                                           entry.displayName,
                                         ),
-                                        size: 18,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              _downloadIcon(entry.displayName),
+                                              color: _downloadColor(
+                                                entry.displayName,
+                                              ),
+                                              size: 18,
+                                            ),
+                                            if (_hasTorrentHit(
+                                              entry.displayName,
+                                            ))
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  left: 4,
+                                                ),
+                                                child: _torrentBadge(),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1471,10 +1739,126 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           ),
                           const SizedBox(height: 8),
                           Tooltip(
-                            message: l10n.fetchHubLinksTooltip,
+                            message: 'Search for this var on F95Zone forum',
+                            child: OutlinedButton(
+                              onPressed: selectedVar == null
+                                  ? null
+                                  : () async {
+                                      final search = selectedVar.replaceAll(
+                                        '.latest',
+                                        '.1',
+                                      );
+                                      final encodedSearch = Uri.encodeComponent(
+                                        search,
+                                      );
+                                      await _runJob('open_url', {
+                                        'url':
+                                            'https://f95zone.to/search/?q=$encodedSearch&t=post&c[nodes][0]=72&o=date&c[child_nodes]=1',
+                                      });
+                                    },
+                              child: const Text('Search in F95'),
+                            ),
+                          ),
+                          const Divider(height: 16),
+                          const Text(
+                            'External Sources',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _enableExternal,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _enableExternal = value ?? false;
+                                  });
+                                },
+                              ),
+                              const Expanded(
+                                child: Text('Enable External Sources'),
+                              ),
+                            ],
+                          ),
+                          if (_enableExternal) ...[
+                            const SizedBox(height: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Checkbox(
+                                        value: _enablePixeldrain,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _enablePixeldrain = value ?? false;
+                                          });
+                                        },
+                                      ),
+                                      const Expanded(child: Text('Pixeldrain')),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      Checkbox(
+                                        value: _enableMediafire,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _enableMediafire = value ?? false;
+                                          });
+                                        },
+                                      ),
+                                      const Expanded(child: Text('Mediafire')),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      Checkbox(
+                                        value: _pixeldrainBypass,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _pixeldrainBypass = value ?? false;
+                                          });
+                                        },
+                                      ),
+                                      const Expanded(
+                                        child: Text('Pixeldrain Bypass'),
+                                      ),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      Checkbox(
+                                        value: _enableTorrents,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _enableTorrents = value ?? false;
+                                          });
+                                        },
+                                      ),
+                                      const Expanded(
+                                        child: Text('Local Torrents'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const Divider(height: 16),
+                          Tooltip(
+                            message: _enableExternal
+                                ? 'Fetch download links from Hub with external fallback'
+                                : l10n.fetchHubLinksTooltip,
                             child: OutlinedButton(
                               onPressed: _fetchDownload,
-                              child: Text(l10n.fetchHubLinksLabel),
+                              child: Text(
+                                _enableExternal
+                                    ? 'Fetch Links (Hub + External)'
+                                    : l10n.fetchHubLinksLabel,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -1519,6 +1903,55 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                               child: Text(l10n.exportMissingLabel),
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Torrents',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 8),
+                          if (selectedVar == null)
+                            const Text('Select a missing var to view torrents.')
+                          else if (selectedTorrentFiles.isEmpty)
+                            const Text('No torrents found for this var.')
+                          else ...[
+                            Row(
+                              children: [
+                                Text(
+                                  'Found ${selectedTorrentFiles.length} torrent(s).',
+                                ),
+                                const Spacer(),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            ...selectedTorrentFiles.map(
+                              (name) => Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Open in external client',
+                                    onPressed: () =>
+                                        _openTorrentInExternalClient(name),
+                                    icon: const Icon(Icons.open_in_new),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

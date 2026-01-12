@@ -1,6 +1,7 @@
 pub mod db;
 pub mod downloader;
 pub mod download_manager;
+pub mod external_links;
 pub mod fs_util;
 pub mod paths;
 pub mod system_ops;
