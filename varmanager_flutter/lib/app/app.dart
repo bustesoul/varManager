@@ -106,6 +106,8 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   void onWindowClose() {
     if (_closing) return;
     _closing = true;
+    // Hide window immediately to avoid "hanging" close UX.
+    unawaited(windowManager.hide().catchError((_) {}));
     // Send shutdown signal to backend but don't wait
     unawaited(
       ref.read(backendProcessManagerProvider).shutdown().catchError((_) {}),
@@ -116,8 +118,13 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
 
   Future<void> _performShutdown() async {
     try {
-      await windowManager.setPreventClose(false);
-      await windowManager.destroy();
+      // Fire-and-forget: plugin calls can occasionally take time; UI is already hidden.
+      unawaited(windowManager.setPreventClose(false).catchError((_) {}));
+      unawaited(windowManager.destroy().catchError((_) {}));
+
+      // Hard fallback in case the window manager gets stuck.
+      await Future.delayed(const Duration(milliseconds: 900));
+      exit(0);
     } catch (_) {
       exit(0);
     }

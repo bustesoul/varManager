@@ -12,7 +12,6 @@ class BackendProcessManager {
 
   final BackendClient client;
   final Directory workDir;
-  Process? _process;
   bool _starting = false;
 
   static const String defaultHost = '127.0.0.1';
@@ -73,7 +72,7 @@ class BackendProcessManager {
         throw Exception('backend exe not found');
       }
       final (exePath, backendWorkDir) = resolved;
-      _process = await Process.start(
+      await Process.start(
         exePath,
         [],
         workingDirectory: backendWorkDir,
