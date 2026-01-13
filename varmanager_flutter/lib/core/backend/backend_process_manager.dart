@@ -89,13 +89,7 @@ class BackendProcessManager {
     try {
       await client.shutdown();
     } catch (_) {}
-    if (_process != null) {
-      final process = _process!;
-      // Wait 8 seconds for graceful shutdown before force kill
-      await Future.delayed(const Duration(seconds: 8));
-      process.kill(ProcessSignal.sigkill);
-      _process = null;
-    }
+    // Don't wait for process to exit - backend will shutdown via parent watchdog
   }
 
   Future<void> _shutdownExisting() async {
