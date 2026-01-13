@@ -8,10 +8,10 @@ use windows::Win32::Foundation::{
     WIN32_ERROR,
 };
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, CreateSymbolicLinkW, SetFileTime, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    FILE_WRITE_ATTRIBUTES, OPEN_EXISTING, SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
-    SYMBOLIC_LINK_FLAG_DIRECTORY, SYMBOLIC_LINK_FLAGS,
+    CreateFileW, CreateSymbolicLinkW, SetFileTime, FILE_ATTRIBUTE_NORMAL,
+    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES, OPEN_EXISTING, SYMBOLIC_LINK_FLAGS,
+    SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE, SYMBOLIC_LINK_FLAG_DIRECTORY,
 };
 
 const WINDOWS_EPOCH_OFFSET_SECS: u64 = 11_644_473_600;
@@ -45,7 +45,12 @@ pub fn set_symlink_file_times(
             None,
         )
     }
-    .map_err(|err| format!("CreateFileW for file time failed ({}).", format_hresult_error(err)))?;
+    .map_err(|err| {
+        format!(
+            "CreateFileW for file time failed ({}).",
+            format_hresult_error(err)
+        )
+    })?;
 
     let creation = system_time_to_filetime(created);
     let last_write = system_time_to_filetime(modified);
@@ -54,11 +59,17 @@ pub fn set_symlink_file_times(
 
     if let Err(err) = close_result {
         if set_result.is_ok() {
-            return Err(format!("CloseHandle failed ({}).", format_hresult_error(err)));
+            return Err(format!(
+                "CloseHandle failed ({}).",
+                format_hresult_error(err)
+            ));
         }
     }
     if let Err(err) = set_result {
-        return Err(format!("SetFileTime failed ({}).", format_hresult_error(err)));
+        return Err(format!(
+            "SetFileTime failed ({}).",
+            format_hresult_error(err)
+        ));
     }
 
     Ok(())

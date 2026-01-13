@@ -2,10 +2,7 @@ use crate::infra::db::list_var_versions;
 use sqlx::{Row, SqlitePool};
 use std::collections::HashSet;
 
-pub async fn resolve_var_exist_name(
-    pool: &SqlitePool,
-    var_name: &str,
-) -> Result<String, String> {
+pub async fn resolve_var_exist_name(pool: &SqlitePool, var_name: &str) -> Result<String, String> {
     let parts: Vec<&str> = var_name.split('.').collect();
     if parts.len() != 3 {
         return Ok("missing".to_string());
@@ -222,13 +219,11 @@ async fn list_dependencies_for_var(
 }
 
 async fn var_exists(pool: &SqlitePool, var_name: &str) -> Result<bool, String> {
-    let exists = sqlx::query_scalar::<_, i64>(
-        "SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1",
-    )
-    .bind(var_name)
-    .fetch_optional(pool)
-    .await
-    .map_err(|err| err.to_string())?;
+    let exists = sqlx::query_scalar::<_, i64>("SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1")
+        .bind(var_name)
+        .fetch_optional(pool)
+        .await
+        .map_err(|err| err.to_string())?;
     Ok(exists.is_some())
 }
 

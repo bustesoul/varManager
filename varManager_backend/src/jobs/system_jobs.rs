@@ -1,7 +1,7 @@
-use crate::jobs::job_channel::JobReporter;
 use crate::app::data_dir;
 use crate::app::AppState;
 use crate::infra::system_ops;
+use crate::jobs::job_channel::JobReporter;
 use crate::util;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -38,16 +38,16 @@ pub async fn run_vam_start_job(
     reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        vam_start_blocking(&state, &reporter)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || vam_start_blocking(&state, &reporter))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 fn vam_start_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
     system_ops::start_vam(state)?;
-    reporter.set_result(serde_json::to_value(StartResult { started: true }).map_err(|e| e.to_string())?);
+    reporter.set_result(
+        serde_json::to_value(StartResult { started: true }).map_err(|e| e.to_string())?,
+    );
     Ok(())
 }
 
@@ -56,11 +56,9 @@ pub async fn run_rescan_packages_job(
     reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        rescan_packages_blocking(&state, &reporter)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || rescan_packages_blocking(&state, &reporter))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 fn rescan_packages_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
@@ -74,11 +72,9 @@ pub async fn run_open_url_job(
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        open_url_blocking(&reporter, args)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || open_url_blocking(&reporter, args))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 pub async fn run_open_torrents_job(
@@ -86,11 +82,9 @@ pub async fn run_open_torrents_job(
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        open_torrents_blocking(&reporter, args)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || open_torrents_blocking(&reporter, args))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 fn open_url_blocking(reporter: &JobReporter, args: Option<Value>) -> Result<(), String> {

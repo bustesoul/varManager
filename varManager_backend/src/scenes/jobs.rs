@@ -1,5 +1,5 @@
-use crate::jobs::job_channel::JobReporter;
 use crate::app::AppState;
+use crate::jobs::job_channel::JobReporter;
 use serde_json::Value;
 
 use super::core;
@@ -11,7 +11,8 @@ pub async fn run_scene_load_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "scene_load args required".to_string())?;
-        let args: core::SceneLoadArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: core::SceneLoadArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         core::scene_load_blocking(&state, &reporter, args)
     })
     .await
@@ -25,7 +26,8 @@ pub async fn run_scene_analyze_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "scene_analyze args required".to_string())?;
-        let args: core::SceneAnalyzeArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: core::SceneAnalyzeArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         core::scene_analyze_blocking(&state, &reporter, args)
     })
     .await
@@ -141,7 +143,8 @@ pub async fn run_cache_clear_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "cache_clear args required".to_string())?;
-        let args: core::CacheClearArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: core::CacheClearArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         core::cache_clear_blocking(&state, &reporter, args)
     })
     .await
@@ -156,7 +159,8 @@ async fn run_scene_preset_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "scene_preset args required".to_string())?;
-        let args: core::ScenePresetArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: core::ScenePresetArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         core::scene_preset_blocking(&state, &reporter, args, kind)
     })
     .await
@@ -187,12 +191,18 @@ async fn run_scene_hide_fav_job(
     hide_fav: i32,
 ) -> Result<(), String> {
     let args = args.ok_or_else(|| "scene_hide_fav args required".to_string())?;
-    let args: core::SceneHideFavArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+    let args: core::SceneHideFavArgs =
+        serde_json::from_value(args).map_err(|err| err.to_string())?;
     let state_for_blocking = state.clone();
     let var_name = args.var_name.clone();
     let scene_path = args.scene_path.clone();
     let status = tokio::task::spawn_blocking(move || {
-        core::set_hide_fav(&state_for_blocking, var_name.as_deref(), &scene_path, hide_fav)
+        core::set_hide_fav(
+            &state_for_blocking,
+            var_name.as_deref(),
+            &scene_path,
+            hide_fav,
+        )
     })
     .await
     .map_err(|err| err.to_string())??;

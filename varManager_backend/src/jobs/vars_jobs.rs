@@ -1,16 +1,16 @@
+use crate::app::AppState;
+use crate::domain::var_logic::{implicated_vars, vars_dependencies};
 use crate::infra::db::{self, delete_var_related_conn, upsert_install_status};
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, DELETED_DIR, INSTALL_LINK_DIR};
-use crate::domain::var_logic::{implicated_vars, vars_dependencies};
-use crate::app::AppState;
 use crate::infra::winfs;
+use crate::jobs::job_channel::JobReporter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::SqlitePool;
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
-use sqlx::SqlitePool;
 
 #[derive(Deserialize)]
 struct InstallVarsArgs {
@@ -98,7 +98,8 @@ pub async fn run_uninstall_vars_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "uninstall_vars args required".to_string())?;
-        let args: UninstallVarsArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: UninstallVarsArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         uninstall_vars_blocking(&state, &reporter, args)
     })
     .await
@@ -119,7 +120,11 @@ pub async fn run_delete_vars_job(
     .map_err(|err| err.to_string())?
 }
 
-fn install_vars_blocking(state: &AppState, reporter: &JobReporter, args: InstallVarsArgs) -> Result<(), String> {
+fn install_vars_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: InstallVarsArgs,
+) -> Result<(), String> {
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("InstallVars start".to_string());
@@ -178,7 +183,11 @@ fn install_vars_blocking(state: &AppState, reporter: &JobReporter, args: Install
     Ok(())
 }
 
-fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: UninstallVarsArgs) -> Result<(), String> {
+fn uninstall_vars_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: UninstallVarsArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let started = Instant::now();
@@ -266,8 +275,12 @@ fn uninstall_vars_blocking(state: &AppState, reporter: &JobReporter, args: Unins
     }
 
     reporter.set_result(
-        serde_json::to_value(UninstallVarsResult { total, removed, skipped })
-            .map_err(|err| err.to_string())?,
+        serde_json::to_value(UninstallVarsResult {
+            total,
+            removed,
+            skipped,
+        })
+        .map_err(|err| err.to_string())?,
     );
 
     reporter.progress(100);
@@ -285,14 +298,19 @@ pub async fn run_preview_uninstall_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "preview_uninstall args required".to_string())?;
-        let args: PreviewUninstallArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: PreviewUninstallArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         preview_uninstall_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: PreviewUninstallArgs) -> Result<(), String> {
+fn preview_uninstall_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: PreviewUninstallArgs,
+) -> Result<(), String> {
     let started = Instant::now();
     reporter.log("PreviewUninstall start".to_string());
     reporter.progress(1);
@@ -392,7 +410,11 @@ fn preview_uninstall_blocking(state: &AppState, reporter: &JobReporter, args: Pr
     Ok(())
 }
 
-fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVarsArgs) -> Result<(), String> {
+fn delete_vars_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: DeleteVarsArgs,
+) -> Result<(), String> {
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("DeleteVars start".to_string());
@@ -449,8 +471,12 @@ fn delete_vars_blocking(state: &AppState, reporter: &JobReporter, args: DeleteVa
     }
 
     reporter.set_result(
-        serde_json::to_value(DeleteVarsResult { total, deleted, failed })
-            .map_err(|err| err.to_string())?,
+        serde_json::to_value(DeleteVarsResult {
+            total,
+            deleted,
+            failed,
+        })
+        .map_err(|err| err.to_string())?,
     );
 
     reporter.progress(100);
@@ -530,10 +556,20 @@ async fn remove_install_status(pool: &SqlitePool, var_name: &str) -> Result<(), 
 
 fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
     let types = [
-        "scenes", "looks", "hairstyle", "clothing", "assets", "morphs", "skin", "pose",
+        "scenes",
+        "looks",
+        "hairstyle",
+        "clothing",
+        "assets",
+        "morphs",
+        "skin",
+        "pose",
     ];
     for typename in types {
-        let dir = varspath.join(crate::infra::paths::PREVIEW_DIR).join(typename).join(var_name);
+        let dir = varspath
+            .join(crate::infra::paths::PREVIEW_DIR)
+            .join(typename)
+            .join(var_name);
         if dir.exists() {
             fs::remove_dir_all(&dir).map_err(|err| err.to_string())?;
         }

@@ -1,16 +1,16 @@
+use crate::app::AppState;
 use crate::infra::db::{
     list_dependencies_all, list_dependencies_for_installed, list_dependencies_for_vars,
     list_var_versions, upsert_install_status, var_exists_conn,
 };
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
-use crate::app::AppState;
 use crate::infra::winfs;
+use crate::jobs::job_channel::JobReporter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::SqlitePool;
 use std::fs;
 use std::path::Path;
-use sqlx::SqlitePool;
 
 #[derive(Deserialize)]
 struct MissingDepsArgs {
@@ -35,15 +35,18 @@ pub async fn run_missing_deps_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "missing_deps args required".to_string())?;
-        let args: MissingDepsArgs =
-            serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: MissingDepsArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
         missing_deps_blocking(&state, &reporter, args)
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
-fn missing_deps_blocking(state: &AppState, reporter: &JobReporter, args: MissingDepsArgs) -> Result<(), String> {
+fn missing_deps_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: MissingDepsArgs,
+) -> Result<(), String> {
     reporter.log(format!("MissingDeps start: scope={}", args.scope));
     reporter.progress(1);
 
@@ -139,14 +142,16 @@ fn missing_deps_blocking(state: &AppState, reporter: &JobReporter, args: Missing
     install_failed.sort();
     install_failed.dedup();
 
-    reporter.set_result(serde_json::to_value(MissingDepsResult {
-        scope: args.scope,
-        missing,
-        installed,
-        install_failed,
-        dependency_count: total,
-    })
-    .map_err(|err| err.to_string())?);
+    reporter.set_result(
+        serde_json::to_value(MissingDepsResult {
+            scope: args.scope,
+            missing,
+            installed,
+            install_failed,
+            dependency_count: total,
+        })
+        .map_err(|err| err.to_string())?,
+    );
 
     reporter.progress(100);
     reporter.log("MissingDeps completed".to_string());

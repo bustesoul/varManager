@@ -1,10 +1,12 @@
+use crate::app::{data_dir, AppState};
+use crate::domain::var_logic::{resolve_var_exist_name, vars_dependencies};
 use crate::infra::db::var_exists_conn;
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
-use crate::infra::paths::{config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR};
-use crate::domain::var_logic::{resolve_var_exist_name, vars_dependencies};
-use crate::app::{data_dir, AppState};
+use crate::infra::paths::{
+    config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR,
+};
 use crate::infra::winfs;
+use crate::jobs::job_channel::JobReporter;
 use crate::util;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -59,7 +61,12 @@ pub struct AnalysisSummary {
     pub parent_links: Vec<AnalysisParentLink>,
 }
 
-const SCENE_BASE_ATOMS: [&str; 4] = ["CoreControl", "PlayerNavigationPanel", "VRController", "WindowCamera"];
+const SCENE_BASE_ATOMS: [&str; 4] = [
+    "CoreControl",
+    "PlayerNavigationPanel",
+    "VRController",
+    "WindowCamera",
+];
 const POSE_CONTROL_IDS: [&str; 26] = [
     "hipControl",
     "pelvisControl",
@@ -232,7 +239,11 @@ pub(crate) struct CacheClearArgs {
     entry_name: String,
 }
 
-pub(crate) fn scene_load_blocking(state: &AppState, reporter: &JobReporter, args: SceneLoadArgs) -> Result<(), String> {
+pub(crate) fn scene_load_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: SceneLoadArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let mut json_ls = args.json;
@@ -267,11 +278,17 @@ pub(crate) fn scene_load_blocking(state: &AppState, reporter: &JobReporter, args
     let deps = read_lines(&depend_path)?;
     let gender = if gender_path.exists() {
         fs::read_to_string(&gender_path)
-            .unwrap_or_else(|_| args.character_gender.clone().unwrap_or_else(|| "unknown".to_string()))
+            .unwrap_or_else(|_| {
+                args.character_gender
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string())
+            })
             .trim()
             .to_string()
     } else {
-        args.character_gender.clone().unwrap_or_else(|| "unknown".to_string())
+        args.character_gender
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string())
     };
 
     let result = build_loadscene(
@@ -289,8 +306,14 @@ pub(crate) fn scene_load_blocking(state: &AppState, reporter: &JobReporter, args
     Ok(())
 }
 
-pub(crate) fn scene_analyze_blocking(state: &AppState, reporter: &JobReporter, args: SceneAnalyzeArgs) -> Result<(), String> {
-    let gender = args.character_gender.unwrap_or_else(|| "female".to_string());
+pub(crate) fn scene_analyze_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: SceneAnalyzeArgs,
+) -> Result<(), String> {
+    let gender = args
+        .character_gender
+        .unwrap_or_else(|| "female".to_string());
     let result = read_save_name(state, &args.save_name, &gender, true)?;
     reporter.set_result(
         serde_json::to_value(SceneAnalyzeResult {
@@ -560,7 +583,9 @@ fn read_save_name(
         let file = fs::File::open(destvarfile).map_err(|err| err.to_string())?;
         let mut zip = ZipArchive::new(file).map_err(|err| err.to_string())?;
         let mut entry = zip.by_name(&entry_name).map_err(|err| err.to_string())?;
-        entry.read_to_string(&mut jsonscene).map_err(|err| err.to_string())?;
+        entry
+            .read_to_string(&mut jsonscene)
+            .map_err(|err| err.to_string())?;
     } else {
         let jsonfile = vampath.join(save_name.replace('/', "\\"));
         jsonscene = fs::read_to_string(&jsonfile).map_err(|err| err.to_string())?;
@@ -622,10 +647,18 @@ fn analysis_atoms(jsonscene: &str, scene_folder: &Path, is_person: bool) -> Resu
     }
     write_json_file(&scene_folder.join("posinfo.bin"), &Value::Object(posinfo))?;
 
-    let atoms = value.get("atoms").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let atoms = value
+        .get("atoms")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     let mut parent_atoms: HashMap<String, Vec<String>> = HashMap::new();
     for atom in atoms {
-        let mut atom_type = atom.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let mut atom_type = atom
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if atom_type.is_empty() {
             continue;
         }
@@ -842,7 +875,10 @@ fn build_atom_tree(dir: &Path, cache_root: &Path) -> Result<Vec<AtomTreeNode>, S
     Ok(nodes)
 }
 
-fn list_person_info(atoms_root: &Path, entry_name: &str) -> Result<Vec<AnalysisPersonInfo>, String> {
+fn list_person_info(
+    atoms_root: &Path,
+    entry_name: &str,
+) -> Result<Vec<AnalysisPersonInfo>, String> {
     let person_dir = atoms_root.join("Person");
     let mut people = Vec::new();
     if person_dir.exists() {
@@ -869,7 +905,11 @@ fn list_person_info(atoms_root: &Path, entry_name: &str) -> Result<Vec<AnalysisP
             });
         }
     }
-    people.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    people.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
     people.dedup_by(|a, b| a.name.eq_ignore_ascii_case(&b.name));
     Ok(people)
 }
@@ -912,10 +952,9 @@ async fn read_dependencies(
     let deps = distinct(read_lines(&dep_path)?);
     let mut items = Vec::new();
     for dep in deps {
-        let resolved =
-            resolve_var_exist_name(&state.db_pool, &dep)
-                .await
-                .unwrap_or_else(|_| "missing".to_string());
+        let resolved = resolve_var_exist_name(&state.db_pool, &dep)
+            .await
+            .unwrap_or_else(|_| "missing".to_string());
         let (status, resolved_name) = if resolved == "missing" {
             ("missing", String::new())
         } else if let Some(stripped) = resolved.strip_suffix('$') {
@@ -931,7 +970,11 @@ async fn read_dependencies(
             status: status.to_string(),
         });
     }
-    items.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    items.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
     Ok(items)
 }
 
@@ -1009,7 +1052,9 @@ fn load_core_control(cache_root: &Path) -> Result<Value, String> {
             }
         }
     }
-    let first = files.first().ok_or_else(|| "CoreControl not found".to_string())?;
+    let first = files
+        .first()
+        .ok_or_else(|| "CoreControl not found".to_string())?;
     let contents = fs::read_to_string(first).map_err(|err| err.to_string())?;
     serde_json::from_str(&contents).map_err(|err| err.to_string())
 }
@@ -1147,32 +1192,113 @@ fn save_preset(
     }
 
     if skin {
-        save_static_preset(state, "Custom\\Atom\\Person\\Appearance\\Preset_eyeDefault.vap", DEFAULT_EYE_COLOR)?;
-        add_preset_resource(save_names, "looks", "Custom/Atom/Person/Appearance/Preset_eyeDefault.vap", character_gender, ignore_gender, person_order);
+        save_static_preset(
+            state,
+            "Custom\\Atom\\Person\\Appearance\\Preset_eyeDefault.vap",
+            DEFAULT_EYE_COLOR,
+        )?;
+        add_preset_resource(
+            save_names,
+            "looks",
+            "Custom/Atom/Person/Appearance/Preset_eyeDefault.vap",
+            character_gender,
+            ignore_gender,
+            person_order,
+        );
     }
     if clothing {
-        save_static_preset(state, "Custom\\Atom\\Person\\Clothing\\Preset_ClothNaked.vap", CLOTH_NAKED)?;
-        add_preset_resource(save_names, "clothing", "Custom/Atom/Person/Clothing/Preset_ClothNaked.vap", character_gender, ignore_gender, person_order);
+        save_static_preset(
+            state,
+            "Custom\\Atom\\Person\\Clothing\\Preset_ClothNaked.vap",
+            CLOTH_NAKED,
+        )?;
+        add_preset_resource(
+            save_names,
+            "clothing",
+            "Custom/Atom/Person/Clothing/Preset_ClothNaked.vap",
+            character_gender,
+            ignore_gender,
+            person_order,
+        );
     }
     if hair {
-        save_static_preset(state, "Custom\\Atom\\Person\\Hair\\Preset_HairBald.vap", HAIR_BALD)?;
-        add_preset_resource(save_names, "hairstyle", "Custom/Atom/Person/Hair/Preset_HairBald.vap", character_gender, ignore_gender, person_order);
+        save_static_preset(
+            state,
+            "Custom\\Atom\\Person\\Hair\\Preset_HairBald.vap",
+            HAIR_BALD,
+        )?;
+        add_preset_resource(
+            save_names,
+            "hairstyle",
+            "Custom/Atom/Person/Hair/Preset_HairBald.vap",
+            character_gender,
+            ignore_gender,
+            person_order,
+        );
     }
     if morphs {
-        save_json_preset(state, var_name, "Custom\\Atom\\Person\\Morphs\\Preset_temp.vap", &json_morphs)?;
-        add_preset_resource(save_names, "morphs", "Custom/Atom/Person/Morphs/Preset_temp.vap", character_gender, ignore_gender, person_order);
+        save_json_preset(
+            state,
+            var_name,
+            "Custom\\Atom\\Person\\Morphs\\Preset_temp.vap",
+            &json_morphs,
+        )?;
+        add_preset_resource(
+            save_names,
+            "morphs",
+            "Custom/Atom/Person/Morphs/Preset_temp.vap",
+            character_gender,
+            ignore_gender,
+            person_order,
+        );
     }
     if breast {
-        save_json_preset(state, var_name, "Custom\\Atom\\Person\\BreastPhysics\\Preset_temp.vap", &json_breast)?;
-        add_preset_resource(save_names, "breast", "Custom/Atom/Person/BreastPhysics/Preset_temp.vap", character_gender, ignore_gender, person_order);
+        save_json_preset(
+            state,
+            var_name,
+            "Custom\\Atom\\Person\\BreastPhysics\\Preset_temp.vap",
+            &json_breast,
+        )?;
+        add_preset_resource(
+            save_names,
+            "breast",
+            "Custom/Atom/Person/BreastPhysics/Preset_temp.vap",
+            character_gender,
+            ignore_gender,
+            person_order,
+        );
     }
     if glute {
-        save_json_preset(state, var_name, "Custom\\Atom\\Person\\GlutePhysics\\Preset_temp.vap", &json_glute)?;
-        add_preset_resource(save_names, "glute", "Custom/Atom/Person/GlutePhysics/Preset_temp.vap", character_gender, ignore_gender, person_order);
+        save_json_preset(
+            state,
+            var_name,
+            "Custom\\Atom\\Person\\GlutePhysics\\Preset_temp.vap",
+            &json_glute,
+        )?;
+        add_preset_resource(
+            save_names,
+            "glute",
+            "Custom/Atom/Person/GlutePhysics/Preset_temp.vap",
+            character_gender,
+            ignore_gender,
+            person_order,
+        );
     }
     if clothing || hair || skin {
-        save_json_preset(state, var_name, "Custom\\Atom\\Person\\Appearance\\Preset_temp.vap", &json_preset)?;
-        add_preset_resource(save_names, "looks", "Custom/Atom/Person/Appearance/Preset_temp.vap", character_gender, ignore_gender, person_order);
+        save_json_preset(
+            state,
+            var_name,
+            "Custom\\Atom\\Person\\Appearance\\Preset_temp.vap",
+            &json_preset,
+        )?;
+        add_preset_resource(
+            save_names,
+            "looks",
+            "Custom/Atom/Person/Appearance/Preset_temp.vap",
+            character_gender,
+            ignore_gender,
+            person_order,
+        );
     }
 
     Ok(())
@@ -1207,8 +1333,20 @@ fn save_plugin_preset(
             }
         }
     }
-    save_json_preset(state, var_name, "Custom\\Atom\\Person\\Plugins\\Preset_temp.vap", &json_plugin)?;
-    add_preset_resource(save_names, "plugin", "Custom/Atom/Person/Plugins/Preset_temp.vap", character_gender, ignore_gender, person_order);
+    save_json_preset(
+        state,
+        var_name,
+        "Custom\\Atom\\Person\\Plugins\\Preset_temp.vap",
+        &json_plugin,
+    )?;
+    add_preset_resource(
+        save_names,
+        "plugin",
+        "Custom/Atom/Person/Plugins/Preset_temp.vap",
+        character_gender,
+        ignore_gender,
+        person_order,
+    );
     Ok(())
 }
 
@@ -1237,8 +1375,20 @@ fn save_pose_preset(
             }
         }
     }
-    save_json_preset(state, var_name, "Custom\\Atom\\Person\\Pose\\Preset_temp.vap", &json_pose)?;
-    add_preset_resource(save_names, "pose", "Custom/Atom/Person/Pose/Preset_temp.vap", character_gender, ignore_gender, person_order);
+    save_json_preset(
+        state,
+        var_name,
+        "Custom\\Atom\\Person\\Pose\\Preset_temp.vap",
+        &json_pose,
+    )?;
+    add_preset_resource(
+        save_names,
+        "pose",
+        "Custom/Atom/Person/Pose/Preset_temp.vap",
+        character_gender,
+        ignore_gender,
+        person_order,
+    );
     Ok(())
 }
 
@@ -1275,7 +1425,11 @@ fn save_animation_preset(
         .ok_or_else(|| "MotionAnimationMaster not found".to_string())?;
     json_animation["motionAnimationMaster"] = master;
 
-    save_raw_json(state, "Custom\\Atom\\Person\\AnimationPresets\\Preset_temp.bin", &json_animation)?;
+    save_raw_json(
+        state,
+        "Custom\\Atom\\Person\\AnimationPresets\\Preset_temp.bin",
+        &json_animation,
+    )?;
     add_preset_resource(
         save_names,
         "animation",
@@ -1502,13 +1656,13 @@ fn build_loadscene(
             resource["characterGender"] = Value::String(character_gender.to_string());
         }
         if resource.get("ignoreGender").is_none() {
-            resource["ignoreGender"] = Value::String(ignore_gender.to_string().to_ascii_lowercase());
+            resource["ignoreGender"] =
+                Value::String(ignore_gender.to_string().to_ascii_lowercase());
         }
         if resource.get("personOrder").is_none() {
             resource["personOrder"] = Value::String(person_order.to_string());
         }
-        if delete_temp.is_empty()
-            && resource.get("type").and_then(|v| v.as_str()) == Some("scenes")
+        if delete_temp.is_empty() && resource.get("type").and_then(|v| v.as_str()) == Some("scenes")
         {
             delete_temp = collect_temp_links(vampath)?;
         }
@@ -1538,8 +1692,11 @@ fn build_loadscene(
     if loadscene.exists() {
         let _ = fs::remove_file(&loadscene);
     }
-    fs::write(&loadscene, serde_json::to_string_pretty(json_ls).map_err(|err| err.to_string())?)
-        .map_err(|err| err.to_string())?;
+    fs::write(
+        &loadscene,
+        serde_json::to_string_pretty(json_ls).map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())?;
 
     if !delete_temp.is_empty() {
         spawn_delete_temp_thread(vampath.to_path_buf(), delete_temp);
@@ -1552,7 +1709,11 @@ fn build_loadscene(
     })
 }
 
-fn install_temp(state: &AppState, reporter: &JobReporter, deps: &[String]) -> Result<(Vec<String>, bool), String> {
+fn install_temp(
+    state: &AppState,
+    reporter: &JobReporter,
+    deps: &[String],
+) -> Result<(Vec<String>, bool), String> {
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
 
@@ -1648,11 +1809,19 @@ fn resolve_atom_source(cache_root: &Path, atom_path: &str) -> PathBuf {
 }
 
 fn write_json_file(path: &Path, value: &Value) -> Result<(), String> {
-    fs::write(path, serde_json::to_string(value).map_err(|err| err.to_string())?)
-        .map_err(|err| err.to_string())
+    fs::write(
+        path,
+        serde_json::to_string(value).map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
 }
 
-fn save_json_preset(state: &AppState, var_name: &str, rel: &str, value: &Value) -> Result<(), String> {
+fn save_json_preset(
+    state: &AppState,
+    var_name: &str,
+    rel: &str,
+    value: &Value,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let path = vampath.join(rel);
@@ -1672,8 +1841,11 @@ fn save_raw_json(state: &AppState, rel: &str, value: &Value) -> Result<(), Strin
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
-    fs::write(&path, serde_json::to_string(value).map_err(|err| err.to_string())?)
-        .map_err(|err| err.to_string())?;
+    fs::write(
+        &path,
+        serde_json::to_string(value).map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -1772,7 +1944,9 @@ fn cache_dir(var_name: &str, entry_name: &str) -> PathBuf {
     data_dir()
         .join(CACHE_DIR)
         .join(util::valid_file_name(key))
-        .join(util::valid_file_name(&util::normalize_entry_name(entry_name)))
+        .join(util::valid_file_name(&util::normalize_entry_name(
+            entry_name,
+        )))
 }
 
 fn normalize_cache_key(var_name: &str, entry_name: &str) -> (String, String) {

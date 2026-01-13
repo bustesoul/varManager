@@ -66,10 +66,9 @@ pub fn scan_torrents_only(packages: &[String]) -> Result<ExternalLinksResult, St
         return Ok(result);
     }
 
-    let var_re = Regex::new(
-        r"(?i)([A-Za-z0-9_\-]{1,60}\.[A-Za-z0-9_\-]{1,80}\.(?:\d+|latest))\.var",
-    )
-    .map_err(|err| err.to_string())?;
+    let var_re =
+        Regex::new(r"(?i)([A-Za-z0-9_\-]{1,60}\.[A-Za-z0-9_\-]{1,80}\.(?:\d+|latest))\.var")
+            .map_err(|err| err.to_string())?;
 
     scan_torrents(&links_root, &var_re, &matcher, &mut result)?;
     Ok(result)
@@ -90,12 +89,10 @@ pub fn scan_external_links(
         return Ok(result);
     }
 
-    let var_re = Regex::new(
-        r"(?i)([A-Za-z0-9_\-]{1,60}\.[A-Za-z0-9_\-]{1,80}\.(?:\d+|latest))\.var",
-    )
-    .map_err(|err| err.to_string())?;
-    let url_re = Regex::new(r##"(?i)https?://[^\s\]\)>"']+"##)
-        .map_err(|err| err.to_string())?;
+    let var_re =
+        Regex::new(r"(?i)([A-Za-z0-9_\-]{1,60}\.[A-Za-z0-9_\-]{1,80}\.(?:\d+|latest))\.var")
+            .map_err(|err| err.to_string())?;
+    let url_re = Regex::new(r##"(?i)https?://[^\s\]\)>"']+"##).map_err(|err| err.to_string())?;
 
     let mut allowed = options.sources.clone();
     if allowed.is_empty() {
@@ -255,7 +252,10 @@ fn trim_url(value: &str) -> String {
     let mut trimmed = value.trim().to_string();
     loop {
         let last = trimmed.chars().last();
-        if matches!(last, Some('.') | Some(',') | Some(')') | Some(']') | Some('>') | Some('"') | Some('\'')) {
+        if matches!(
+            last,
+            Some('.') | Some(',') | Some(')') | Some(']') | Some('>') | Some('"') | Some('\'')
+        ) {
             trimmed.pop();
             continue;
         }
@@ -266,10 +266,7 @@ fn trim_url(value: &str) -> String {
 
 fn apply_pixeldrain_bypass(url: &str) -> String {
     let replaced = url.replace("pixeldrain.com/u/", "pixeldrain.sriflix.my/");
-    replaced.replace(
-        "pixeldrain.com/api/file/",
-        "pixeldrain.sriflix.my/",
-    )
+    replaced.replace("pixeldrain.com/api/file/", "pixeldrain.sriflix.my/")
 }
 
 fn insert_url(

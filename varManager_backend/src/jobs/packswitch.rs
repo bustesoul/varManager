@@ -1,14 +1,14 @@
+use crate::app::AppState;
 use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{addon_packages_dir, addon_switch_root, config_paths};
-use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
+use crate::jobs::job_channel::JobReporter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::SqlitePool;
 use std::fs;
 use std::path::Path;
-use sqlx::SqlitePool;
 
 #[derive(Deserialize)]
 struct PackSwitchArgs {
@@ -88,7 +88,11 @@ pub async fn run_packswitch_set_job(
     .map_err(|err| err.to_string())?
 }
 
-fn add_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+fn add_switch_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: PackSwitchArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let name = args.name.trim();
@@ -111,7 +115,11 @@ fn add_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitc
     Ok(())
 }
 
-fn delete_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+fn delete_switch_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: PackSwitchArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let name = args.name.trim();

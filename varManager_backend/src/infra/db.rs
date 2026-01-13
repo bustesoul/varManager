@@ -210,13 +210,11 @@ pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
 }
 
 pub async fn var_exists_conn(pool: &SqlitePool, var_name: &str) -> Result<bool, String> {
-    let exists = sqlx::query_scalar::<_, i64>(
-        "SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1",
-    )
-    .bind(var_name)
-    .fetch_optional(pool)
-    .await
-    .map_err(|err| err.to_string())?;
+    let exists = sqlx::query_scalar::<_, i64>("SELECT 1 FROM vars WHERE varName = ?1 LIMIT 1")
+        .bind(var_name)
+        .fetch_optional(pool)
+        .await
+        .map_err(|err| err.to_string())?;
     Ok(exists.is_some())
 }
 
@@ -257,9 +255,7 @@ pub async fn list_dependencies_all(pool: &SqlitePool) -> Result<Vec<String>, Str
     Ok(deps)
 }
 
-pub async fn list_dependencies_for_installed(
-    pool: &SqlitePool,
-) -> Result<Vec<String>, String> {
+pub async fn list_dependencies_for_installed(pool: &SqlitePool) -> Result<Vec<String>, String> {
     let rows = sqlx::query(
         "SELECT d.dependency FROM dependencies d \
              JOIN installStatus i ON d.varName = i.varName \
@@ -285,9 +281,8 @@ pub async fn list_dependencies_for_vars(
     if var_names.is_empty() {
         return Ok(Vec::new());
     }
-    let mut builder = sqlx::QueryBuilder::new(
-        "SELECT dependency FROM dependencies WHERE varName IN (",
-    );
+    let mut builder =
+        sqlx::QueryBuilder::new("SELECT dependency FROM dependencies WHERE varName IN (");
     let mut separated = builder.separated(", ");
     for name in var_names {
         separated.push_bind(name);
@@ -440,16 +435,14 @@ pub async fn replace_hide_fav(
         if !entry.hide && !entry.fav {
             continue;
         }
-        sqlx::query(
-            "INSERT INTO HideFav (varName, scenePath, hide, fav) VALUES (?1, ?2, ?3, ?4)",
-        )
-        .bind(var_name)
-        .bind(&entry.scene_path)
-        .bind(if entry.hide { 1 } else { 0 })
-        .bind(if entry.fav { 1 } else { 0 })
-        .execute(tx.as_mut())
-        .await
-        .map_err(|err| err.to_string())?;
+        sqlx::query("INSERT INTO HideFav (varName, scenePath, hide, fav) VALUES (?1, ?2, ?3, ?4)")
+            .bind(var_name)
+            .bind(&entry.scene_path)
+            .bind(if entry.hide { 1 } else { 0 })
+            .bind(if entry.fav { 1 } else { 0 })
+            .execute(tx.as_mut())
+            .await
+            .map_err(|err| err.to_string())?;
     }
     Ok(())
 }
@@ -488,10 +481,7 @@ pub async fn delete_var_related(
     Ok(())
 }
 
-pub async fn delete_var_related_conn(
-    pool: &SqlitePool,
-    var_name: &str,
-) -> Result<(), String> {
+pub async fn delete_var_related_conn(pool: &SqlitePool, var_name: &str) -> Result<(), String> {
     sqlx::query("DELETE FROM dependencies WHERE varName = ?1")
         .bind(var_name)
         .execute(pool)

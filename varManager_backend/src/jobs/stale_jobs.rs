@@ -1,15 +1,15 @@
+use crate::app::AppState;
 use crate::infra::db::{delete_var_related_conn, upsert_install_status};
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, OLD_VERSION_DIR, STALE_DIR};
-use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
+use crate::jobs::job_channel::JobReporter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::{Row, SqlitePool};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use sqlx::{Row, SqlitePool};
 
 #[derive(Deserialize)]
 struct StaleVarsArgs {
@@ -89,7 +89,10 @@ struct VarInfo {
     look: i64,
 }
 
-fn stale_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<StaleVarsResult, String> {
+fn stale_vars_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+) -> Result<StaleVarsResult, String> {
     reporter.log("StaleVars start".to_string());
     reporter.progress(1);
     let (varspath, vampath) = config_paths(state)?;
@@ -153,7 +156,10 @@ fn stale_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<Stale
     })
 }
 
-fn old_version_vars_blocking(state: &AppState, reporter: &JobReporter) -> Result<StaleVarsResult, String> {
+fn old_version_vars_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+) -> Result<StaleVarsResult, String> {
     reporter.log("OldVersionVars start".to_string());
     reporter.progress(1);
     let (varspath, vampath) = config_paths(state)?;
@@ -279,9 +285,7 @@ async fn load_vars(pool: &SqlitePool, filter_old: bool) -> Result<Vec<VarInfo>, 
     Ok(vars)
 }
 
-fn find_old_versions(
-    vars: &[VarInfo],
-) -> (Vec<String>, HashMap<String, i64>) {
+fn find_old_versions(vars: &[VarInfo]) -> (Vec<String>, HashMap<String, i64>) {
     let mut grouped: HashMap<String, Vec<&VarInfo>> = HashMap::new();
     for info in vars {
         let key = format!("{}.{}", info.creator, info.package);
@@ -305,21 +309,15 @@ fn find_old_versions(
 }
 
 async fn has_dependents(pool: &SqlitePool, var_name: &str) -> Result<bool, String> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(1) FROM dependencies WHERE dependency = ?1",
-    )
-    .bind(var_name)
-    .fetch_one(pool)
-    .await
-    .map_err(|err| err.to_string())?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM dependencies WHERE dependency = ?1")
+        .bind(var_name)
+        .fetch_one(pool)
+        .await
+        .map_err(|err| err.to_string())?;
     Ok(count > 0)
 }
 
-async fn cleanup_var(
-    pool: &SqlitePool,
-    varspath: &Path,
-    var_name: &str,
-) -> Result<(), String> {
+async fn cleanup_var(pool: &SqlitePool, varspath: &Path, var_name: &str) -> Result<(), String> {
     delete_var_related_conn(pool, var_name).await?;
     sqlx::query("DELETE FROM installStatus WHERE varName = ?1")
         .bind(var_name)
@@ -332,7 +330,14 @@ async fn cleanup_var(
 
 fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
     let types = [
-        "scenes", "looks", "hairstyle", "clothing", "assets", "morphs", "skin", "pose",
+        "scenes",
+        "looks",
+        "hairstyle",
+        "clothing",
+        "assets",
+        "morphs",
+        "skin",
+        "pose",
     ];
     for typename in types {
         let dir = varspath
@@ -356,7 +361,9 @@ async fn install_var(
     vampath: &Path,
     var_name: &str,
 ) -> Result<(), String> {
-    let link_dir = vampath.join("AddonPackages").join(crate::infra::paths::INSTALL_LINK_DIR);
+    let link_dir = vampath
+        .join("AddonPackages")
+        .join(crate::infra::paths::INSTALL_LINK_DIR);
     fs::create_dir_all(&link_dir).map_err(|err| err.to_string())?;
     let link_path = link_dir.join(format!("{}.var", var_name));
     if link_path.exists() {

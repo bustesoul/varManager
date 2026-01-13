@@ -1,9 +1,11 @@
+use crate::app::AppState;
 use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
-use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR};
-use crate::app::AppState;
+use crate::infra::paths::{
+    config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR,
+};
 use crate::infra::winfs;
+use crate::jobs::job_channel::JobReporter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -67,9 +69,13 @@ pub async fn run_rebuild_links_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args
-            .map(|value| serde_json::from_value::<RebuildLinksArgs>(value).map_err(|e| e.to_string()))
+            .map(|value| {
+                serde_json::from_value::<RebuildLinksArgs>(value).map_err(|e| e.to_string())
+            })
             .transpose()?
-            .unwrap_or(RebuildLinksArgs { include_missing: true });
+            .unwrap_or(RebuildLinksArgs {
+                include_missing: true,
+            });
         rebuild_links_blocking(&state, &reporter, args)
     })
     .await
@@ -104,7 +110,11 @@ pub async fn run_missing_links_create_job(
     .map_err(|err| err.to_string())?
 }
 
-fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: RebuildLinksArgs) -> Result<(), String> {
+fn rebuild_links_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: RebuildLinksArgs,
+) -> Result<(), String> {
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("RebuildLinks start".to_string());
@@ -135,11 +145,7 @@ fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: Rebuil
         let target = match winfs::read_link_target(link_path) {
             Ok(target) => target,
             Err(err) => {
-                reporter.log(format!(
-                    "skip non-link {} ({})",
-                    link_path.display(),
-                    err
-                ));
+                reporter.log(format!("skip non-link {} ({})", link_path.display(), err));
                 skipped += 1;
                 continue;
             }
@@ -221,7 +227,11 @@ fn rebuild_links_blocking(state: &AppState, reporter: &JobReporter, args: Rebuil
     Ok(())
 }
 
-fn move_links_blocking(state: &AppState, reporter: &JobReporter, args: MoveLinksArgs) -> Result<(), String> {
+fn move_links_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: MoveLinksArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let target_dir = args.target_dir.trim();
@@ -352,7 +362,10 @@ fn find_link_path(root: &Path, var_name: &str) -> Option<PathBuf> {
     let walker = WalkDir::new(root).follow_links(false).into_iter();
     for entry in walker.filter_map(|e| e.ok()) {
         if entry.file_type().is_file()
-            && entry.file_name().to_string_lossy().eq_ignore_ascii_case(&target)
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(&target)
         {
             return Some(entry.path().to_path_buf());
         }
@@ -364,7 +377,9 @@ fn find_missing_matches(root: &Path, missing_var: &str) -> Vec<PathBuf> {
     let mut matches = Vec::new();
     let is_latest = missing_var.to_ascii_lowercase().ends_with(".latest");
     let target_base = if is_latest {
-        missing_var.rsplit_once('.').map(|(base, _)| base.to_string())
+        missing_var
+            .rsplit_once('.')
+            .map(|(base, _)| base.to_string())
     } else {
         None
     };

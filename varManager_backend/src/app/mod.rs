@@ -5,10 +5,7 @@ use sqlx::SqlitePool;
 use std::{
     env,
     path::PathBuf,
-    sync::{
-        atomic::AtomicU64,
-        Arc, RwLock,
-    },
+    sync::{atomic::AtomicU64, Arc, RwLock},
 };
 use sysinfo::{Pid, ProcessesToUpdate, System};
 use tokio::{
@@ -57,8 +54,16 @@ impl ProxyConfig {
         } else {
             host.to_string()
         };
-        let username = self.username.as_ref().map(|v| v.trim()).filter(|v| !v.is_empty());
-        let password = self.password.as_ref().map(|v| v.trim()).filter(|v| !v.is_empty());
+        let username = self
+            .username
+            .as_ref()
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty());
+        let password = self
+            .password
+            .as_ref()
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty());
         let mut auth = String::new();
         if let Some(user) = username {
             auth.push_str(user);

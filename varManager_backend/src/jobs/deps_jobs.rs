@@ -1,20 +1,20 @@
+use crate::app::AppState;
+use crate::domain::var_logic::{resolve_var_exist_name, vars_dependencies};
 use crate::infra::db::upsert_install_status;
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
-use crate::domain::var_logic::{resolve_var_exist_name, vars_dependencies};
-use crate::app::AppState;
 use crate::infra::winfs;
+use crate::jobs::job_channel::JobReporter;
 use chrono::{DateTime, Local};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::{Row, SqlitePool};
 use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use sqlx::{Row, SqlitePool};
 
 #[derive(Deserialize)]
 struct SavesDepsArgs {}
@@ -60,7 +60,11 @@ pub async fn run_log_deps_job(
     .map_err(|err| err.to_string())?
 }
 
-fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDepsArgs) -> Result<(), String> {
+fn saves_deps_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    _args: SavesDepsArgs,
+) -> Result<(), String> {
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("SavesDeps start".to_string());
@@ -116,14 +120,13 @@ fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDep
     let installed = collect_installed_names(&vampath);
     dependencies.retain(|dep| !installed.contains(dep));
 
-    let (missing, installed_now) =
-        handle.block_on(install_missing_dependencies(
-            reporter,
-            pool,
-            &varspath,
-            &vampath,
-            &dependencies,
-        ))?;
+    let (missing, installed_now) = handle.block_on(install_missing_dependencies(
+        reporter,
+        pool,
+        &varspath,
+        &vampath,
+        &dependencies,
+    ))?;
 
     reporter.set_result(
         serde_json::to_value(DepsJobResult {
@@ -139,7 +142,11 @@ fn saves_deps_blocking(state: &AppState, reporter: &JobReporter, _args: SavesDep
     Ok(())
 }
 
-fn log_deps_blocking(state: &AppState, reporter: &JobReporter, _args: LogDepsArgs) -> Result<(), String> {
+fn log_deps_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    _args: LogDepsArgs,
+) -> Result<(), String> {
     let (varspath, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     reporter.log("LogDeps start".to_string());

@@ -3,9 +3,9 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use moka::future::Cache;
 use reqwest::header;
-use sqlx::{Row, SqlitePool};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use sqlx::{Row, SqlitePool};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -136,8 +136,7 @@ impl ImageCacheService {
         config: ImageCacheConfig,
         db_pool: SqlitePool,
     ) -> Result<Self, ImageCacheError> {
-        let memory_max_bytes =
-            config.memory_cache_size_mb as u64 * 1024_u64 * 1024_u64;
+        let memory_max_bytes = config.memory_cache_size_mb as u64 * 1024_u64 * 1024_u64;
         let disk_max_bytes = config.disk_cache_size_mb as u64 * 1024_u64 * 1024_u64;
         let ttl = Duration::from_secs(config.cache_ttl_hours as u64 * 3600);
 
@@ -177,7 +176,10 @@ impl ImageCacheService {
         })
     }
 
-    pub fn start_maintenance(self: Arc<Self>, shutdown_broadcast: tokio::sync::broadcast::Sender<()>) {
+    pub fn start_maintenance(
+        self: Arc<Self>,
+        shutdown_broadcast: tokio::sync::broadcast::Sender<()>,
+    ) {
         if !self.config.enabled {
             return;
         }
@@ -261,7 +263,9 @@ impl ImageCacheService {
 
             let result = self.fetch_source(&source).await;
             if let Ok((bytes, content_type)) = &result {
-                self.metrics.downloads_success.fetch_add(1, Ordering::Relaxed);
+                self.metrics
+                    .downloads_success
+                    .fetch_add(1, Ordering::Relaxed);
                 if self.config.enabled {
                     self.insert_memory(&key, bytes.clone(), content_type.clone())
                         .await;
@@ -325,7 +329,10 @@ impl ImageCacheService {
     }
 
     async fn insert_memory(&self, key: &str, bytes: Bytes, content_type: String) {
-        let cached = CachedImage { bytes, content_type };
+        let cached = CachedImage {
+            bytes,
+            content_type,
+        };
         self.memory_cache.insert(key.to_string(), cached).await;
     }
 
@@ -347,10 +354,9 @@ impl ImageCacheService {
         match &source.source {
             ImageSource::Hub { url } => self.download_hub_image(url).await,
             ImageSource::LocalFile { .. } => {
-                let full_path = source
-                    .full_path
-                    .as_ref()
-                    .ok_or_else(|| ImageCacheError::Invalid("local file path missing".to_string()))?;
+                let full_path = source.full_path.as_ref().ok_or_else(|| {
+                    ImageCacheError::Invalid("local file path missing".to_string())
+                })?;
                 read_local_image(full_path).await
             }
         }
@@ -423,9 +429,8 @@ impl ImageCacheService {
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
         }
-        Err(last_err.unwrap_or_else(|| {
-            ImageCacheError::Network("hub image download failed".to_string())
-        }))
+        Err(last_err
+            .unwrap_or_else(|| ImageCacheError::Network("hub image download failed".to_string())))
     }
 }
 
@@ -482,11 +487,11 @@ impl DiskCache {
                 access_count INTEGER NOT NULL DEFAULT 1
             );
             CREATE INDEX IF NOT EXISTS idx_last_accessed ON image_cache_entries(last_accessed);
-            "#
+            "#,
         )
-            .execute(&db_pool)
-            .await
-            .map_err(ImageCacheError::from)?;
+        .execute(&db_pool)
+        .await
+        .map_err(ImageCacheError::from)?;
 
         let cache = Self {
             base_dir,
@@ -507,9 +512,7 @@ impl DiskCache {
             None => return Ok(None),
         };
         let now = now_ts();
-        if self.ttl.as_secs() > 0
-            && now.saturating_sub(entry.last_accessed) > self.ttl.as_secs()
-        {
+        if self.ttl.as_secs() > 0 && now.saturating_sub(entry.last_accessed) > self.ttl.as_secs() {
             self.remove_entry(&entry.key, &entry.file_name).await?;
             return Ok(None);
         }
@@ -561,12 +564,8 @@ impl DiskCache {
         }
 
         let existing = self.lookup_entry_meta(&key).await?;
-        let effective_needed = size_bytes.saturating_sub(
-            existing
-                .as_ref()
-                .map(|entry| entry.size_bytes)
-                .unwrap_or(0),
-        );
+        let effective_needed =
+            size_bytes.saturating_sub(existing.as_ref().map(|entry| entry.size_bytes).unwrap_or(0));
         self.ensure_disk_space(effective_needed).await?;
 
         let extension = extension_from_content_type(&content_type)
@@ -582,17 +581,17 @@ impl DiskCache {
         let (source_type, source_url, source_root, source_path) = source_fields(&source);
         let result = self
             .insert_entry(
-            &key,
-            &file_name,
-            &content_type,
-            size_bytes,
-            now,
-            source_type,
-            source_url,
-            source_root,
-            source_path,
-        )
-        .await;
+                &key,
+                &file_name,
+                &content_type,
+                size_bytes,
+                now,
+                source_type,
+                source_url,
+                source_root,
+                source_path,
+            )
+            .await;
         if let Err(err) = result {
             self.remove_file_best_effort(&file_name).await;
             return Err(err);
@@ -630,12 +629,11 @@ impl DiskCache {
     }
 
     async fn stats(&self) -> Result<DiskCacheStatsSnapshot, ImageCacheError> {
-        let row = sqlx::query(
-            "SELECT COUNT(1), COALESCE(SUM(size_bytes), 0) FROM image_cache_entries",
-        )
-        .fetch_one(&self.db_pool)
-        .await
-        .map_err(ImageCacheError::from)?;
+        let row =
+            sqlx::query("SELECT COUNT(1), COALESCE(SUM(size_bytes), 0) FROM image_cache_entries")
+                .fetch_one(&self.db_pool)
+                .await
+                .map_err(ImageCacheError::from)?;
         let entries: i64 = row.try_get(0).map_err(ImageCacheError::from)?;
         let size_bytes: i64 = row.try_get(1).map_err(ImageCacheError::from)?;
         Ok(DiskCacheStatsSnapshot {
@@ -681,12 +679,10 @@ impl DiskCache {
         }
         self.cleanup_expired().await?;
 
-        let row = sqlx::query(
-            "SELECT COALESCE(SUM(size_bytes), 0) FROM image_cache_entries",
-        )
-        .fetch_one(&self.db_pool)
-        .await
-        .map_err(ImageCacheError::from)?;
+        let row = sqlx::query("SELECT COALESCE(SUM(size_bytes), 0) FROM image_cache_entries")
+            .fetch_one(&self.db_pool)
+            .await
+            .map_err(ImageCacheError::from)?;
         let total_size: i64 = row.try_get(0).map_err(ImageCacheError::from)?;
         let total_size = total_size as u64;
 
@@ -972,26 +968,17 @@ fn extension_from_source(source: &ImageSource) -> Option<String> {
 }
 
 fn extension_from_url(url: &str) -> Option<String> {
-    url::Url::parse(url)
-        .ok()
-        .and_then(|parsed| {
-            Path::new(parsed.path())
-                .extension()
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_lowercase())
-        })
+    url::Url::parse(url).ok().and_then(|parsed| {
+        Path::new(parsed.path())
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_lowercase())
+    })
 }
 
-fn source_fields(
-    source: &ImageSource,
-) -> (String, Option<String>, Option<String>, Option<String>) {
+fn source_fields(source: &ImageSource) -> (String, Option<String>, Option<String>, Option<String>) {
     match source {
-        ImageSource::Hub { url } => (
-            "hub".to_string(),
-            Some(url.to_string()),
-            None,
-            None,
-        ),
+        ImageSource::Hub { url } => ("hub".to_string(), Some(url.to_string()), None, None),
         ImageSource::LocalFile { root, path } => (
             "local".to_string(),
             None,
@@ -1007,9 +994,15 @@ fn is_disk_full_error(err: &std::io::Error) -> bool {
 
 fn map_io_error(context: &'static str, err: std::io::Error) -> ImageCacheError {
     if is_disk_full_error(&err) {
-        ImageCacheError::DiskFull { context, source: err }
+        ImageCacheError::DiskFull {
+            context,
+            source: err,
+        }
     } else {
-        ImageCacheError::Io { context, source: err }
+        ImageCacheError::Io {
+            context,
+            source: err,
+        }
     }
 }
 
@@ -1025,10 +1018,7 @@ fn hub_headers() -> header::HeaderMap {
         header::ACCEPT_ENCODING,
         "gzip, deflate, br, zstd".parse().unwrap(),
     );
-    headers.insert(
-        header::ACCEPT_LANGUAGE,
-        "en-US,en;q=0.9".parse().unwrap(),
-    );
+    headers.insert(header::ACCEPT_LANGUAGE, "en-US,en;q=0.9".parse().unwrap());
     headers.insert(header::COOKIE, "vamhubconsent=yes".parse().unwrap());
     headers.insert(header::DNT, "1".parse().unwrap());
     headers.insert(

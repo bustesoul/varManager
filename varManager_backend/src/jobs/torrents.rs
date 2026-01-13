@@ -75,11 +75,16 @@ async fn torrent_download_async(
 
     let (varspath, _) = config_paths(state)?;
     let temp_dir = torrent_download_dir();
-    fs::create_dir_all(&temp_dir).await.map_err(|err| err.to_string())?;
+    fs::create_dir_all(&temp_dir)
+        .await
+        .map_err(|err| err.to_string())?;
 
     let torrents_root = data_dir().join("links").join("torrents");
     if !tokio::fs::try_exists(&torrents_root).await.unwrap_or(false) {
-        return Err(format!("torrents directory missing: {}", torrents_root.display()));
+        return Err(format!(
+            "torrents directory missing: {}",
+            torrents_root.display()
+        ));
     }
 
     let mut requested: HashMap<String, Vec<String>> = HashMap::new();
@@ -124,9 +129,11 @@ async fn torrent_download_async(
                 }
             };
 
-            if let Some(entry) = meta.files.iter().find(|entry| {
-                entry.file_name.eq_ignore_ascii_case(&target)
-            }) {
+            if let Some(entry) = meta
+                .files
+                .iter()
+                .find(|entry| entry.file_name.eq_ignore_ascii_case(&target))
+            {
                 found = Some(ResolvedEntry {
                     var_name: var_name.to_string(),
                     torrent_name: torrent_name.to_string(),
@@ -155,7 +162,9 @@ async fn torrent_download_async(
     }
 
     let temp_torrent_dir = temp_dir.join(".torrents");
-    fs::create_dir_all(&temp_torrent_dir).await.map_err(|err| err.to_string())?;
+    fs::create_dir_all(&temp_torrent_dir)
+        .await
+        .map_err(|err| err.to_string())?;
 
     let total_targets: usize = by_torrent.values().map(|v| v.len()).sum();
     let mut completed_targets = 0usize;
@@ -185,10 +194,10 @@ async fn torrent_download_async(
         }
 
         // Register torrent download
-        let var_names: Vec<String> = entries.iter()
-            .map(|e| e.var_name.clone())
-            .collect();
-        state.torrent_tracker.register(torrent_name.clone(), var_names);
+        let var_names: Vec<String> = entries.iter().map(|e| e.var_name.clone()).collect();
+        state
+            .torrent_tracker
+            .register(torrent_name.clone(), var_names);
 
         reporter.log(format!(
             "aria2 start: {} target(s) from {}",
@@ -210,8 +219,7 @@ async fn torrent_download_async(
                 .collect::<Vec<_>>()
                 .join(",");
 
-            let temp_torrent_path =
-                temp_torrent_dir_clone.join(unique_torrent_name(&torrent_name));
+            let temp_torrent_path = temp_torrent_dir_clone.join(unique_torrent_name(&torrent_name));
 
             if let Err(e) = fs::copy(&torrent_path, &temp_torrent_path).await {
                 return Err((torrent_name, vec![], format!("Copy failed: {}", e)));
@@ -225,10 +233,7 @@ async fn torrent_download_async(
                 .arg("--seed-time=0")
                 .arg("--seed-ratio=0.0")
                 .arg("--bt-stop-timeout=0")
-                .arg(format!(
-                    "--stop-with-process={}",
-                    std::process::id()
-                ))
+                .arg(format!("--stop-with-process={}", std::process::id()))
                 .arg("--dir")
                 .arg(&temp_dir_clone)
                 .arg(format!("--select-file={}", indices))
@@ -282,7 +287,12 @@ async fn torrent_download_async(
             // Unregister from tracker
             state_clone.torrent_tracker.unregister(&torrent_name);
 
-            Ok::<_, (String, Vec<String>, String)>((torrent_name, moved, move_errors, skipped_count))
+            Ok::<_, (String, Vec<String>, String)>((
+                torrent_name,
+                moved,
+                move_errors,
+                skipped_count,
+            ))
         });
 
         handles.push(handle);
@@ -317,10 +327,7 @@ async fn torrent_download_async(
     }
 
     if !failed.is_empty() {
-        reporter.log(format!(
-            "torrent download failures: {}",
-            failed.join(", ")
-        ));
+        reporter.log(format!("torrent download failures: {}", failed.join(", ")));
     }
 
     reporter.set_result(
@@ -338,8 +345,7 @@ async fn torrent_download_async(
 
 fn parse_torrent(path: &Path) -> Result<TorrentMeta, String> {
     let data = std::fs::read(path).map_err(|err| err.to_string())?;
-    let value: BencodeValue =
-        serde_bencode::from_bytes(&data).map_err(|err| err.to_string())?;
+    let value: BencodeValue = serde_bencode::from_bytes(&data).map_err(|err| err.to_string())?;
     let info = match value {
         BencodeValue::Dict(map) => dict_get(&map, "info")
             .ok_or_else(|| format!("torrent missing info: {}", path.display()))?
@@ -382,9 +388,8 @@ fn parse_torrent(path: &Path) -> Result<TorrentMeta, String> {
                 relative.push(&text);
                 file_name = Some(text);
             }
-            let file_name = file_name.ok_or_else(|| {
-                format!("torrent path empty: {}", path.display())
-            })?;
+            let file_name =
+                file_name.ok_or_else(|| format!("torrent path empty: {}", path.display()))?;
             files.push(TorrentFileEntry {
                 index: idx + 1,
                 relative_path: relative,
@@ -402,18 +407,13 @@ fn parse_torrent(path: &Path) -> Result<TorrentMeta, String> {
     Ok(TorrentMeta { files })
 }
 
-fn dict_get<'a>(
-    map: &'a HashMap<Vec<u8>, BencodeValue>,
-    key: &str,
-) -> Option<&'a BencodeValue> {
+fn dict_get<'a>(map: &'a HashMap<Vec<u8>, BencodeValue>, key: &str) -> Option<&'a BencodeValue> {
     map.get(key.as_bytes())
 }
 
 fn bencode_str(value: &BencodeValue) -> Option<String> {
     match value {
-        BencodeValue::Bytes(bytes) => {
-            Some(String::from_utf8_lossy(bytes).to_string())
-        }
+        BencodeValue::Bytes(bytes) => Some(String::from_utf8_lossy(bytes).to_string()),
         _ => None,
     }
 }

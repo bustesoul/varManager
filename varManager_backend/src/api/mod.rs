@@ -5,9 +5,9 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use sqlx::{QueryBuilder, Row, SqlitePool};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sqlx::{QueryBuilder, Row, SqlitePool};
 use std::{
     collections::HashMap,
     path::{Component, Path as StdPath, PathBuf},
@@ -17,15 +17,13 @@ use std::{
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
 
+use crate::app::{app_root, data_dir, AppState, Config, APP_VERSION};
+use crate::infra::db;
+use crate::infra::download_manager::{DownloadAction, DownloadEnqueueItem, DownloadListResponse};
 use crate::jobs::job_channel::{
     min_job_log_level, JobLogsResponse, JobResultResponse, JobState, JobStatus, JobView,
 };
-use crate::infra::download_manager::{DownloadAction, DownloadEnqueueItem, DownloadListResponse};
-use crate::app::{app_root, data_dir, AppState, APP_VERSION, Config};
-use crate::infra::db;
-use crate::services::image_cache::{
-    CacheStats, ImageCacheError, ImageSource, ResolvedImageSource,
-};
+use crate::services::image_cache::{CacheStats, ImageCacheError, ImageSource, ResolvedImageSource};
 use crate::{jobs, scenes};
 
 #[derive(Deserialize)]
@@ -506,7 +504,11 @@ pub async fn get_job_logs(
 
     let request_from = query.from.unwrap_or(job.log_offset);
     let dropped = request_from < job.log_offset;
-    let from = if dropped { job.log_offset } else { request_from };
+    let from = if dropped {
+        job.log_offset
+    } else {
+        request_from
+    };
     let start = from.saturating_sub(job.log_offset);
     let entries = job
         .logs
@@ -792,19 +794,39 @@ pub async fn list_vars(
     let mut conditions = Vec::new();
     let mut params: Vec<BindValue> = Vec::new();
 
-    if let Some(creator) = query.creator.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(creator) = query
+        .creator
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         conditions.push("v.creatorName = ?".to_string());
         params.push(BindValue::Text(creator.to_string()));
     }
-    if let Some(package) = query.package.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(package) = query
+        .package
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         conditions.push("v.packageName LIKE ?".to_string());
         params.push(BindValue::Text(format!("%{}%", package)));
     }
-    if let Some(version) = query.version.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(version) = query
+        .version
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         conditions.push("v.version LIKE ?".to_string());
         params.push(BindValue::Text(format!("%{}%", version)));
     }
-    if let Some(search) = query.search.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(search) = query
+        .search
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         conditions.push("(v.varName LIKE ? OR v.packageName LIKE ?)".to_string());
         let like = format!("%{}%", search);
         params.push(BindValue::Text(like.clone()));
@@ -961,10 +983,7 @@ pub async fn list_vars(
             BindValue::Float(value) => count_query.bind(*value),
         };
     }
-    let total: i64 = count_query
-        .fetch_one(pool)
-        .await
-        .map_err(internal_error)?;
+    let total: i64 = count_query.fetch_one(pool).await.map_err(internal_error)?;
     let total = total as u64;
 
     let sql = format!(
@@ -1014,14 +1033,8 @@ pub async fn list_vars(
             appearance: row.try_get(19).map_err(internal_error)?,
             dependency_cnt: row.try_get(20).map_err(internal_error)?,
             fsize: row.try_get(21).map_err(internal_error)?,
-            installed: row
-                .try_get::<i64, _>(22)
-                .map_err(internal_error)?
-                != 0,
-            disabled: row
-                .try_get::<i64, _>(23)
-                .map_err(internal_error)?
-                != 0,
+            installed: row.try_get::<i64, _>(22).map_err(internal_error)? != 0,
+            disabled: row.try_get::<i64, _>(23).map_err(internal_error)? != 0,
         });
     }
 
@@ -1042,10 +1055,9 @@ pub async fn resolve_vars(
 
     let mut resolved = HashMap::new();
     for name in req.names {
-        let value =
-            crate::domain::var_logic::resolve_var_exist_name(pool, &name)
-                .await
-                .unwrap_or_else(|_| "missing".to_string());
+        let value = crate::domain::var_logic::resolve_var_exist_name(pool, &name)
+            .await
+            .unwrap_or_else(|_| "missing".to_string());
         resolved.insert(name, value);
     }
     Ok(Json(ResolveVarsResponse { resolved }))
@@ -1081,7 +1093,10 @@ pub async fn validate_output_dir(
             reason: Some("directory not empty".to_string()),
         }));
     }
-    Ok(Json(ValidateOutputResponse { ok: true, reason: None }))
+    Ok(Json(ValidateOutputResponse {
+        ok: true,
+        reason: None,
+    }))
 }
 
 pub async fn save_missing_map(
@@ -1127,7 +1142,8 @@ pub async fn load_missing_map(
     if !path.is_absolute() {
         path = app_root().join(&path);
     }
-    let contents = std::fs::read_to_string(&path).map_err(|err| ApiError::not_found(err.to_string()))?;
+    let contents =
+        std::fs::read_to_string(&path).map_err(|err| ApiError::not_found(err.to_string()))?;
     let mut links = Vec::new();
     for line in contents.lines() {
         let line = line.trim();
@@ -1243,22 +1259,19 @@ pub async fn get_var_detail(
         appearance: row.try_get(19).map_err(internal_error)?,
         dependency_cnt: row.try_get(20).map_err(internal_error)?,
         fsize: row.try_get(21).map_err(internal_error)?,
-        installed: row
-            .try_get::<i64, _>(22)
-            .map_err(internal_error)?
-            != 0,
-        disabled: row
-            .try_get::<i64, _>(23)
-            .map_err(internal_error)?
-            != 0,
+        installed: row.try_get::<i64, _>(22).map_err(internal_error)? != 0,
+        disabled: row.try_get::<i64, _>(23).map_err(internal_error)? != 0,
     };
 
-    let dependencies =
-        list_dependencies_with_status(pool, &name).await.map_err(internal_error)?;
-    let dependents =
-        list_dependents_conn(pool, &name).await.map_err(internal_error)?;
-    let dependent_saves =
-        list_dependent_saves(pool, &name).await.map_err(internal_error)?;
+    let dependencies = list_dependencies_with_status(pool, &name)
+        .await
+        .map_err(internal_error)?;
+    let dependents = list_dependents_conn(pool, &name)
+        .await
+        .map_err(internal_error)?;
+    let dependent_saves = list_dependent_saves(pool, &name)
+        .await
+        .map_err(internal_error)?;
     let scenes = list_var_scenes(pool, &name).await.map_err(internal_error)?;
 
     Ok(Json(VarDetailResponse {
@@ -1286,15 +1299,30 @@ pub async fn list_scenes(
     let mut conditions = Vec::new();
     let mut params: Vec<BindValue> = Vec::new();
 
-    if let Some(category) = query.category.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(category) = query
+        .category
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         conditions.push("s.atomType = ?".to_string());
         params.push(BindValue::Text(category.to_string()));
     }
-    if let Some(creator) = query.creator.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(creator) = query
+        .creator
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         conditions.push("v.creatorName = ?".to_string());
         params.push(BindValue::Text(creator.to_string()));
     }
-    if let Some(search) = query.search.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(search) = query
+        .search
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         conditions.push("(s.scenePath LIKE ? OR v.varName LIKE ?)".to_string());
         let like = format!("%{}%", search);
         params.push(BindValue::Text(like.clone()));
@@ -1357,7 +1385,13 @@ pub async fn list_scenes(
     for row in rows {
         let hide: i64 = row.try_get(13).map_err(internal_error)?;
         let fav: i64 = row.try_get(14).map_err(internal_error)?;
-        let hide_fav = if hide != 0 { -1 } else if fav != 0 { 1 } else { 0 };
+        let hide_fav = if hide != 0 {
+            -1
+        } else if fav != 0 {
+            1
+        } else {
+            0
+        };
         let installed = row.try_get::<i64, _>(11).map_err(internal_error)? != 0;
         let location = if installed {
             "installed".to_string()
@@ -1562,7 +1596,11 @@ fn load_save_scenes(vampath: &StdPath) -> Vec<SceneListItem> {
     let mut items = Vec::new();
     let groups = vec![
         ("scenes", vampath.join("Saves").join("scene"), "json"),
-        ("looks", vampath.join("Saves").join("Person").join("full"), "json"),
+        (
+            "looks",
+            vampath.join("Saves").join("Person").join("full"),
+            "json",
+        ),
         (
             "looks",
             vampath.join("Saves").join("Person").join("appearance"),
@@ -1570,7 +1608,11 @@ fn load_save_scenes(vampath: &StdPath) -> Vec<SceneListItem> {
         ),
         (
             "looks",
-            vampath.join("Custom").join("Atom").join("Person").join("Appearance"),
+            vampath
+                .join("Custom")
+                .join("Atom")
+                .join("Person")
+                .join("Appearance"),
             "vap",
         ),
         (
@@ -1580,29 +1622,49 @@ fn load_save_scenes(vampath: &StdPath) -> Vec<SceneListItem> {
         ),
         (
             "pose",
-            vampath.join("Custom").join("Atom").join("Person").join("Pose"),
+            vampath
+                .join("Custom")
+                .join("Atom")
+                .join("Person")
+                .join("Pose"),
             "vap",
         ),
         (
             "clothing",
-            vampath.join("Custom").join("Atom").join("Person").join("Clothing"),
+            vampath
+                .join("Custom")
+                .join("Atom")
+                .join("Person")
+                .join("Clothing"),
             "vap",
         ),
         ("clothing", vampath.join("Custom").join("Clothing"), "vap"),
         (
             "hairstyle",
-            vampath.join("Custom").join("Atom").join("Person").join("Hair"),
+            vampath
+                .join("Custom")
+                .join("Atom")
+                .join("Person")
+                .join("Hair"),
             "vap",
         ),
         ("hairstyle", vampath.join("Custom").join("Hair"), "vap"),
         (
             "morphs",
-            vampath.join("Custom").join("Atom").join("Person").join("Morphs"),
+            vampath
+                .join("Custom")
+                .join("Atom")
+                .join("Person")
+                .join("Morphs"),
             "vap",
         ),
         (
             "skin",
-            vampath.join("Custom").join("Atom").join("Person").join("Skin"),
+            vampath
+                .join("Custom")
+                .join("Atom")
+                .join("Person")
+                .join("Skin"),
             "vap",
         ),
     ];
@@ -1664,10 +1726,7 @@ fn load_save_scenes(vampath: &StdPath) -> Vec<SceneListItem> {
     items
 }
 
-async fn load_missing_link_scenes(
-    pool: &SqlitePool,
-    vampath: &StdPath,
-) -> Vec<SceneListItem> {
+async fn load_missing_link_scenes(pool: &SqlitePool, vampath: &StdPath) -> Vec<SceneListItem> {
     let mut items = Vec::new();
     let root = crate::infra::paths::missing_links_dir(vampath);
     if !root.exists() {
@@ -1700,7 +1759,7 @@ async fn load_missing_link_scenes(
 
     for var_name in vars {
         let rows = match sqlx::query(
-        "SELECT s.varName, s.atomType, s.previewPic, s.scenePath, s.isPreset, s.isLoadable,
+            "SELECT s.varName, s.atomType, s.previewPic, s.scenePath, s.isPreset, s.isLoadable,
                 v.creatorName, v.packageName, v.metaDate, v.varDate, v.version,
                 COALESCE(i.installed, 0), COALESCE(i.disabled, 0)
          FROM scenes s
@@ -1724,8 +1783,7 @@ async fn load_missing_link_scenes(
                 Ok(value) => value,
                 Err(_) => continue,
             };
-            let (hide, fav, hide_fav) =
-                read_hide_fav_for_var(vampath, &var_name, &scene_path);
+            let (hide, fav, hide_fav) = read_hide_fav_for_var(vampath, &var_name, &scene_path);
             items.push(SceneListItem {
                 var_name,
                 atom_type: row.try_get(1).unwrap_or_default(),
@@ -1768,7 +1826,13 @@ fn read_hide_fav_for_var(vampath: &StdPath, var_name: &str, scene_path: &str) ->
     let pathfav = base.join(format!("{}.fav", scenename));
     let hide = pathhide.exists();
     let fav = pathfav.exists();
-    let hide_fav = if hide { -1 } else if fav { 1 } else { 0 };
+    let hide_fav = if hide {
+        -1
+    } else if fav {
+        1
+    } else {
+        0
+    };
     (hide, fav, hide_fav)
 }
 
@@ -1783,7 +1847,13 @@ fn read_hide_fav_for_save(path: &StdPath) -> (bool, bool, i32) {
     ));
     let hide_exists = hide.exists();
     let fav_exists = fav.exists();
-    let hide_fav = if hide_exists { -1 } else if fav_exists { 1 } else { 0 };
+    let hide_fav = if hide_exists {
+        -1
+    } else if fav_exists {
+        1
+    } else {
+        0
+    };
     (hide_exists, fav_exists, hide_fav)
 }
 
@@ -1886,7 +1956,10 @@ pub async fn list_packswitch(
             }
         }
     }
-    if !switches.iter().any(|name| name.eq_ignore_ascii_case("default")) {
+    if !switches
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case("default"))
+    {
         switches.push("default".to_string());
     }
     switches.sort_by_key(|a| a.to_ascii_lowercase());
@@ -1923,9 +1996,8 @@ pub async fn list_var_dependencies(
 
     let pool = &state.db_pool;
 
-    let mut builder = QueryBuilder::new(
-        "SELECT varName, dependency FROM dependencies WHERE varName IN (",
-    );
+    let mut builder =
+        QueryBuilder::new("SELECT varName, dependency FROM dependencies WHERE varName IN (");
     let mut separated = builder.separated(", ");
     for name in &names {
         separated.push_bind(name);
@@ -2066,15 +2138,18 @@ pub async fn get_analysis_summary(
     Ok(Json(summary))
 }
 
-pub async fn list_saves_tree(
-    State(state): State<AppState>,
-) -> ApiResult<Json<SavesTreeResponse>> {
+pub async fn list_saves_tree(State(state): State<AppState>) -> ApiResult<Json<SavesTreeResponse>> {
     let (_, vampath) = crate::infra::paths::config_paths(&state).map_err(internal_error)?;
-    let vampath = vampath
-        .ok_or_else(|| ApiError::bad_request("vampath is required in config.json"))?;
+    let vampath =
+        vampath.ok_or_else(|| ApiError::bad_request("vampath is required in config.json"))?;
 
     let groups = vec![
-        ("scenes", "[Scenes]: ./Saves/scene", vampath.join("Saves").join("scene"), "json"),
+        (
+            "scenes",
+            "[Scenes]: ./Saves/scene",
+            vampath.join("Saves").join("scene"),
+            "json",
+        ),
         (
             "appearance",
             "[Appearance]: ./Saves/Person/appearance",
@@ -2084,7 +2159,11 @@ pub async fn list_saves_tree(
         (
             "presets",
             "[Appearance Presets]: ./Custom/Atom/Person/Appearance",
-            vampath.join("Custom").join("Atom").join("Person").join("Appearance"),
+            vampath
+                .join("Custom")
+                .join("Atom")
+                .join("Person")
+                .join("Appearance"),
             "vap",
         ),
     ];
@@ -2141,9 +2220,7 @@ pub async fn list_saves_tree(
     }))
 }
 
-pub async fn get_stats(
-    State(state): State<AppState>,
-) -> ApiResult<Json<StatsResponse>> {
+pub async fn get_stats(State(state): State<AppState>) -> ApiResult<Json<StatsResponse>> {
     let _cfg = read_config(&state).map_err(internal_error)?;
     let pool = &state.db_pool;
 
@@ -2151,18 +2228,16 @@ pub async fn get_stats(
         .fetch_one(pool)
         .await
         .map_err(internal_error)? as u64;
-    let vars_installed: u64 = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(1) FROM installStatus WHERE installed = 1",
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(internal_error)? as u64;
-    let vars_disabled: u64 = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(1) FROM installStatus WHERE disabled = 1",
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(internal_error)? as u64;
+    let vars_installed: u64 =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM installStatus WHERE installed = 1")
+            .fetch_one(pool)
+            .await
+            .map_err(internal_error)? as u64;
+    let vars_disabled: u64 =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM installStatus WHERE disabled = 1")
+            .fetch_one(pool)
+            .await
+            .map_err(internal_error)? as u64;
     let scenes_total: u64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM scenes")
         .fetch_one(pool)
         .await
@@ -2218,7 +2293,10 @@ fn safe_join(base: &StdPath, relative: &str) -> Result<PathBuf, String> {
     Ok(base.join(rel))
 }
 
-fn parse_image_source(state: &AppState, query: PreviewQuery) -> Result<ResolvedImageSource, String> {
+fn parse_image_source(
+    state: &AppState,
+    query: PreviewQuery,
+) -> Result<ResolvedImageSource, String> {
     if let Some(source) = query
         .source
         .as_ref()
@@ -2310,9 +2388,7 @@ fn resolve_local_source(
 fn map_image_cache_error(err: ImageCacheError) -> ApiError {
     match err {
         ImageCacheError::NotFound(message) => ApiError::not_found(message),
-        ImageCacheError::Network(message) => {
-            ApiError::new(StatusCode::BAD_GATEWAY, message)
-        }
+        ImageCacheError::Network(message) => ApiError::new(StatusCode::BAD_GATEWAY, message),
         ImageCacheError::HttpStatus { status, url } => ApiError::new(
             StatusCode::BAD_GATEWAY,
             format!("upstream status {} for {}", status, url),
@@ -2329,9 +2405,7 @@ fn map_image_cache_error(err: ImageCacheError) -> ApiError {
     }
 }
 
-pub async fn get_cache_stats(
-    State(state): State<AppState>,
-) -> ApiResult<Json<CacheStats>> {
+pub async fn get_cache_stats(State(state): State<AppState>) -> ApiResult<Json<CacheStats>> {
     let stats = state.image_cache.stats().await.map_err(internal_error)?;
     Ok(Json(stats))
 }
@@ -2368,8 +2442,7 @@ async fn list_dependencies_with_status(
             .try_get::<Option<String>, _>(0)
             .map_err(|err| err.to_string())?
         {
-            let mut resolved =
-                crate::domain::var_logic::resolve_var_exist_name(pool, &dep).await?;
+            let mut resolved = crate::domain::var_logic::resolve_var_exist_name(pool, &dep).await?;
             let mut closest = false;
             if resolved.ends_with('$') {
                 closest = true;
@@ -2387,10 +2460,7 @@ async fn list_dependencies_with_status(
     Ok(result)
 }
 
-async fn list_dependents_conn(
-    pool: &SqlitePool,
-    var_name: &str,
-) -> Result<Vec<String>, String> {
+async fn list_dependents_conn(pool: &SqlitePool, var_name: &str) -> Result<Vec<String>, String> {
     let mut names = Vec::new();
     let targets = dependency_targets(pool, var_name).await?;
     for dep in targets {
@@ -2413,10 +2483,7 @@ async fn list_dependents_conn(
     Ok(names)
 }
 
-async fn list_dependent_saves(
-    pool: &SqlitePool,
-    var_name: &str,
-) -> Result<Vec<String>, String> {
+async fn list_dependent_saves(pool: &SqlitePool, var_name: &str) -> Result<Vec<String>, String> {
     let mut names = Vec::new();
     let targets = dependency_targets(pool, var_name).await?;
     for dep in targets {
@@ -2453,32 +2520,19 @@ async fn list_var_scenes(
     let mut items = Vec::new();
     for row in rows {
         items.push(ScenePreviewItem {
-            atom_type: row
-                .try_get::<String, _>(0)
-                .map_err(|err| err.to_string())?,
+            atom_type: row.try_get::<String, _>(0).map_err(|err| err.to_string())?,
             preview_pic: row
                 .try_get::<Option<String>, _>(1)
                 .map_err(|err| err.to_string())?,
-            scene_path: row
-                .try_get::<String, _>(2)
-                .map_err(|err| err.to_string())?,
-            is_preset: row
-                .try_get::<i64, _>(3)
-                .map_err(|err| err.to_string())?
-                != 0,
-            is_loadable: row
-                .try_get::<i64, _>(4)
-                .map_err(|err| err.to_string())?
-                != 0,
+            scene_path: row.try_get::<String, _>(2).map_err(|err| err.to_string())?,
+            is_preset: row.try_get::<i64, _>(3).map_err(|err| err.to_string())? != 0,
+            is_loadable: row.try_get::<i64, _>(4).map_err(|err| err.to_string())? != 0,
         });
     }
     Ok(items)
 }
 
-async fn dependency_targets(
-    pool: &SqlitePool,
-    var_name: &str,
-) -> Result<Vec<String>, String> {
+async fn dependency_targets(pool: &SqlitePool, var_name: &str) -> Result<Vec<String>, String> {
     let parts: Vec<&str> = var_name.split('.').collect();
     if parts.len() != 3 {
         return Ok(vec![var_name.to_string()]);
