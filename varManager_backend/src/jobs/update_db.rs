@@ -426,6 +426,12 @@ fn tidy_vars(
         reporter.log("vampath not set; skip AddonPackages scan".to_string());
     }
 
+    let mut seen = HashSet::new();
+    vars.retain(|path| {
+        let key = path_dedupe_key(path);
+        seen.insert(key)
+    });
+
     let total = vars.len();
     stats.scanned = total;
     let start_time = std::time::Instant::now();
@@ -494,6 +500,11 @@ fn tidy_vars(
     }
     reporter.log(format!("TidyVars completed: {} files processed", total));
     Ok(stats)
+}
+
+fn path_dedupe_key(path: &Path) -> String {
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    canonical.to_string_lossy().to_ascii_lowercase()
 }
 
 fn collect_var_files(root: &Path, exclude_dirs: &[&str], follow_links: bool) -> Vec<PathBuf> {
