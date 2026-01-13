@@ -992,6 +992,42 @@ abstract class AppLocalizations {
   /// **'Scan vars, extract previews, and update the database.'**
   String get updateDbTooltip;
 
+  /// No description provided for @updateDbRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update DB required'**
+  String get updateDbRequiredTitle;
+
+  /// No description provided for @updateDbRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'AddonPackages at {path} is not a symlink. Run Update DB before switching packs.'**
+  String updateDbRequiredMessage(Object path);
+
+  /// No description provided for @updateDbSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update DB completed'**
+  String get updateDbSummaryTitle;
+
+  /// No description provided for @updateDbSummaryScanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanned {count} packages.'**
+  String updateDbSummaryScanned(Object count);
+
+  /// No description provided for @updateDbSummaryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No packages moved.'**
+  String get updateDbSummaryEmpty;
+
+  /// No description provided for @updateDbSummaryMoveLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} from {from} to {to}'**
+  String updateDbSummaryMoveLine(Object count, Object from, Object to);
+
   /// No description provided for @startVamLabel.
   ///
   /// In en, this message translates to:

@@ -10,7 +10,9 @@ use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
 use chrono::{DateTime, Local};
 use regex::Regex;
-use std::collections::HashSet;
+use serde::Serialize;
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -32,6 +34,61 @@ const MISSING_LINK_DIR: &str = "___MissingVarLink___";
 const TEMP_LINK_DIR: &str = "___TempVarLink___";
 const VARS_FOR_INSTALL_FILE: &str = "varsForInstall.txt";
 
+#[derive(Default)]
+struct MoveCounter {
+    counts: HashMap<(PathBuf, PathBuf), u64>,
+}
+
+impl MoveCounter {
+    fn add(&mut self, from: &Path, to: &Path, count: u64) {
+        if count == 0 {
+            return;
+        }
+        let key = (from.to_path_buf(), to.to_path_buf());
+        *self.counts.entry(key).or_insert(0) += count;
+    }
+
+    fn to_summary(&self) -> Vec<MoveSummary> {
+        let mut items: Vec<MoveSummary> = self
+            .counts
+            .iter()
+            .map(|((from, to), count)| MoveSummary {
+                from: from.display().to_string(),
+                to: to.display().to_string(),
+                count: *count,
+            })
+            .collect();
+        items.sort_by(|a, b| {
+            let from_cmp = a.from.cmp(&b.from);
+            if from_cmp == Ordering::Equal {
+                a.to.cmp(&b.to)
+            } else {
+                from_cmp
+            }
+        });
+        items
+    }
+}
+
+#[derive(Default)]
+struct TidyStats {
+    scanned: usize,
+    moves: MoveCounter,
+}
+
+#[derive(Serialize)]
+struct MoveSummary {
+    from: String,
+    to: String,
+    count: u64,
+}
+
+#[derive(Serialize)]
+struct UpdateDbSummary {
+    scanned: usize,
+    moves: Vec<MoveSummary>,
+}
+
 pub async fn run_update_db_job(state: AppState, reporter: JobReporter) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         update_db_blocking(&state, &reporter)
@@ -43,6 +100,8 @@ pub async fn run_update_db_job(state: AppState, reporter: JobReporter) -> Result
 fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
     let overall_start = std::time::Instant::now();
     let (varspath, vampath) = config_paths(state)?;
+    let tidied_dir = varspath.join(TIDIED_DIR);
+    let not_comply_dir = varspath.join(NOT_COMPLY_DIR);
     reporter.log(format!("UpdateDB started: varspath={}", varspath.display()));
     reporter.progress(1);
 
@@ -50,6 +109,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         Some(vampath) => collect_addonpackages_vars(vampath),
         None => Vec::new(),
     };
+    let addon_root = vampath.as_ref().map(|vampath| vampath.join("AddonPackages"));
 
     let mut vars_for_install = load_vars_for_install();
     for varfile in &addon_vars {
@@ -66,9 +126,10 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     save_vars_for_install(&vars_for_install)?;
 
     reporter.log("Phase 1/5: Tidying VAR files...".to_string());
-    tidy_vars(
+    let mut tidy_stats = tidy_vars(
         &varspath,
         if vampath.is_some() { Some(&addon_vars) } else { None },
+        addon_root.as_deref(),
         reporter,
     )?;
     reporter.progress(10);
@@ -78,7 +139,6 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     let db_path = crate::infra::db::default_path();
     reporter.log(format!("DB ready: {}", db_path.display()));
 
-    let tidied_dir = varspath.join(TIDIED_DIR);
     let var_files = collect_var_files(
         &tidied_dir,
         &[
@@ -92,6 +152,11 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     );
     if var_files.is_empty() {
         reporter.log("No VAR files found under tidied directory".to_string());
+        let summary = UpdateDbSummary {
+            scanned: tidy_stats.scanned,
+            moves: tidy_stats.moves.to_summary(),
+        };
+        reporter.set_result(serde_json::to_value(summary).map_err(|err| err.to_string())?);
         reporter.progress(100);
         return Ok(());
     }
@@ -109,7 +174,8 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     let vampath_async = vampath.clone();
     let dependency_regex = dependency_regex.clone();
     let var_files = var_files.clone();
-    handle.block_on(async move {
+    let invalid_to_not_comply = handle.block_on(async move {
+        let mut invalid_moves = 0u64;
         let mut exist_vars: HashSet<String> = HashSet::new();
         let mut tx = pool_for_tx.begin().await.map_err(|err| err.to_string())?;
         let total_vars = var_files.len();
@@ -147,11 +213,13 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                 Err(ProcessError::NotComply(err)) => {
                     reporter_async.log(err);
                     move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                    invalid_moves += 1;
                     continue;
                 }
                 Err(ProcessError::InvalidPackage(err)) => {
                     reporter_async.log(err);
                     move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                    invalid_moves += 1;
                     continue;
                 }
                 Err(ProcessError::Io(err)) => return Err(err),
@@ -179,8 +247,12 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         cleanup_missing_vars(&mut tx, &exist_vars, &varspath_async, &reporter_async).await?;
         reporter_async.log("Phase 3/5: Committing database changes...".to_string());
         tx.commit().await.map_err(|err| err.to_string())?;
-        Ok::<(), String>(())
+        Ok::<u64, String>(invalid_moves)
     })?;
+
+    tidy_stats
+        .moves
+        .add(&tidied_dir, &not_comply_dir, invalid_to_not_comply);
 
     reporter.progress(90);
 
@@ -241,6 +313,12 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     } else {
         reporter.log("vampath not set; skip UpdateVarsInstalled/RescanPackages".to_string());
     }
+
+    let summary = UpdateDbSummary {
+        scanned: tidy_stats.scanned,
+        moves: tidy_stats.moves.to_summary(),
+    };
+    reporter.set_result(serde_json::to_value(summary).map_err(|err| err.to_string())?);
 
     reporter.progress(100);
     let total_elapsed = overall_start.elapsed();
@@ -318,8 +396,10 @@ fn collect_hide_fav_records(
 fn tidy_vars(
     varspath: &Path,
     addon_vars: Option<&[PathBuf]>,
+    addon_root: Option<&Path>,
     reporter: &JobReporter,
-) -> Result<(), String> {
+) -> Result<TidyStats, String> {
+    let mut stats = TidyStats::default();
     let tidied_path = varspath.join(TIDIED_DIR);
     let redundant_path = varspath.join(REDUNDANT_DIR);
     let not_comply_path = varspath.join(NOT_COMPLY_DIR);
@@ -347,6 +427,7 @@ fn tidy_vars(
     }
 
     let total = vars.len();
+    stats.scanned = total;
     let start_time = std::time::Instant::now();
 
     for (idx, varfile) in vars.into_iter().enumerate() {
@@ -356,7 +437,13 @@ fn tidy_vars(
         if fs_util::is_symlink(&varfile) {
             continue;
         }
+        let source_root: &Path = match addon_root {
+            Some(root) if varfile.starts_with(root) => root,
+            _ => varspath,
+        };
+
         if !comply_var_file(&varfile) {
+            stats.moves.add(source_root, &not_comply_path, 1);
             move_to_not_comply(varspath, &varfile, reporter)?;
             continue;
         }
@@ -367,6 +454,7 @@ fn tidy_vars(
             .unwrap_or_default();
         let parts: Vec<&str> = varname.split('.').collect();
         if parts.len() != 3 {
+            stats.moves.add(source_root, &not_comply_path, 1);
             move_to_not_comply(varspath, &varfile, reporter)?;
             continue;
         }
@@ -379,6 +467,7 @@ fn tidy_vars(
         let dest = creator_path.join(&filename);
         if dest.exists() {
             let redundant_dest = unique_path(&redundant_path, &filename);
+            stats.moves.add(source_root, &redundant_path, 1);
             reporter.log(format!(
                 "{} has same filename in tidy dir, moved to {}",
                 varfile.display(),
@@ -386,6 +475,7 @@ fn tidy_vars(
             ));
             move_file(&varfile, &redundant_dest)?;
         } else {
+            stats.moves.add(source_root, &tidied_path, 1);
             move_file(&varfile, &dest)?;
         }
 
@@ -403,7 +493,7 @@ fn tidy_vars(
         }
     }
     reporter.log(format!("TidyVars completed: {} files processed", total));
-    Ok(())
+    Ok(stats)
 }
 
 fn collect_var_files(root: &Path, exclude_dirs: &[&str], follow_links: bool) -> Vec<PathBuf> {
@@ -689,7 +779,9 @@ fn process_var_file(
 
     let file = File::open(var_file).map_err(|err| ProcessError::Io(err.to_string()))?;
     let reader = BufReader::new(file);
-    let mut zip = ZipArchive::new(reader).map_err(|err| ProcessError::Io(err.to_string()))?;
+    let mut zip = ZipArchive::new(reader).map_err(|err| {
+        ProcessError::InvalidPackage(format!("zip open failed: {}", err))
+    })?;
 
     let meta_json = read_meta_json(&mut zip).map_err(ProcessError::InvalidPackage)?;
     let meta_date = meta_json.meta_date;
@@ -700,7 +792,9 @@ fn process_var_file(
 
     for i in 0..zip.len() {
         let entry_name = {
-            let entry = zip.by_index(i).map_err(|err| ProcessError::Io(err.to_string()))?;
+            let entry = zip.by_index(i).map_err(|err| {
+                ProcessError::InvalidPackage(format!("zip entry read failed: {}", err))
+            })?;
             if entry.is_dir() {
                 continue;
             }

@@ -477,6 +477,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'Scan vars, extract previews, and update the database.';
 
   @override
+  String get updateDbRequiredTitle => 'Update DB required';
+
+  @override
+  String updateDbRequiredMessage(Object path) {
+    return 'AddonPackages at $path is not a symlink. Run Update DB before switching packs.';
+  }
+
+  @override
+  String get updateDbSummaryTitle => 'Update DB completed';
+
+  @override
+  String updateDbSummaryScanned(Object count) {
+    return 'Scanned $count packages.';
+  }
+
+  @override
+  String get updateDbSummaryEmpty => 'No packages moved.';
+
+  @override
+  String updateDbSummaryMoveLine(Object count, Object from, Object to) {
+    return '$count from $from to $to';
+  }
+
+  @override
   String get startVamLabel => 'Start VaM';
 
   @override

@@ -472,6 +472,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateDbTooltip => '扫描 Vars、提取预览并更新数据库。';
 
   @override
+  String get updateDbRequiredTitle => '需要更新数据库';
+
+  @override
+  String updateDbRequiredMessage(Object path) {
+    return '检测到 AddonPackages 不是符号链接（$path）。请先执行更新数据库。';
+  }
+
+  @override
+  String get updateDbSummaryTitle => '更新数据库完成';
+
+  @override
+  String updateDbSummaryScanned(Object count) {
+    return '扫描到 $count 个包。';
+  }
+
+  @override
+  String get updateDbSummaryEmpty => '没有需要移动的包。';
+
+  @override
+  String updateDbSummaryMoveLine(Object count, Object from, Object to) {
+    return '$count 从 $from 移动到 $to';
+  }
+
+  @override
   String get startVamLabel => '启动 VaM';
 
   @override
