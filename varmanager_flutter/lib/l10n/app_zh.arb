@@ -504,6 +504,8 @@
   "bootstrapCheckStatusPending": "等待",
   "bootstrapTourHomeTitle": "主页：筛选 + PackSwitch",
   "bootstrapTourHomeBody": "更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。(如果你是varManager新用户, 请注意执行此操作会永久改变varspath内的*.var包组织结构)",
+  "bootstrapTourHomeBodyIntro": "更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。",
+  "bootstrapTourHomeBodyWarning": "（请注意执行此操作会永久改变varspath内的*.var包组织结构）",
   "bootstrapTourScenesTitle": "Scenes：三列拖拽",
   "bootstrapTourScenesBody": "Hide/Normal/Fav 三列拖拽整理，支持位置筛选和清理缓存。",
   "bootstrapTourHubTagsTitle": "Hub：标签与快捷筛选",

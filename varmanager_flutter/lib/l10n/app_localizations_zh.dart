@@ -1642,6 +1642,14 @@ class AppLocalizationsZh extends AppLocalizations {
       '更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。(如果你是varManager新用户, 请注意执行此操作会永久改变varspath内的*.var包组织结构)';
 
   @override
+  String get bootstrapTourHomeBodyIntro =>
+      '更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。';
+
+  @override
+  String get bootstrapTourHomeBodyWarning =>
+      '（请注意执行此操作会永久改变varspath内的*.var包组织结构）';
+
+  @override
   String get bootstrapTourScenesTitle => 'Scenes：三列拖拽';
 
   @override

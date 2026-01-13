@@ -796,6 +796,8 @@
   "bootstrapCheckStatusPending": "Pending",
   "bootstrapTourHomeTitle": "Home: Filters + PackSwitch",
   "bootstrapTourHomeBody": "Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)",
+  "bootstrapTourHomeBodyIntro": "Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs.",
+  "bootstrapTourHomeBodyWarning": "(If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)",
   "bootstrapTourScenesTitle": "Scenes: 3-column board",
   "bootstrapTourScenesBody": "Scenes are split into Hide/Normal/Fav; drag cards to organize, filter by location, and clear cache when needed.",
   "bootstrapTourHubTagsTitle": "Hub: Tags + quick filters",

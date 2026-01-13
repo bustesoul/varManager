@@ -311,6 +311,21 @@ class _BootstrapTourCoachState extends ConsumerState<BootstrapTourCoach> {
     final onBack = hasPreviousBootstrapStep(step)
         ? () => _handleBack()
         : null;
+    final InlineSpan? messageSpan = step == BootstrapStep.tourHome
+        ? TextSpan(
+            children: [
+              TextSpan(text: l10n.bootstrapTourHomeBodyIntro),
+              const TextSpan(text: '\n'),
+              TextSpan(
+                text: l10n.bootstrapTourHomeBodyWarning,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          )
+        : null;
     return TargetFocus(
       identify: step.name,
       keyTarget: keyTarget,
@@ -338,6 +353,7 @@ class _BootstrapTourCoachState extends ConsumerState<BootstrapTourCoach> {
                 child: _CoachBubble(
                   title: data.title,
                   message: data.body,
+                  messageSpan: messageSpan,
                   onBack: onBack,
                   onNext: _handleNext,
                   onSkip: _handleSkip,
@@ -461,6 +477,7 @@ class _CoachBubble extends StatelessWidget {
   const _CoachBubble({
     required this.title,
     required this.message,
+    this.messageSpan,
     required this.onNext,
     required this.onSkip,
     required this.nextLabel,
@@ -471,6 +488,7 @@ class _CoachBubble extends StatelessWidget {
 
   final String title;
   final String message;
+  final InlineSpan? messageSpan;
   final VoidCallback onNext;
   final VoidCallback onSkip;
   final VoidCallback? onBack;
@@ -492,7 +510,7 @@ class _CoachBubble extends StatelessWidget {
           children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            Text(message),
+            messageSpan == null ? Text(message) : Text.rich(messageSpan!),
             const SizedBox(height: 12),
             Row(
               children: [
