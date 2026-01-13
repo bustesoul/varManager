@@ -352,10 +352,20 @@ fn log_update_db_summary(stats: &TidyStats, reporter: &JobReporter) {
         stats.scanned, total_moved
     ));
     for item in stats.moves.to_summary() {
+        let status = move_status_label(&item.to);
         reporter.log(format!(
-            "Moved {} from {} to {}",
-            item.count, item.from, item.to
+            "{}: Move {} from {} to {}",
+            status, item.count, item.from, item.to
         ));
+    }
+}
+
+fn move_status_label(dest: &str) -> &'static str {
+    let dest_lc = dest.to_ascii_lowercase();
+    if dest_lc.ends_with(&NOT_COMPLY_DIR.to_ascii_lowercase()) {
+        "Invalid"
+    } else {
+        "Succeed"
     }
 }
 
