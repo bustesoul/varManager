@@ -39,6 +39,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _showAdvancedFilters = false;
   _ActionGroup _actionGroup = _ActionGroup.core;
   String _missingDepsScope = 'installed';
+  bool _updateDbFullRescan = false;
 
   static const Duration _tooltipDelay = Duration(seconds: 1);
 
@@ -821,7 +822,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                 onPressed: isBusy
                     ? null
                     : () async {
-                        await _runJob('update_db');
+                        await _runJob(
+                          'update_db',
+                          args: _updateDbFullRescan
+                              ? const {'full_rescan': true}
+                              : null,
+                        );
                         ref.invalidate(varsListProvider);
                       },
                 icon: const Icon(Icons.sync),
@@ -830,6 +836,20 @@ class _HomePageState extends ConsumerState<HomePage> {
                   visualDensity: VisualDensity.compact,
                   padding: compactPadding,
                 ),
+              ),
+            ),
+            _withTooltip(
+              l10n.updateDbFullRescanTooltip,
+              FilterChip(
+                label: Text(l10n.updateDbFullRescanLabel),
+                selected: _updateDbFullRescan,
+                onSelected: isBusy
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _updateDbFullRescan = value;
+                        });
+                      },
               ),
             ),
             _withTooltip(

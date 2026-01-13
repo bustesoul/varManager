@@ -60,23 +60,29 @@ pub async fn dispatch(
             }
             Ok(())
         }
-        "update_db" => update_db::run_update_db_job(state.clone(), reporter.clone()).await,
+        "update_db" => update_db::run_update_db_job(state.clone(), reporter.clone(), args).await,
         "missing_deps" => {
             missing_deps::run_missing_deps_job(state.clone(), reporter.clone(), args).await
         }
-        "rebuild_links" => links::run_rebuild_links_job(state.clone(), reporter.clone(), args).await,
+        "rebuild_links" => {
+            links::run_rebuild_links_job(state.clone(), reporter.clone(), args).await
+        }
         "links_move" => links::run_move_links_job(state.clone(), reporter.clone(), args).await,
         "links_missing_create" => {
             links::run_missing_links_create_job(state.clone(), reporter.clone(), args).await
         }
-        "install_vars" => vars_jobs::run_install_vars_job(state.clone(), reporter.clone(), args).await,
+        "install_vars" => {
+            vars_jobs::run_install_vars_job(state.clone(), reporter.clone(), args).await
+        }
         "preview_uninstall" => {
             vars_jobs::run_preview_uninstall_job(state.clone(), reporter.clone(), args).await
         }
         "uninstall_vars" => {
             vars_jobs::run_uninstall_vars_job(state.clone(), reporter.clone(), args).await
         }
-        "delete_vars" => vars_jobs::run_delete_vars_job(state.clone(), reporter.clone(), args).await,
+        "delete_vars" => {
+            vars_jobs::run_delete_vars_job(state.clone(), reporter.clone(), args).await
+        }
         "vars_export_installed" => {
             vars_misc::run_export_installed_job(state.clone(), reporter.clone(), args).await
         }
@@ -92,7 +98,9 @@ pub async fn dispatch(
         }
         "saves_deps" => deps_jobs::run_saves_deps_job(state.clone(), reporter.clone(), args).await,
         "log_deps" => deps_jobs::run_log_deps_job(state.clone(), reporter.clone(), args).await,
-        "fix_previews" => preview_jobs::run_fix_previews_job(state.clone(), reporter.clone(), args).await,
+        "fix_previews" => {
+            preview_jobs::run_fix_previews_job(state.clone(), reporter.clone(), args).await
+        }
         "stale_vars" => stale_jobs::run_stale_vars_job(state.clone(), reporter.clone(), args).await,
         "old_version_vars" => {
             stale_jobs::run_old_version_vars_job(state.clone(), reporter.clone(), args).await
@@ -109,9 +117,15 @@ pub async fn dispatch(
         "packswitch_set" => {
             packswitch::run_packswitch_set_job(state.clone(), reporter.clone(), args).await
         }
-        "hub_missing_scan" => hub::run_hub_missing_scan_job(state.clone(), reporter.clone(), args).await,
-        "hub_updates_scan" => hub::run_hub_updates_scan_job(state.clone(), reporter.clone(), args).await,
-        "hub_download_all" => hub::run_hub_download_all_job(state.clone(), reporter.clone(), args).await,
+        "hub_missing_scan" => {
+            hub::run_hub_missing_scan_job(state.clone(), reporter.clone(), args).await
+        }
+        "hub_updates_scan" => {
+            hub::run_hub_updates_scan_job(state.clone(), reporter.clone(), args).await
+        }
+        "hub_download_all" => {
+            hub::run_hub_download_all_job(state.clone(), reporter.clone(), args).await
+        }
         "hub_info" => hub::run_hub_info_job(state.clone(), reporter.clone()).await,
         "hub_resources" => hub::run_hub_resources_job(state.clone(), reporter.clone(), args).await,
         "hub_resource_detail" => {
@@ -127,7 +141,9 @@ pub async fn dispatch(
             torrents::run_torrent_download_job(state.clone(), reporter.clone(), args).await
         }
         "scene_load" => scenes::run_scene_load_job(state.clone(), reporter.clone(), args).await,
-        "scene_analyze" => scenes::run_scene_analyze_job(state.clone(), reporter.clone(), args).await,
+        "scene_analyze" => {
+            scenes::run_scene_analyze_job(state.clone(), reporter.clone(), args).await
+        }
         "scene_preset_look" => {
             scenes::run_scene_preset_look_job(state.clone(), reporter.clone(), args).await
         }
@@ -143,7 +159,9 @@ pub async fn dispatch(
         "scene_preset_scene" => {
             scenes::run_scene_preset_scene_job(state.clone(), reporter.clone(), args).await
         }
-        "scene_add_atoms" => scenes::run_scene_add_atoms_job(state.clone(), reporter.clone(), args).await,
+        "scene_add_atoms" => {
+            scenes::run_scene_add_atoms_job(state.clone(), reporter.clone(), args).await
+        }
         "scene_add_subscene" => {
             scenes::run_scene_add_subscene_job(state.clone(), reporter.clone(), args).await
         }

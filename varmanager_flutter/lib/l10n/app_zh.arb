@@ -149,6 +149,8 @@
   "actionGroupMaintenanceTooltip": "清理与维护任务。",
   "updateDbLabel": "更新数据库",
   "updateDbTooltip": "扫描 Vars、提取预览并更新数据库。",
+  "updateDbFullRescanLabel": "全量重扫",
+  "updateDbFullRescanTooltip": "强制扫描所有 VAR（禁用增量跳过）。",
   "startVamLabel": "启动 VaM",
   "startVamTooltip": "启动 VaM 应用。",
   "prepareSavesLabel": "准备存档",

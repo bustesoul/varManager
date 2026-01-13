@@ -149,6 +149,8 @@
   "actionGroupMaintenanceTooltip": "Cleanup and maintenance jobs.",
   "updateDbLabel": "Update DB",
   "updateDbTooltip": "Scan vars, extract previews, and update the database.",
+  "updateDbFullRescanLabel": "Full rescan",
+  "updateDbFullRescanTooltip": "Force scanning all VARs (disable incremental skip).",
   "startVamLabel": "Start VaM",
   "startVamTooltip": "Launch the VaM application.",
   "prepareSavesLabel": "Prepare Saves",

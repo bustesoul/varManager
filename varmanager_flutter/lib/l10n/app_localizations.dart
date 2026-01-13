@@ -992,6 +992,18 @@ abstract class AppLocalizations {
   /// **'Scan vars, extract previews, and update the database.'**
   String get updateDbTooltip;
 
+  /// No description provided for @updateDbFullRescanLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Full rescan'**
+  String get updateDbFullRescanLabel;
+
+  /// No description provided for @updateDbFullRescanTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Force scanning all VARs (disable incremental skip).'**
+  String get updateDbFullRescanTooltip;
+
   /// No description provided for @startVamLabel.
   ///
   /// In en, this message translates to:

@@ -1,23 +1,24 @@
+use crate::app::AppState;
+use crate::domain::var_logic::vars_dependencies;
 use crate::infra::db::{
     delete_var_related, list_vars, replace_dependencies, replace_hide_fav, replace_scenes,
     upsert_install_status, upsert_var, var_exists_conn, HideFavRecord, SceneRecord, VarRecord,
 };
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::resolve_var_file_path;
-use crate::domain::var_logic::vars_dependencies;
-use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
+use crate::jobs::job_channel::JobReporter;
 use chrono::{DateTime, Local};
 use regex::Regex;
-use std::collections::HashSet;
+use serde_json::Value;
+use sqlx::{Sqlite, SqlitePool, Transaction};
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use walkdir::WalkDir;
 use zip::ZipArchive;
-use sqlx::{Sqlite, SqlitePool, Transaction};
 
 const TIDIED_DIR: &str = "___VarTidied___";
 const REDUNDANT_DIR: &str = "___VarRedundant___";
@@ -32,19 +33,34 @@ const MISSING_LINK_DIR: &str = "___MissingVarLink___";
 const TEMP_LINK_DIR: &str = "___TempVarLink___";
 const VARS_FOR_INSTALL_FILE: &str = "varsForInstall.txt";
 
-pub async fn run_update_db_job(state: AppState, reporter: JobReporter) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        update_db_blocking(&state, &reporter)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+pub async fn run_update_db_job(
+    state: AppState,
+    reporter: JobReporter,
+    args: Option<Value>,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || update_db_blocking(&state, &reporter, args))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
-fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
+fn update_db_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: Option<Value>,
+) -> Result<(), String> {
     let overall_start = std::time::Instant::now();
     let (varspath, vampath) = config_paths(state)?;
     reporter.log(format!("UpdateDB started: varspath={}", varspath.display()));
     reporter.progress(1);
+
+    let full_rescan = args
+        .as_ref()
+        .and_then(|v| v.get("full_rescan"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if full_rescan {
+        reporter.log("UpdateDB: full_rescan=true (incremental skip disabled)".to_string());
+    }
 
     let addon_vars = match vampath.as_ref() {
         Some(vampath) => collect_addonpackages_vars(vampath),
@@ -68,7 +84,11 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     reporter.log("Phase 1/5: Tidying VAR files...".to_string());
     tidy_vars(
         &varspath,
-        if vampath.is_some() { Some(&addon_vars) } else { None },
+        if vampath.is_some() {
+            Some(&addon_vars)
+        } else {
+            None
+        },
         reporter,
     )?;
     reporter.progress(10);
@@ -96,7 +116,10 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         return Ok(());
     }
 
-    reporter.log(format!("Phase 2/5: Processing {} VAR files into database...", var_files.len()));
+    reporter.log(format!(
+        "Phase 2/5: Processing {} VAR files into database...",
+        var_files.len()
+    ));
 
     let dependency_regex = Regex::new(
         r#"\x22(([^\r\n\x22\x3A\x2E]{1,60})\x2E([^\r\n\x22\x3A\x2E]{1,80})\x2E(\d+|latest))(\x22?\s*)\x3A"#,
@@ -112,8 +135,25 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     handle.block_on(async move {
         let mut exist_vars: HashSet<String> = HashSet::new();
         let mut tx = pool_for_tx.begin().await.map_err(|err| err.to_string())?;
+
+        let existing_signatures: HashMap<String, (Option<String>, Option<f64>)> = if full_rescan {
+            HashMap::new()
+        } else {
+            let rows = sqlx::query_as::<_, (String, Option<String>, Option<f64>)>(
+                "SELECT varName, varDate, fsize FROM vars",
+            )
+            .fetch_all(tx.as_mut())
+            .await
+            .map_err(|err| err.to_string())?;
+            rows.into_iter()
+                .map(|(name, date, size)| (name, (date, size)))
+                .collect()
+        };
+
         let total_vars = var_files.len();
         let start_time = std::time::Instant::now();
+        let mut skipped = 0usize;
+        let mut processed_count = 0usize;
 
         for (idx, var_file) in var_files.iter().enumerate() {
             let basename = match var_file.file_stem() {
@@ -134,25 +174,76 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                 }
             }
 
+            // Incremental: skip unchanged VARs to make "copy new release over old" fast.
+            if !full_rescan {
+                if let Ok(meta) = std::fs::metadata(var_file) {
+                    let var_date = meta.modified().ok().map(format_system_time);
+                    let fsize_mb = meta.len() as f64 / (1024.0 * 1024.0);
+                    if let Some((db_var_date, db_fsize)) = existing_signatures.get(&basename) {
+                        let date_matches = match (db_var_date.as_deref(), var_date.as_deref()) {
+                            (Some(a), Some(b)) => a == b,
+                            _ => false,
+                        };
+                        let size_matches = match db_fsize {
+                            Some(s) => (s - fsize_mb).abs() < 1e-9,
+                            None => false,
+                        };
+                        if date_matches && size_matches {
+                            skipped += 1;
+                            let progress = 10 + ((idx + 1) * 80 / total_vars) as u8;
+                            if idx % 200 == 0 || idx + 1 == total_vars {
+                                let elapsed = start_time.elapsed().as_secs_f64();
+                                let speed =
+                                    if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
+                                let remaining = if speed > 0.0 {
+                                    (total_vars - idx - 1) as f64 / speed
+                                } else {
+                                    0.0
+                                };
+
+                                reporter_async.progress(progress.min(90));
+                                reporter_async.log(format!(
+                                    "Scanning VARs: {}/{} ({:.1}%) | Processed: {} | Skipped: {} | Speed: {:.1} VAR/s | ETA: {:.0}s | Current: {}",
+                                    idx + 1,
+                                    total_vars,
+                                    (idx + 1) as f64 / total_vars as f64 * 100.0,
+                                    processed_count,
+                                    skipped,
+                                    speed,
+                                    remaining,
+                                    basename
+                                ));
+                            }
+                            continue;
+                        }
+                    }
+                }
+            }
+
             let result = process_var_file(&dependency_regex, &varspath_async, var_file);
             match result {
-                Ok(processed) => {
-                    upsert_var(&mut tx, &processed.var_record).await?;
+                Ok(processed_var) => {
+                    processed_count += 1;
+                    upsert_var(&mut tx, &processed_var.var_record).await?;
                     replace_dependencies(
                         &mut tx,
-                        &processed.var_record.var_name,
-                        &processed.dependencies,
+                        &processed_var.var_record.var_name,
+                        &processed_var.dependencies,
                     )
                     .await?;
-                    replace_scenes(&mut tx, &processed.var_record.var_name, &processed.scenes)
+                    replace_scenes(
+                        &mut tx,
+                        &processed_var.var_record.var_name,
+                        &processed_var.scenes,
+                    )
                         .await?;
                     if let Some(vampath) = vampath_async.as_ref() {
                         let entries = collect_hide_fav_records(
                             vampath,
-                            &processed.var_record.var_name,
-                            &processed.scenes,
+                            &processed_var.var_record.var_name,
+                            &processed_var.scenes,
                         );
-                        replace_hide_fav(&mut tx, &processed.var_record.var_name, &entries)
+                        replace_hide_fav(&mut tx, &processed_var.var_record.var_name, &entries)
                             .await?;
                     }
                 }
@@ -189,9 +280,11 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
 
                 reporter_async.progress(progress.min(90));
                 reporter_async.log(format!(
-                    "Processing VARs: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s | Current: {}",
+                    "Scanning VARs: {}/{} ({:.1}%) | Processed: {} | Skipped: {} | Speed: {:.1} VAR/s | ETA: {:.0}s | Current: {}",
                     idx + 1, total_vars,
                     (idx + 1) as f64 / total_vars as f64 * 100.0,
+                    processed_count,
+                    skipped,
                     speed,
                     remaining,
                     basename
@@ -231,13 +324,22 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                 if total > 0 && (idx % 20 == 0 || idx + 1 == total) {
                     let progress = 90 + ((idx + 1) * 5 / total) as u8;
                     let elapsed = start_time.elapsed().as_secs_f64();
-                    let speed = if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
-                    let remaining = if speed > 0.0 { (total - idx - 1) as f64 / speed } else { 0.0 };
+                    let speed = if elapsed > 0.0 {
+                        (idx + 1) as f64 / elapsed
+                    } else {
+                        0.0
+                    };
+                    let remaining = if speed > 0.0 {
+                        (total - idx - 1) as f64 / speed
+                    } else {
+                        0.0
+                    };
 
                     reporter.progress(progress.min(95));
                     reporter.log(format!(
                         "Installing VARs: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s",
-                        idx + 1, total,
+                        idx + 1,
+                        total,
                         (idx + 1) as f64 / total as f64 * 100.0,
                         speed,
                         remaining
@@ -323,8 +425,7 @@ fn collect_hide_fav_records(
     scenes
         .iter()
         .filter_map(|scene| {
-            let (hide, fav) =
-                read_hide_fav_for_scene(vampath, var_name, &scene.scene_path);
+            let (hide, fav) = read_hide_fav_for_scene(vampath, var_name, &scene.scene_path);
             if hide || fav {
                 Some(HideFavRecord {
                     scene_path: scene.scene_path.clone(),
@@ -414,11 +515,20 @@ fn tidy_vars(
 
         if idx % 200 == 0 && total > 0 {
             let elapsed = start_time.elapsed().as_secs_f64();
-            let speed = if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
-            let remaining = if speed > 0.0 { (total - idx - 1) as f64 / speed } else { 0.0 };
+            let speed = if elapsed > 0.0 {
+                (idx + 1) as f64 / elapsed
+            } else {
+                0.0
+            };
+            let remaining = if speed > 0.0 {
+                (total - idx - 1) as f64 / speed
+            } else {
+                0.0
+            };
             reporter.log(format!(
                 "TidyVars: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s",
-                idx + 1, total,
+                idx + 1,
+                total,
                 (idx + 1) as f64 / total as f64 * 100.0,
                 speed,
                 remaining
@@ -467,10 +577,7 @@ fn move_to_not_comply(varspath: &Path, src: &Path, reporter: &JobReporter) -> Re
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown.var".to_string());
     let dest = unique_path(&not_comply_path, &filename);
-    reporter.log(format!(
-        "Move non-compliant var to {}",
-        dest.display()
-    ));
+    reporter.log(format!("Move non-compliant var to {}", dest.display()));
     move_file(src, &dest)
 }
 
@@ -674,7 +781,6 @@ enum ProcessError {
     Io(String),
 }
 
-
 fn is_invalid_var_archive(err: &str) -> bool {
     let err_lc = err.to_lowercase();
     err_lc.contains("invalid local file header")
@@ -710,10 +816,7 @@ fn process_var_file(
     let version = parts[2].to_string();
 
     let meta = fs::metadata(var_file).map_err(|err| ProcessError::Io(err.to_string()))?;
-    let var_date = meta
-        .modified()
-        .ok()
-        .map(format_system_time);
+    let var_date = meta.modified().ok().map(format_system_time);
 
     // Calculate file size in MB
     let fsize_mb = meta.len() as f64 / (1024.0 * 1024.0);
@@ -731,7 +834,9 @@ fn process_var_file(
 
     for i in 0..zip.len() {
         let entry_name = {
-            let entry = zip.by_index(i).map_err(|err| ProcessError::Io(err.to_string()))?;
+            let entry = zip
+                .by_index(i)
+                .map_err(|err| ProcessError::Io(err.to_string()))?;
             if entry.is_dir() {
                 continue;
             }
@@ -743,15 +848,8 @@ fn process_var_file(
             let (typename, is_preset) = entry_info;
             let count = counts.bump(typename);
 
-            let preview_pic = extract_preview(
-                &mut zip,
-                &entry_name,
-                varspath,
-                basename,
-                typename,
-                count,
-            )
-            .ok();
+            let preview_pic =
+                extract_preview(&mut zip, &entry_name, varspath, basename, typename, count).ok();
 
             if is_scene_record_type(typename) {
                 scenes.push(SceneRecord {
@@ -820,10 +918,7 @@ async fn cleanup_missing_vars(
         if !exist_vars.contains(&var_name) {
             delete_var_related(tx, &var_name).await?;
             if let Err(err) = delete_preview_pics(varspath, &var_name) {
-                reporter.log(format!(
-                    "delete preview pics failed {} ({})",
-                    var_name, err
-                ));
+                reporter.log(format!("delete preview pics failed {} ({})", var_name, err));
             }
             removed += 1;
         }
@@ -836,7 +931,14 @@ async fn cleanup_missing_vars(
 
 fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
     let types = [
-        "scenes", "looks", "hairstyle", "clothing", "assets", "morphs", "skin", "pose",
+        "scenes",
+        "looks",
+        "hairstyle",
+        "clothing",
+        "assets",
+        "morphs",
+        "skin",
+        "pose",
     ];
     for typename in types {
         let dir = varspath.join(PREVIEW_DIR).join(typename).join(var_name);
@@ -861,7 +963,10 @@ fn read_meta_json(zip: &mut ZipArchive<BufReader<File>>) -> Result<MetaJson, Str
     entry
         .read_to_string(&mut contents)
         .map_err(|err| err.to_string())?;
-    Ok(MetaJson { meta_date, contents })
+    Ok(MetaJson {
+        meta_date,
+        contents,
+    })
 }
 
 struct MetaJson {
@@ -980,7 +1085,9 @@ fn extract_preview(
     typename: &str,
     count: usize,
 ) -> Result<String, String> {
-    let dot = entry_name.rfind('.').ok_or_else(|| "no extension".to_string())?;
+    let dot = entry_name
+        .rfind('.')
+        .ok_or_else(|| "no extension".to_string())?;
     let jpg_entry = format!("{}{}", &entry_name[..dot], ".jpg");
     let mut jpg = zip
         .by_name(&jpg_entry)

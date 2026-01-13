@@ -472,6 +472,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateDbTooltip => '扫描 Vars、提取预览并更新数据库。';
 
   @override
+  String get updateDbFullRescanLabel => '全量重扫';
+
+  @override
+  String get updateDbFullRescanTooltip => '强制扫描所有 VAR（禁用增量跳过）。';
+
+  @override
   String get startVamLabel => '启动 VaM';
 
   @override

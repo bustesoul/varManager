@@ -477,6 +477,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Scan vars, extract previews, and update the database.';
 
   @override
+  String get updateDbFullRescanLabel => 'Full rescan';
+
+  @override
+  String get updateDbFullRescanTooltip =>
+      'Force scanning all VARs (disable incremental skip).';
+
+  @override
   String get startVamLabel => 'Start VaM';
 
   @override
