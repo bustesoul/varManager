@@ -48,6 +48,10 @@ impl MoveCounter {
         *self.counts.entry(key).or_insert(0) += count;
     }
 
+    fn total(&self) -> u64 {
+        self.counts.values().copied().sum()
+    }
+
     fn to_summary(&self) -> Vec<MoveSummary> {
         let mut items: Vec<MoveSummary> = self
             .counts
@@ -151,12 +155,13 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         false,
     );
     if var_files.is_empty() {
-        reporter.log("No VAR files found under tidied directory".to_string());
+            reporter.log("No VAR files found under tidied directory".to_string());
         let summary = UpdateDbSummary {
             scanned: tidy_stats.scanned,
             moves: tidy_stats.moves.to_summary(),
         };
         reporter.set_result(serde_json::to_value(summary).map_err(|err| err.to_string())?);
+        log_update_db_summary(&tidy_stats, reporter);
         reporter.progress(100);
         return Ok(());
     }
@@ -222,7 +227,15 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                     invalid_moves += 1;
                     continue;
                 }
-                Err(ProcessError::Io(err)) => return Err(err),
+                Err(ProcessError::Io(err)) => {
+                    if is_zip_error(&err) {
+                        reporter_async.log(err);
+                        move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                        invalid_moves += 1;
+                        continue;
+                    }
+                    return Err(err);
+                }
             }
 
             let progress = 10 + ((idx + 1) * 80 / total_vars) as u8;
@@ -319,6 +332,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         moves: tidy_stats.moves.to_summary(),
     };
     reporter.set_result(serde_json::to_value(summary).map_err(|err| err.to_string())?);
+    log_update_db_summary(&tidy_stats, reporter);
 
     reporter.progress(100);
     let total_elapsed = overall_start.elapsed();
@@ -329,6 +343,20 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         total_elapsed.as_secs() % 60
     ));
     Ok(())
+}
+
+fn log_update_db_summary(stats: &TidyStats, reporter: &JobReporter) {
+    let total_moved = stats.moves.total();
+    reporter.log(format!(
+        "UpdateDB summary: scanned={}, moved={}",
+        stats.scanned, total_moved
+    ));
+    for item in stats.moves.to_summary() {
+        reporter.log(format!(
+            "Moved {} from {} to {}",
+            item.count, item.from, item.to
+        ));
+    }
 }
 
 fn config_paths(state: &AppState) -> Result<(PathBuf, Option<PathBuf>), String> {
@@ -750,6 +778,11 @@ enum ProcessError {
     NotComply(String),
     InvalidPackage(String),
     Io(String),
+}
+
+fn is_zip_error(err: &str) -> bool {
+    let msg = err.to_ascii_lowercase();
+    msg.contains("zip") || msg.contains("eocd") || msg.contains("archive")
 }
 
 fn process_var_file(
