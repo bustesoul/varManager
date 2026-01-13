@@ -352,7 +352,7 @@ fn log_update_db_summary(stats: &TidyStats, reporter: &JobReporter) {
         stats.scanned, total_moved
     ));
     for item in stats.moves.to_summary() {
-        let status = move_status_label(&item.to);
+        let status = move_prefix_label(&item.to);
         reporter.log(format!(
             "{}: Move {} from {} to {}",
             status, item.count, item.from, item.to
@@ -360,13 +360,21 @@ fn log_update_db_summary(stats: &TidyStats, reporter: &JobReporter) {
     }
 }
 
-fn move_status_label(dest: &str) -> &'static str {
-    let dest_lc = dest.to_ascii_lowercase();
-    if dest_lc.ends_with(&NOT_COMPLY_DIR.to_ascii_lowercase()) {
-        "Invalid"
-    } else {
-        "Succeed"
+fn move_prefix_label(dest: &str) -> &'static str {
+    let leaf = std::path::Path::new(dest)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    if leaf.eq_ignore_ascii_case(NOT_COMPLY_DIR) {
+        return "Invalid";
     }
+    if leaf.eq_ignore_ascii_case(REDUNDANT_DIR) {
+        return "Redundant";
+    }
+    if leaf.eq_ignore_ascii_case(TIDIED_DIR) {
+        return "Succeed";
+    }
+    "Succeed"
 }
 
 fn config_paths(state: &AppState) -> Result<(PathBuf, Option<PathBuf>), String> {
