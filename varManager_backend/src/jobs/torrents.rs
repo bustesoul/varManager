@@ -74,7 +74,7 @@ async fn torrent_download_async(
     }
 
     let (varspath, _) = config_paths(state)?;
-    let temp_dir = torrent_download_dir(&varspath);
+    let temp_dir = torrent_download_dir();
     fs::create_dir_all(&temp_dir).await.map_err(|err| err.to_string())?;
 
     let torrents_root = data_dir().join("links").join("torrents");
@@ -430,6 +430,7 @@ fn unique_torrent_name(original: &str) -> String {
     format!("{}_{}", now, base)
 }
 
-fn torrent_download_dir(varspath: &Path) -> PathBuf {
-    varspath.join("down")
+fn torrent_download_dir() -> PathBuf {
+    use crate::app::app_root;
+    app_root().join("down")
 }

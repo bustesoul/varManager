@@ -122,6 +122,18 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
             };
             exist_vars.insert(basename.clone());
 
+            // Check for zero-size files
+            if let Ok(metadata) = std::fs::metadata(var_file) {
+                if metadata.len() == 0 {
+                    reporter_async.log(format!(
+                        "Moving zero-size VAR file to non-compliant: {}",
+                        var_file.display()
+                    ));
+                    move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                    continue;
+                }
+            }
+
             let result = process_var_file(&dependency_regex, &varspath_async, var_file);
             match result {
                 Ok(processed) => {
@@ -157,10 +169,11 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                 Err(ProcessError::Io(err)) => {
                     if is_invalid_var_archive(&err) {
                         reporter_async.log(format!(
-                            "Skipping invalid VAR archive {} ({})",
+                            "Moving invalid VAR archive to non-compliant: {} ({})",
                             var_file.display(),
                             err
                         ));
+                        move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
                         continue;
                     }
                     return Err(err);
