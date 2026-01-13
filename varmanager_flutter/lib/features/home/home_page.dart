@@ -1011,9 +1011,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ref.read(focusedVarProvider.notifier).setFocused(item.varName);
                     },
                     title: Text(item.varName),
-                    subtitle: Text(
-                      '${item.creatorName ?? '-'} - ${item.packageName ?? '-'} - v${item.version ?? '-'}',
-                    ),
+                    subtitle: Text(() {
+                      final sizeLabel = _formatSizeLabel(item.fsize);
+                      final parts = [
+                        item.creatorName ?? '-',
+                        item.packageName ?? '-',
+                        'v${item.version ?? '-'}',
+                        if (sizeLabel.isNotEmpty) sizeLabel,
+                      ];
+                      return parts.join(' - ');
+                    }()),
                     trailing: Wrap(
                       spacing: 8,
                       children: [
@@ -1582,6 +1589,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _formatNumber(double? value) {
     if (value == null) return '';
     return value.toString();
+  }
+
+  String _formatSizeLabel(double? sizeMb) {
+    if (sizeMb == null || sizeMb <= 0) return '';
+    final precision = sizeMb >= 10 ? 0 : 1;
+    return '${sizeMb.toStringAsFixed(precision)} MB';
   }
 
   String _formatInt(int? value) {
