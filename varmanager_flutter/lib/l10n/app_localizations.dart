@@ -1028,6 +1028,35 @@ abstract class AppLocalizations {
   /// **'{count} from {from} to {to}'**
   String updateDbSummaryMoveLine(Object count, Object from, Object to);
 
+  /// No description provided for @updateDbSummaryMoveLineStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{status}: Move {count} from {from} to {to}'**
+  String updateDbSummaryMoveLineStatus(
+    Object status,
+    Object count,
+    Object from,
+    Object to,
+  );
+
+  /// No description provided for @updateDbSummaryStatusSucceed.
+  ///
+  /// In en, this message translates to:
+  /// **'Succeed'**
+  String get updateDbSummaryStatusSucceed;
+
+  /// No description provided for @updateDbSummaryStatusInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid'**
+  String get updateDbSummaryStatusInvalid;
+
+  /// No description provided for @updateDbSummaryStatusRedundant.
+  ///
+  /// In en, this message translates to:
+  /// **'Redundant'**
+  String get updateDbSummaryStatusRedundant;
+
   /// No description provided for @startVamLabel.
   ///
   /// In en, this message translates to:

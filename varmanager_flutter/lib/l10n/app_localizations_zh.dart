@@ -496,6 +496,25 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String updateDbSummaryMoveLineStatus(
+    Object status,
+    Object count,
+    Object from,
+    Object to,
+  ) {
+    return '$status：移动 $count 个，从 $from 到 $to';
+  }
+
+  @override
+  String get updateDbSummaryStatusSucceed => '成功';
+
+  @override
+  String get updateDbSummaryStatusInvalid => '不合规';
+
+  @override
+  String get updateDbSummaryStatusRedundant => '冗余';
+
+  @override
   String get startVamLabel => '启动 VaM';
 
   @override

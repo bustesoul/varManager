@@ -155,6 +155,10 @@
   "updateDbSummaryScanned": "Scanned {count} packages.",
   "updateDbSummaryEmpty": "No packages moved.",
   "updateDbSummaryMoveLine": "{count} from {from} to {to}",
+  "updateDbSummaryMoveLineStatus": "{status}: Move {count} from {from} to {to}",
+  "updateDbSummaryStatusSucceed": "Succeed",
+  "updateDbSummaryStatusInvalid": "Invalid",
+  "updateDbSummaryStatusRedundant": "Redundant",
   "startVamLabel": "Start VaM",
   "startVamTooltip": "Launch the VaM application.",
   "prepareSavesLabel": "Prepare Saves",
@@ -579,6 +583,14 @@
   },
   "@updateDbSummaryMoveLine": {
     "placeholders": {
+      "count": {},
+      "from": {},
+      "to": {}
+    }
+  },
+  "@updateDbSummaryMoveLineStatus": {
+    "placeholders": {
+      "status": {},
       "count": {},
       "from": {},
       "to": {}

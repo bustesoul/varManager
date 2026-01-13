@@ -501,6 +501,25 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String updateDbSummaryMoveLineStatus(
+    Object status,
+    Object count,
+    Object from,
+    Object to,
+  ) {
+    return '$status: Move $count from $from to $to';
+  }
+
+  @override
+  String get updateDbSummaryStatusSucceed => 'Succeed';
+
+  @override
+  String get updateDbSummaryStatusInvalid => 'Invalid';
+
+  @override
+  String get updateDbSummaryStatusRedundant => 'Redundant';
+
+  @override
   String get startVamLabel => 'Start VaM';
 
   @override

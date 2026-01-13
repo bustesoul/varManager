@@ -9,6 +9,7 @@ import '../../core/models/job_models.dart';
 import '../../core/models/var_models.dart';
 import '../../core/utils/debounce.dart';
 import '../../widgets/lazy_dropdown_field.dart';
+import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
 import '../bootstrap/bootstrap_keys.dart';
 import '../missing_vars/missing_vars_page.dart';
@@ -1271,7 +1272,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         if (count <= 0) continue;
         final from = item['from']?.toString() ?? '';
         final to = item['to']?.toString() ?? '';
-        moveLines.add(l10n.updateDbSummaryMoveLine(count, from, to));
+        final status = _moveStatusLabel(to, l10n);
+        moveLines.add(l10n.updateDbSummaryMoveLineStatus(status, count, from, to));
       }
     }
     if (!mounted) return;
@@ -1595,6 +1597,18 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (sizeMb == null || sizeMb <= 0) return '';
     final precision = sizeMb >= 10 ? 0 : 1;
     return '${sizeMb.toStringAsFixed(precision)} MB';
+  }
+
+  String _moveStatusLabel(String dest, AppLocalizations l10n) {
+    final normalized = dest.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    final leaf = normalized.isEmpty ? '' : normalized.split('/').last.toLowerCase();
+    if (leaf == '___varnotcomplyrule___') {
+      return l10n.updateDbSummaryStatusInvalid;
+    }
+    if (leaf == '___varredundant___') {
+      return l10n.updateDbSummaryStatusRedundant;
+    }
+    return l10n.updateDbSummaryStatusSucceed;
   }
 
   String _formatInt(int? value) {
