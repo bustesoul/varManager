@@ -150,7 +150,7 @@
   "updateDbLabel": "更新数据库",
   "updateDbTooltip": "扫描 Vars、提取预览并更新数据库。",
   "updateDbRequiredTitle": "需要更新数据库",
-  "updateDbRequiredMessage": "检测到 AddonPackages 不是符号链接（{path}）。请先执行更新数据库。",
+  "updateDbRequiredMessage": "检测到 AddonPackages 包含实际 .var 文件或不是符号链接（{path}）。请先执行更新数据库。",
   "updateDbSummaryTitle": "更新数据库完成",
   "updateDbSummaryScanned": "扫描到 {count} 个包。",
   "updateDbSummaryEmpty": "没有需要移动的包。",

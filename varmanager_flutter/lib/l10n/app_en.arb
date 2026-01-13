@@ -150,7 +150,7 @@
   "updateDbLabel": "Update DB",
   "updateDbTooltip": "Scan vars, extract previews, and update the database.",
   "updateDbRequiredTitle": "Update DB required",
-  "updateDbRequiredMessage": "AddonPackages at {path} is not a symlink. Run Update DB before switching packs.",
+  "updateDbRequiredMessage": "AddonPackages at {path} contains real .var files or is not a symlink. Run Update DB before switching packs.",
   "updateDbSummaryTitle": "Update DB completed",
   "updateDbSummaryScanned": "Scanned {count} packages.",
   "updateDbSummaryEmpty": "No packages moved.",

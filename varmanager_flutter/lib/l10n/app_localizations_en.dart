@@ -481,7 +481,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String updateDbRequiredMessage(Object path) {
-    return 'AddonPackages at $path is not a symlink. Run Update DB before switching packs.';
+    return 'AddonPackages at $path contains real .var files or is not a symlink. Run Update DB before switching packs.';
   }
 
   @override

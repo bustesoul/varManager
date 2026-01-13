@@ -476,7 +476,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String updateDbRequiredMessage(Object path) {
-    return '检测到 AddonPackages 不是符号链接（$path）。请先执行更新数据库。';
+    return '检测到 AddonPackages 包含实际 .var 文件或不是符号链接（$path）。请先执行更新数据库。';
   }
 
   @override

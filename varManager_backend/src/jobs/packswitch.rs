@@ -1,14 +1,19 @@
 use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
-use crate::infra::paths::{addon_packages_dir, addon_switch_root, config_paths};
+use crate::infra::paths::{
+    addon_packages_dir, addon_switch_root, config_paths, INSTALL_LINK_DIR, MISSING_LINK_DIR,
+    TEMP_LINK_DIR,
+};
 use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use sqlx::SqlitePool;
+use walkdir::WalkDir;
 
 #[derive(Deserialize)]
 struct PackSwitchArgs {
@@ -223,6 +228,14 @@ fn set_switch_blocking(
             }
         }
 
+        if addon_packages_has_real_vars(&addon_path) {
+            reporter.log(format!(
+                "AddonPackages has real var files; update DB required: {}",
+                addon_path.display()
+            ));
+            return Ok(PackSwitchSetOutcome::UpdateDbRequired { addon_path });
+        }
+
         if meta.file_type().is_symlink() {
             if fs::remove_file(&addon_path).is_err() {
                 fs::remove_dir_all(&addon_path).map_err(|err| err.to_string())?;
@@ -239,6 +252,53 @@ fn set_switch_blocking(
     let _ = system_ops::rescan_packages(state);
     reporter.log(format!("switch to {}", name));
     Ok(PackSwitchSetOutcome::Switched)
+}
+
+fn addon_packages_has_real_vars(addon_path: &Path) -> bool {
+    let scan_root = resolve_addon_scan_root(addon_path);
+    if !scan_root.exists() {
+        return false;
+    }
+    let exclude: HashSet<String> = [INSTALL_LINK_DIR, MISSING_LINK_DIR, TEMP_LINK_DIR]
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
+    let walker = WalkDir::new(&scan_root).follow_links(false).into_iter();
+    for entry in walker.filter_entry(|entry| {
+        if entry.file_type().is_dir() {
+            if let Some(name) = entry.file_name().to_str() {
+                return !exclude.contains(name);
+            }
+        }
+        true
+    }) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        if entry.file_type().is_file() {
+            if let Some(ext) = entry.path().extension() {
+                if ext.eq_ignore_ascii_case("var") {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn resolve_addon_scan_root(addon_path: &Path) -> PathBuf {
+    if fs_util::is_symlink(addon_path) {
+        if let Ok(target) = winfs::read_link_target(addon_path) {
+            if target.is_absolute() {
+                return target;
+            }
+            if let Some(parent) = addon_path.parent() {
+                return parent.join(target);
+            }
+        }
+    }
+    addon_path.to_path_buf()
 }
 
 async fn refresh_install_status(pool: &SqlitePool, vampath: &Path) -> Result<usize, String> {
