@@ -1729,9 +1729,10 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                         '.latest',
                                         '.1',
                                       );
+                                      final encodedSearch = Uri.encodeQueryComponent(search);
                                       await _runJob('open_url', {
                                         'url':
-                                            'https://www.google.com/search?q=$search var',
+                                            'https://www.google.com/search?q=$encodedSearch+var',
                                       });
                                     },
                               child: Text(l10n.googleSearchLabel),

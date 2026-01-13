@@ -12,7 +12,7 @@ use std::{
 };
 use sysinfo::{Pid, ProcessesToUpdate, System};
 use tokio::{
-    sync::{oneshot, Semaphore},
+    sync::{broadcast, oneshot, Semaphore},
     time::{interval, Duration},
 };
 use tracing::{Event, Subscriber};
@@ -173,6 +173,7 @@ impl Default for Config {
 pub struct AppState {
     pub(crate) config: Arc<RwLock<Config>>,
     pub(crate) shutdown_tx: Arc<tokio::sync::Mutex<Option<oneshot::Sender<()>>>>,
+    pub(crate) shutdown_broadcast: broadcast::Sender<()>,
     pub(crate) jobs: JobMap,
     pub(crate) job_counter: Arc<AtomicU64>,
     pub(crate) job_semaphore: Arc<RwLock<Arc<Semaphore>>>,
@@ -180,6 +181,7 @@ pub struct AppState {
     pub(crate) db_pool: SqlitePool,
     pub(crate) image_cache: Arc<crate::services::image_cache::ImageCacheService>,
     pub(crate) download_manager: Arc<crate::infra::download_manager::DownloadManager>,
+    pub(crate) torrent_tracker: Arc<crate::infra::torrent_tracker::TorrentTracker>,
 }
 
 pub fn init_logging(
@@ -406,22 +408,34 @@ pub async fn parent_watchdog(parent_pid: u32, state: AppState) {
     let target = Pid::from_u32(parent_pid);
     let mut system = System::new();
     let mut ticker = interval(Duration::from_secs(3));
+    let mut shutdown_rx = state.shutdown_broadcast.subscribe();
+
     loop {
-        ticker.tick().await;
-        system.refresh_processes(ProcessesToUpdate::Some(&[target]), true);
-        if system.process(target).is_none() {
-            tracing::info!(parent_pid, "parent process exited, shutting down backend");
-            trigger_shutdown(&state).await;
-            break;
+        tokio::select! {
+            _ = ticker.tick() => {
+                system.refresh_processes(ProcessesToUpdate::Some(&[target]), true);
+                if system.process(target).is_none() {
+                    tracing::info!(parent_pid, "parent process exited, shutting down backend");
+                    trigger_shutdown(&state).await;
+                    break;
+                }
+            }
+            _ = shutdown_rx.recv() => {
+                tracing::info!("ParentWatchdog received shutdown signal");
+                break;
+            }
         }
     }
 }
 
 pub async fn trigger_shutdown(state: &AppState) {
+    // Send oneshot signal for axum graceful shutdown
     let mut guard = state.shutdown_tx.lock().await;
     if let Some(tx) = guard.take() {
         let _ = tx.send(());
     }
+    // Broadcast to all subscribers (JobManager, ParentWatchdog, ImageCache, etc.)
+    let _ = state.shutdown_broadcast.send(());
 }
 
 pub async fn shutdown_signal(mut rx: oneshot::Receiver<()>) {

@@ -290,18 +290,28 @@ pub fn create_job_map() -> JobMap {
 pub struct JobManager {
     rx: JobEventReceiver,
     jobs: JobMap,
+    state: crate::app::AppState,
 }
 
 impl JobManager {
-    pub fn new(rx: JobEventReceiver, jobs: JobMap) -> Self {
-        Self { rx, jobs }
+    pub fn new(rx: JobEventReceiver, jobs: JobMap, state: crate::app::AppState) -> Self {
+        Self { rx, jobs, state }
     }
 
     /// Run the job manager. Call this in a spawned task.
     pub async fn run(mut self) {
         tracing::info!("JobManager started");
-        while let Some(event) = self.rx.recv().await {
-            self.handle_event(event).await;
+        let mut shutdown_rx = self.state.shutdown_broadcast.subscribe();
+        loop {
+            tokio::select! {
+                Some(event) = self.rx.recv() => {
+                    self.handle_event(event).await;
+                }
+                _ = shutdown_rx.recv() => {
+                    tracing::info!("JobManager received shutdown signal");
+                    break;
+                }
+            }
         }
         tracing::info!("JobManager stopped");
     }

@@ -151,9 +151,10 @@ class VarDetailPage extends ConsumerWidget {
                                     '.latest',
                                     '.1',
                                   );
+                                  final encodedSearch = Uri.encodeQueryComponent(search);
                                   _runJob(ref, 'open_url', {
                                     'url':
-                                        'https://www.google.com/search?q=$search var',
+                                        'https://www.google.com/search?q=$encodedSearch+var',
                                   });
                                 },
                                 child: Text(l10n.commonSearch),

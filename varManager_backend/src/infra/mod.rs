@@ -5,4 +5,5 @@ pub mod external_links;
 pub mod fs_util;
 pub mod paths;
 pub mod system_ops;
+pub mod torrent_tracker;
 pub mod winfs;

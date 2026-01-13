@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use serde_bencode::value::Value as BencodeValue;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{self, Command};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::fs;
+use tokio::process::Command;
 
 #[derive(Deserialize)]
 pub struct TorrentDownloadArgs {
@@ -54,14 +54,10 @@ pub async fn run_torrent_download_job(
     reporter: JobReporter,
     args: Option<Value>,
 ) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        torrent_download_blocking(&state, &reporter, args)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    torrent_download_async(&state, &reporter, args).await
 }
 
-fn torrent_download_blocking(
+async fn torrent_download_async(
     state: &AppState,
     reporter: &JobReporter,
     args: Option<Value>,
@@ -73,16 +69,16 @@ fn torrent_download_blocking(
     }
 
     let aria2_path = data_dir().join("aria2c.exe");
-    if !aria2_path.exists() {
+    if !tokio::fs::try_exists(&aria2_path).await.unwrap_or(false) {
         return Err(format!("aria2c.exe not found: {}", aria2_path.display()));
     }
 
     let (varspath, _) = config_paths(state)?;
     let temp_dir = torrent_download_dir(&varspath);
-    fs::create_dir_all(&temp_dir).map_err(|err| err.to_string())?;
+    fs::create_dir_all(&temp_dir).await.map_err(|err| err.to_string())?;
 
     let torrents_root = data_dir().join("links").join("torrents");
-    if !torrents_root.exists() {
+    if !tokio::fs::try_exists(&torrents_root).await.unwrap_or(false) {
         return Err(format!("torrents directory missing: {}", torrents_root.display()));
     }
 
@@ -159,95 +155,165 @@ fn torrent_download_blocking(
     }
 
     let temp_torrent_dir = temp_dir.join(".torrents");
-    fs::create_dir_all(&temp_torrent_dir).map_err(|err| err.to_string())?;
+    fs::create_dir_all(&temp_torrent_dir).await.map_err(|err| err.to_string())?;
 
+    let total_targets: usize = by_torrent.values().map(|v| v.len()).sum();
+    let mut completed_targets = 0usize;
     let mut downloaded = 0usize;
     let mut skipped = 0usize;
     let mut failed = Vec::new();
-    let total_targets: usize = by_torrent.values().map(|v| v.len()).sum();
-    let mut completed_targets = 0usize;
+
+    // Spawn parallel downloads
+    let mut handles = Vec::new();
 
     for (torrent_name, entries) in by_torrent {
+        // Check if already downloading
+        if state.torrent_tracker.is_active(&torrent_name) {
+            reporter.log(format!(
+                "Skipping {}: already downloading in another job",
+                torrent_name
+            ));
+            skipped += entries.len();
+            completed_targets += entries.len();
+            continue;
+        }
+
         let torrent_path = torrents_root.join(&torrent_name);
-        if !torrent_path.exists() {
+        if !tokio::fs::try_exists(&torrent_path).await.unwrap_or(false) {
             failed.push(torrent_name);
             continue;
         }
+
+        // Register torrent download
+        let var_names: Vec<String> = entries.iter()
+            .map(|e| e.var_name.clone())
+            .collect();
+        state.torrent_tracker.register(torrent_name.clone(), var_names);
 
         reporter.log(format!(
             "aria2 start: {} target(s) from {}",
             entries.len(),
             torrent_name
         ));
-        let indices = entries
-            .iter()
-            .map(|entry| entry.entry.index.to_string())
-            .collect::<Vec<_>>()
-            .join(",");
 
-        let temp_torrent_path =
-            temp_torrent_dir.join(unique_torrent_name(&torrent_name));
-        fs::copy(&torrent_path, &temp_torrent_path)
-            .map_err(|err| err.to_string())?;
+        // Clone all necessary data for the task
+        let aria2_path_clone = aria2_path.clone();
+        let temp_dir_clone = temp_dir.clone();
+        let temp_torrent_dir_clone = temp_torrent_dir.clone();
+        let varspath_clone = varspath.clone();
+        let state_clone = state.clone();
 
-        let status = Command::new(&aria2_path)
-            .arg("--continue=true")
-            .arg("--allow-overwrite=true")
-            .arg("--check-integrity=true")
-            .arg("--file-allocation=none")
-            .arg("--seed-time=0")
-            .arg("--seed-ratio=0.0")
-            .arg("--bt-stop-timeout=0")
-            .arg(format!(
-                "--stop-with-process={}",
-                process::id()
-            ))
-            .arg("--dir")
-            .arg(&temp_dir)
-            .arg(format!("--select-file={}", indices))
-            .arg(&temp_torrent_path)
-            .status()
-            .map_err(|err| err.to_string())?;
+        let handle = tokio::spawn(async move {
+            let indices = entries
+                .iter()
+                .map(|entry| entry.entry.index.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
 
-        let _ = fs::remove_file(&temp_torrent_path);
+            let temp_torrent_path =
+                temp_torrent_dir_clone.join(unique_torrent_name(&torrent_name));
 
-        if !status.success() {
-            failed.push(torrent_name);
-            continue;
-        }
-
-        let mut move_failed = false;
-        for entry in entries {
-            let src = temp_dir.join(&entry.entry.relative_path);
-            let dest = varspath.join(format!("{}.var", entry.var_name));
-            if dest.exists() {
-                skipped += 1;
-                let _ = fs::remove_file(&src);
-                completed_targets += 1;
-                continue;
+            if let Err(e) = fs::copy(&torrent_path, &temp_torrent_path).await {
+                return Err((torrent_name, vec![], format!("Copy failed: {}", e)));
             }
-            if let Some(parent) = dest.parent() {
-                fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-            }
-            if !src.exists() {
-                failed.push(entry.var_name.clone());
-                move_failed = true;
-                completed_targets += 1;
-                continue;
-            }
-            fs::rename(&src, &dest).map_err(|err| err.to_string())?;
-            downloaded += 1;
-            completed_targets += 1;
-            let progress = if total_targets == 0 {
-                100
-            } else {
-                ((completed_targets * 100) / total_targets).min(100) as u8
+
+            let status = Command::new(&aria2_path_clone)
+                .arg("--continue=true")
+                .arg("--allow-overwrite=true")
+                .arg("--check-integrity=true")
+                .arg("--file-allocation=none")
+                .arg("--seed-time=0")
+                .arg("--seed-ratio=0.0")
+                .arg("--bt-stop-timeout=0")
+                .arg(format!(
+                    "--stop-with-process={}",
+                    std::process::id()
+                ))
+                .arg("--dir")
+                .arg(&temp_dir_clone)
+                .arg(format!("--select-file={}", indices))
+                .arg(&temp_torrent_path)
+                .status()
+                .await;
+
+            let _ = fs::remove_file(&temp_torrent_path).await;
+
+            let status = match status {
+                Ok(s) => s,
+                Err(e) => return Err((torrent_name, vec![], format!("aria2 failed: {}", e))),
             };
-            reporter.progress(progress);
+
+            if !status.success() {
+                return Err((torrent_name, vec![], "aria2 returned error".to_string()));
+            }
+
+            // Move files to final location
+            let mut moved = Vec::new();
+            let mut move_errors = Vec::new();
+            let mut skipped_count = 0usize;
+
+            for entry in entries {
+                let src = temp_dir_clone.join(&entry.entry.relative_path);
+                let dest = varspath_clone.join(format!("{}.var", entry.var_name));
+
+                if tokio::fs::try_exists(&dest).await.unwrap_or(false) {
+                    let _ = fs::remove_file(&src).await;
+                    skipped_count += 1;
+                    continue;
+                }
+
+                if !tokio::fs::try_exists(&src).await.unwrap_or(false) {
+                    move_errors.push(entry.var_name.clone());
+                    continue;
+                }
+
+                if let Some(parent) = dest.parent() {
+                    let _ = fs::create_dir_all(parent).await;
+                }
+
+                if let Err(_) = fs::rename(&src, &dest).await {
+                    move_errors.push(entry.var_name.clone());
+                    continue;
+                }
+
+                moved.push(entry.var_name);
+            }
+
+            // Unregister from tracker
+            state_clone.torrent_tracker.unregister(&torrent_name);
+
+            Ok::<_, (String, Vec<String>, String)>((torrent_name, moved, move_errors, skipped_count))
+        });
+
+        handles.push(handle);
+    }
+
+    // Wait for all downloads to complete
+    for handle in handles {
+        match handle.await {
+            Ok(Ok((torrent_name, moved, move_errors, skipped_count))) => {
+                downloaded += moved.len();
+                skipped += skipped_count;
+                failed.extend(move_errors);
+                completed_targets += moved.len() + failed.len() + skipped_count;
+                reporter.log(format!("aria2 done: {}", torrent_name));
+            }
+            Ok(Err((torrent_name, _, error))) => {
+                reporter.log(format!("aria2 failed for {}: {}", torrent_name, error));
+                failed.push(torrent_name);
+            }
+            Err(e) => {
+                reporter.log(format!("Task join error: {}", e));
+            }
         }
 
-        let _ = move_failed;
-        reporter.log(format!("aria2 done: {}", torrent_name));
+        // Update progress after each torrent completes
+        let progress = if total_targets == 0 {
+            100
+        } else {
+            ((completed_targets * 100) / total_targets).min(100) as u8
+        };
+        reporter.progress(progress);
     }
 
     if !failed.is_empty() {
@@ -271,7 +337,7 @@ fn torrent_download_blocking(
 }
 
 fn parse_torrent(path: &Path) -> Result<TorrentMeta, String> {
-    let data = fs::read(path).map_err(|err| err.to_string())?;
+    let data = std::fs::read(path).map_err(|err| err.to_string())?;
     let value: BencodeValue =
         serde_bencode::from_bytes(&data).map_err(|err| err.to_string())?;
     let info = match value {

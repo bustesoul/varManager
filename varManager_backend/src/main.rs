@@ -37,6 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(std::io::Error::other)?;
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    let (shutdown_broadcast, _) = tokio::sync::broadcast::channel(16);
     let (job_tx, job_rx) = create_job_channel();
     let jobs = create_job_map();
     let image_cache = Arc::new(
@@ -44,16 +45,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .map_err(std::io::Error::other)?,
     );
-    image_cache.clone().start_maintenance();
+    image_cache.clone().start_maintenance(shutdown_broadcast.clone());
     let config_state = Arc::new(RwLock::new(config.clone()));
     let download_manager = Arc::new(DownloadManager::new(db_pool.clone(), Arc::clone(&config_state)));
     download_manager
         .pause_incomplete()
         .await
         .map_err(std::io::Error::other)?;
+    let torrent_tracker = Arc::new(infra::torrent_tracker::TorrentTracker::new());
     let state = AppState {
         config: Arc::clone(&config_state),
         shutdown_tx: Arc::new(tokio::sync::Mutex::new(Some(shutdown_tx))),
+        shutdown_broadcast: shutdown_broadcast.clone(),
         jobs: jobs.clone(),
         job_counter: Arc::new(AtomicU64::new(1)),
         job_semaphore: Arc::new(RwLock::new(Arc::new(Semaphore::new(
@@ -62,13 +65,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         job_tx,
         db_pool,
         image_cache,
-        download_manager,
+        download_manager: download_manager.clone(),
+        torrent_tracker,
     };
 
     // Start JobManager to consume job events and update state
-    let job_manager = JobManager::new(job_rx, jobs);
+    let job_manager = JobManager::new(job_rx, jobs, state.clone());
     tokio::spawn(async move {
         job_manager.run().await;
+    });
+
+    // Pause downloads on shutdown
+    let download_manager_clone = download_manager.clone();
+    let shutdown_broadcast_clone = shutdown_broadcast.clone();
+    tokio::spawn(async move {
+        let mut shutdown_rx = shutdown_broadcast_clone.subscribe();
+        let _ = shutdown_rx.recv().await;
+        tracing::info!("Pausing downloads before shutdown");
+        let _ = download_manager_clone.pause_incomplete().await;
     });
 
     if let Some(parent_pid) = app::read_parent_pid() {

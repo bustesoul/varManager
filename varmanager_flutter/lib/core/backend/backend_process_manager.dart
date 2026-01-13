@@ -91,7 +91,8 @@ class BackendProcessManager {
     } catch (_) {}
     if (_process != null) {
       final process = _process!;
-      await Future.delayed(const Duration(seconds: 2));
+      // Wait 8 seconds for graceful shutdown before force kill
+      await Future.delayed(const Duration(seconds: 8));
       process.kill(ProcessSignal.sigkill);
       _process = null;
     }

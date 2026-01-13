@@ -177,17 +177,25 @@ impl ImageCacheService {
         })
     }
 
-    pub fn start_maintenance(self: Arc<Self>) {
+    pub fn start_maintenance(self: Arc<Self>, shutdown_broadcast: tokio::sync::broadcast::Sender<()>) {
         if !self.config.enabled {
             return;
         }
         let disk_cache = Arc::clone(&self.disk_cache);
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(Duration::from_secs(3600));
+            let mut shutdown_rx = shutdown_broadcast.subscribe();
             loop {
-                ticker.tick().await;
-                if let Err(err) = disk_cache.cleanup_expired().await {
-                    tracing::warn!(error = %err, "image cache cleanup failed");
+                tokio::select! {
+                    _ = ticker.tick() => {
+                        if let Err(err) = disk_cache.cleanup_expired().await {
+                            tracing::warn!(error = %err, "image cache cleanup failed");
+                        }
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::info!("ImageCache maintenance received shutdown signal");
+                        break;
+                    }
                 }
             }
         });

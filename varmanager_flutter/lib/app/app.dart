@@ -106,17 +106,19 @@ class _AppShellState extends ConsumerState<AppShell> with WindowListener {
   void onWindowClose() {
     if (_closing) return;
     _closing = true;
-    () async {
-      try {
-        await ref.read(backendProcessManagerProvider).shutdown();
-      } catch (_) {}
-      try {
-        await windowManager.setPreventClose(false);
-        await windowManager.destroy();
-      } catch (_) {
-        exit(0);
-      }
-    }();
+    unawaited(_performShutdown());
+  }
+
+  Future<void> _performShutdown() async {
+    try {
+      await ref.read(backendProcessManagerProvider).shutdown();
+    } catch (_) {}
+    try {
+      await windowManager.setPreventClose(false);
+      await windowManager.destroy();
+    } catch (_) {
+      exit(0);
+    }
   }
 
   Future<void> _initBackend() async {
