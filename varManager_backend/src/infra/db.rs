@@ -33,6 +33,13 @@ pub struct VarRecord {
 }
 
 #[derive(Clone, Debug)]
+pub struct VarScanInfo {
+    pub var_name: String,
+    pub var_date: Option<String>,
+    pub fsize: Option<f64>,
+}
+
+#[derive(Clone, Debug)]
 pub struct SceneRecord {
     pub var_name: String,
     pub atom_type: String,
@@ -464,6 +471,49 @@ pub async fn list_vars(tx: &mut Transaction<'_, Sqlite>) -> Result<Vec<String>, 
         vars.push(row.try_get::<String, _>(0).map_err(|err| err.to_string())?);
     }
     Ok(vars)
+}
+
+pub async fn list_var_scan_info(
+    tx: &mut Transaction<'_, Sqlite>,
+) -> Result<Vec<VarScanInfo>, String> {
+    let rows = sqlx::query("SELECT varName, varDate, fsize FROM vars")
+        .fetch_all(tx.as_mut())
+        .await
+        .map_err(|err| err.to_string())?;
+    let mut infos = Vec::new();
+    for row in rows {
+        infos.push(VarScanInfo {
+            var_name: row.try_get(0).map_err(|err| err.to_string())?,
+            var_date: row.try_get(1).map_err(|err| err.to_string())?,
+            fsize: row.try_get(2).map_err(|err| err.to_string())?,
+        });
+    }
+    Ok(infos)
+}
+
+pub async fn list_scenes_for_var(
+    tx: &mut Transaction<'_, Sqlite>,
+    var_name: &str,
+) -> Result<Vec<SceneRecord>, String> {
+    let rows = sqlx::query(
+        "SELECT atomType, previewPic, scenePath, isPreset, isLoadable FROM scenes WHERE varName = ?1",
+    )
+    .bind(var_name)
+    .fetch_all(tx.as_mut())
+    .await
+    .map_err(|err| err.to_string())?;
+    let mut scenes = Vec::new();
+    for row in rows {
+        scenes.push(SceneRecord {
+            var_name: var_name.to_string(),
+            atom_type: row.try_get(0).map_err(|err| err.to_string())?,
+            preview_pic: row.try_get(1).map_err(|err| err.to_string())?,
+            scene_path: row.try_get(2).map_err(|err| err.to_string())?,
+            is_preset: row.try_get::<i64, _>(3).map_err(|err| err.to_string())? != 0,
+            is_loadable: row.try_get::<i64, _>(4).map_err(|err| err.to_string())? != 0,
+        });
+    }
+    Ok(scenes)
 }
 
 pub async fn delete_var_related(

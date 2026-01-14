@@ -1,6 +1,7 @@
 use crate::infra::db::{
-    delete_var_related, list_vars, replace_dependencies, replace_hide_fav, replace_scenes,
-    upsert_install_status, upsert_var, var_exists_conn, HideFavRecord, SceneRecord, VarRecord,
+    delete_var_related, list_scenes_for_var, list_var_scan_info, list_vars, replace_dependencies,
+    replace_hide_fav, replace_scenes, upsert_install_status, upsert_var, var_exists_conn,
+    HideFavRecord, SceneRecord, VarRecord,
 };
 use crate::infra::fs_util;
 use crate::jobs::job_channel::JobReporter;
@@ -33,6 +34,7 @@ const INSTALL_LINK_DIR: &str = "___VarsLink___";
 const MISSING_LINK_DIR: &str = "___MissingVarLink___";
 const TEMP_LINK_DIR: &str = "___TempVarLink___";
 const VARS_FOR_INSTALL_FILE: &str = "varsForInstall.txt";
+const FSIZE_EPSILON_MB: f64 = 0.0001;
 
 #[derive(Default)]
 struct MoveCounter {
@@ -183,6 +185,11 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         let mut invalid_moves = 0u64;
         let mut exist_vars: HashSet<String> = HashSet::new();
         let mut tx = pool_for_tx.begin().await.map_err(|err| err.to_string())?;
+        let mut scan_map = HashMap::new();
+        for info in list_var_scan_info(&mut tx).await? {
+            scan_map.insert(info.var_name, (info.var_date, info.fsize));
+        }
+        let mut skipped_unchanged = 0u64;
         let total_vars = var_files.len();
         let start_time = std::time::Instant::now();
 
@@ -193,48 +200,72 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
             };
             exist_vars.insert(basename.clone());
 
-            let result = process_var_file(&dependency_regex, &varspath_async, var_file);
-            match result {
-                Ok(processed) => {
-                    upsert_var(&mut tx, &processed.var_record).await?;
-                    replace_dependencies(
-                        &mut tx,
-                        &processed.var_record.var_name,
-                        &processed.dependencies,
-                    )
-                    .await?;
-                    replace_scenes(&mut tx, &processed.var_record.var_name, &processed.scenes)
-                        .await?;
-                    if let Some(vampath) = vampath_async.as_ref() {
-                        let entries = collect_hide_fav_records(
-                            vampath,
-                            &processed.var_record.var_name,
-                            &processed.scenes,
-                        );
-                        replace_hide_fav(&mut tx, &processed.var_record.var_name, &entries)
-                            .await?;
+            let scan_entry = scan_map.get(&basename).cloned();
+            let mut skipped = false;
+            if let Some((db_date, db_fsize)) = scan_entry {
+                if comply_var_file(var_file) {
+                    if let Some((file_date, file_size_mb)) = read_var_scan_signature(var_file) {
+                        if is_var_unchanged(&db_date, db_fsize, &file_date, file_size_mb) {
+                            if let Some(vampath) = vampath_async.as_ref() {
+                                let scenes = list_scenes_for_var(&mut tx, &basename).await?;
+                                let entries = collect_hide_fav_records(
+                                    vampath,
+                                    &basename,
+                                    &scenes,
+                                );
+                                replace_hide_fav(&mut tx, &basename, &entries).await?;
+                            }
+                            skipped_unchanged += 1;
+                            skipped = true;
+                        }
                     }
                 }
-                Err(ProcessError::NotComply(err)) => {
-                    reporter_async.log(err);
-                    move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
-                    invalid_moves += 1;
-                    continue;
-                }
-                Err(ProcessError::InvalidPackage(err)) => {
-                    reporter_async.log(err);
-                    move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
-                    invalid_moves += 1;
-                    continue;
-                }
-                Err(ProcessError::Io(err)) => {
-                    if is_zip_error(&err) {
+            }
+
+            if !skipped {
+                let result = process_var_file(&dependency_regex, &varspath_async, var_file);
+                match result {
+                    Ok(processed) => {
+                        upsert_var(&mut tx, &processed.var_record).await?;
+                        replace_dependencies(
+                            &mut tx,
+                            &processed.var_record.var_name,
+                            &processed.dependencies,
+                        )
+                        .await?;
+                        replace_scenes(&mut tx, &processed.var_record.var_name, &processed.scenes)
+                            .await?;
+                        if let Some(vampath) = vampath_async.as_ref() {
+                            let entries = collect_hide_fav_records(
+                                vampath,
+                                &processed.var_record.var_name,
+                                &processed.scenes,
+                            );
+                            replace_hide_fav(&mut tx, &processed.var_record.var_name, &entries)
+                                .await?;
+                        }
+                    }
+                    Err(ProcessError::NotComply(err)) => {
                         reporter_async.log(err);
                         move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
                         invalid_moves += 1;
                         continue;
                     }
-                    return Err(err);
+                    Err(ProcessError::InvalidPackage(err)) => {
+                        reporter_async.log(err);
+                        move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                        invalid_moves += 1;
+                        continue;
+                    }
+                    Err(ProcessError::Io(err)) => {
+                        if is_zip_error(&err) {
+                            reporter_async.log(err);
+                            move_to_not_comply(&varspath_async, var_file, &reporter_async)?;
+                            invalid_moves += 1;
+                            continue;
+                        }
+                        return Err(err);
+                    }
                 }
             }
 
@@ -255,6 +286,13 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                     basename
                 ));
             }
+        }
+
+        if skipped_unchanged > 0 {
+            reporter_async.log(format!(
+                "Phase 2/5: skipped {} unchanged VARs",
+                skipped_unchanged
+            ));
         }
 
         cleanup_missing_vars(&mut tx, &exist_vars, &varspath_async, &reporter_async).await?;
@@ -1126,6 +1164,31 @@ fn extract_preview(
     let mut out = File::create(&jpg_path).map_err(|err| err.to_string())?;
     std::io::copy(&mut jpg, &mut out).map_err(|err| err.to_string())?;
     Ok(jpgname)
+}
+
+fn read_var_scan_signature(var_file: &Path) -> Option<(Option<String>, f64)> {
+    let meta = fs::metadata(var_file).ok()?;
+    let var_date = meta.modified().ok().map(format_system_time);
+    let fsize_mb = meta.len() as f64 / (1024.0 * 1024.0);
+    Some((var_date, fsize_mb))
+}
+
+fn is_var_unchanged(
+    db_date: &Option<String>,
+    db_fsize: Option<f64>,
+    file_date: &Option<String>,
+    file_size_mb: f64,
+) -> bool {
+    if db_date.is_none() || file_date.is_none() {
+        return false;
+    }
+    if db_date.as_deref() != file_date.as_deref() {
+        return false;
+    }
+    match db_fsize {
+        Some(size_mb) => (size_mb - file_size_mb).abs() <= FSIZE_EPSILON_MB,
+        None => false,
+    }
 }
 
 #[derive(Default)]
