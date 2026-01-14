@@ -477,6 +477,49 @@ class AppLocalizationsEn extends AppLocalizations {
       'Scan vars, extract previews, and update the database.';
 
   @override
+  String get updateDbRequiredTitle => 'Update DB required';
+
+  @override
+  String updateDbRequiredMessage(Object path) {
+    return 'AddonPackages at $path contains real .var files or is not a symlink. Run Update DB before switching packs.';
+  }
+
+  @override
+  String get updateDbSummaryTitle => 'Update DB completed';
+
+  @override
+  String updateDbSummaryScanned(Object count) {
+    return 'Scanned $count packages.';
+  }
+
+  @override
+  String get updateDbSummaryEmpty => 'No packages moved.';
+
+  @override
+  String updateDbSummaryMoveLine(Object count, Object from, Object to) {
+    return '$count from $from to $to';
+  }
+
+  @override
+  String updateDbSummaryMoveLineStatus(
+    Object status,
+    Object count,
+    Object from,
+    Object to,
+  ) {
+    return '$status: Move $count from $from to $to';
+  }
+
+  @override
+  String get updateDbSummaryStatusSucceed => 'Succeed';
+
+  @override
+  String get updateDbSummaryStatusInvalid => 'Invalid';
+
+  @override
+  String get updateDbSummaryStatusRedundant => 'Redundant';
+
+  @override
   String get startVamLabel => 'Start VaM';
 
   @override
@@ -1657,6 +1700,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get bootstrapTourHomeBody =>
       'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)';
+
+  @override
+  String get bootstrapTourHomeBodyIntro =>
+      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs.';
+
+  @override
+  String get bootstrapTourHomeBodyWarning =>
+      '(If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)';
 
   @override
   String get bootstrapTourScenesTitle => 'Scenes: 3-column board';

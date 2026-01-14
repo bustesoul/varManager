@@ -149,6 +149,16 @@
   "actionGroupMaintenanceTooltip": "Cleanup and maintenance jobs.",
   "updateDbLabel": "Update DB",
   "updateDbTooltip": "Scan vars, extract previews, and update the database.",
+  "updateDbRequiredTitle": "Update DB required",
+  "updateDbRequiredMessage": "AddonPackages at {path} contains real .var files or is not a symlink. Run Update DB before switching packs.",
+  "updateDbSummaryTitle": "Update DB completed",
+  "updateDbSummaryScanned": "Scanned {count} packages.",
+  "updateDbSummaryEmpty": "No packages moved.",
+  "updateDbSummaryMoveLine": "{count} from {from} to {to}",
+  "updateDbSummaryMoveLineStatus": "{status}: Move {count} from {from} to {to}",
+  "updateDbSummaryStatusSucceed": "Succeed",
+  "updateDbSummaryStatusInvalid": "Invalid",
+  "updateDbSummaryStatusRedundant": "Redundant",
   "startVamLabel": "Start VaM",
   "startVamTooltip": "Launch the VaM application.",
   "prepareSavesLabel": "Prepare Saves",
@@ -561,6 +571,31 @@
       "count": {}
     }
   },
+  "@updateDbRequiredMessage": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "@updateDbSummaryScanned": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "@updateDbSummaryMoveLine": {
+    "placeholders": {
+      "count": {},
+      "from": {},
+      "to": {}
+    }
+  },
+  "@updateDbSummaryMoveLineStatus": {
+    "placeholders": {
+      "status": {},
+      "count": {},
+      "from": {},
+      "to": {}
+    }
+  },
   "@installVarConfirm": {
     "placeholders": {
       "varName": {}
@@ -773,6 +808,8 @@
   "bootstrapCheckStatusPending": "Pending",
   "bootstrapTourHomeTitle": "Home: Filters + PackSwitch",
   "bootstrapTourHomeBody": "Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)",
+  "bootstrapTourHomeBodyIntro": "Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs.",
+  "bootstrapTourHomeBodyWarning": "(If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)",
   "bootstrapTourScenesTitle": "Scenes: 3-column board",
   "bootstrapTourScenesBody": "Scenes are split into Hide/Normal/Fav; drag cards to organize, filter by location, and clear cache when needed.",
   "bootstrapTourHubTagsTitle": "Hub: Tags + quick filters",

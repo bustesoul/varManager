@@ -472,6 +472,49 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateDbTooltip => '扫描 Vars、提取预览并更新数据库。';
 
   @override
+  String get updateDbRequiredTitle => '需要更新数据库';
+
+  @override
+  String updateDbRequiredMessage(Object path) {
+    return '检测到 AddonPackages 包含实际 .var 文件或不是符号链接（$path）。请先执行更新数据库。';
+  }
+
+  @override
+  String get updateDbSummaryTitle => '更新数据库完成';
+
+  @override
+  String updateDbSummaryScanned(Object count) {
+    return '扫描到 $count 个包。';
+  }
+
+  @override
+  String get updateDbSummaryEmpty => '没有需要移动的包。';
+
+  @override
+  String updateDbSummaryMoveLine(Object count, Object from, Object to) {
+    return '$count 从 $from 移动到 $to';
+  }
+
+  @override
+  String updateDbSummaryMoveLineStatus(
+    Object status,
+    Object count,
+    Object from,
+    Object to,
+  ) {
+    return '$status：移动 $count 个，从 $from 到 $to';
+  }
+
+  @override
+  String get updateDbSummaryStatusSucceed => '成功';
+
+  @override
+  String get updateDbSummaryStatusInvalid => '不合规';
+
+  @override
+  String get updateDbSummaryStatusRedundant => '冗余';
+
+  @override
   String get startVamLabel => '启动 VaM';
 
   @override
@@ -1616,6 +1659,14 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get bootstrapTourHomeBody =>
       '更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。(如果你是varManager新用户, 请注意执行此操作会永久改变varspath内的*.var包组织结构)';
+
+  @override
+  String get bootstrapTourHomeBodyIntro =>
+      '更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。';
+
+  @override
+  String get bootstrapTourHomeBodyWarning =>
+      '（请注意执行此操作会永久改变varspath内的*.var包组织结构）';
 
   @override
   String get bootstrapTourScenesTitle => 'Scenes：三列拖拽';

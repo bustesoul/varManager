@@ -64,6 +64,12 @@ class VarDetailPage extends ConsumerWidget {
     );
   }
 
+  String _formatSizeLabel(double? sizeMb) {
+    if (sizeMb == null || sizeMb <= 0) return '';
+    final precision = sizeMb >= 10 ? 0 : 1;
+    return '${sizeMb.toStringAsFixed(precision)} MB';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
@@ -89,9 +95,16 @@ class VarDetailPage extends ConsumerWidget {
           Card(
             child: ListTile(
               title: Text(detail.varInfo.varName),
-              subtitle: Text(
-                '${detail.varInfo.creatorName ?? '-'} - ${detail.varInfo.packageName ?? '-'} - v${detail.varInfo.version ?? '-'}',
-              ),
+              subtitle: Text(() {
+                final sizeLabel = _formatSizeLabel(detail.varInfo.fsize);
+                final parts = [
+                  detail.varInfo.creatorName ?? '-',
+                  detail.varInfo.packageName ?? '-',
+                  'v${detail.varInfo.version ?? '-'}',
+                  if (sizeLabel.isNotEmpty) sizeLabel,
+                ];
+                return parts.join(' - ');
+              }()),
               trailing: Wrap(
                 spacing: 8,
                 children: [

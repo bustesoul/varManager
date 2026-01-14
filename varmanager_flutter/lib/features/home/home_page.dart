@@ -9,6 +9,7 @@ import '../../core/models/job_models.dart';
 import '../../core/models/var_models.dart';
 import '../../core/utils/debounce.dart';
 import '../../widgets/lazy_dropdown_field.dart';
+import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
 import '../bootstrap/bootstrap_keys.dart';
 import '../missing_vars/missing_vars_page.dart';
@@ -727,8 +728,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 onPressed: isBusy
                     ? null
                     : () async {
-                      await _runJob('update_db');
+                        final result = await _runJob('update_db');
                         ref.invalidate(varsListProvider);
+                        await _showUpdateDbSummary(result);
                       },
                 icon: const Icon(Icons.sync),
                 label: Text(l10n.updateDbLabel),
@@ -1010,9 +1012,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ref.read(focusedVarProvider.notifier).setFocused(item.varName);
                     },
                     title: Text(item.varName),
-                    subtitle: Text(
-                      '${item.creatorName ?? '-'} - ${item.packageName ?? '-'} - v${item.version ?? '-'}',
-                    ),
+                    subtitle: Text(() {
+                      final sizeLabel = _formatSizeLabel(item.fsize);
+                      final parts = [
+                        item.creatorName ?? '-',
+                        item.packageName ?? '-',
+                        'v${item.version ?? '-'}',
+                        if (sizeLabel.isNotEmpty) sizeLabel,
+                      ];
+                      return parts.join(' - ');
+                    }()),
                     trailing: Wrap(
                       spacing: 8,
                       children: [
@@ -1220,6 +1229,85 @@ class _HomePageState extends ConsumerState<HomePage> {
       },
     );
     return result == true;
+  }
+
+  Future<bool> _confirmUpdateDbRequired(String addonPath) async {
+    final path = addonPath.isEmpty ? 'AddonPackages' : addonPath;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final l10n = context.l10n;
+        return AlertDialog(
+          title: Text(l10n.updateDbRequiredTitle),
+          content: Text(l10n.updateDbRequiredMessage(path)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.commonCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l10n.updateDbLabel),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
+  }
+
+  Future<void> _showUpdateDbSummary(JobResult<dynamic> result) async {
+    if (result.job.isFailed) return;
+    final payloadRaw = result.result;
+    if (payloadRaw is! Map) return;
+    final payload = Map<String, dynamic>.from(payloadRaw);
+    final l10n = context.l10n;
+    final scanned = (payload['scanned'] as num?)?.toInt() ?? 0;
+    final movesRaw = payload['moves'];
+    final moveLines = <String>[];
+    if (movesRaw is List) {
+      for (final item in movesRaw) {
+        if (item is! Map) continue;
+        final count = (item['count'] as num?)?.toInt() ?? 0;
+        if (count <= 0) continue;
+        final from = item['from']?.toString() ?? '';
+        final to = item['to']?.toString() ?? '';
+        final status = _moveStatusLabel(to, l10n);
+        moveLines.add(l10n.updateDbSummaryMoveLineStatus(status, count, from, to));
+      }
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        final content = <Widget>[];
+        if (scanned > 0) {
+          content.add(Text(l10n.updateDbSummaryScanned(scanned)));
+        }
+        if (moveLines.isEmpty) {
+          content.add(Text(l10n.updateDbSummaryEmpty));
+        } else {
+          content.add(const SizedBox(height: 8));
+          content.addAll(moveLines.map((line) => Text(line)));
+        }
+        return AlertDialog(
+          title: Text(l10n.updateDbSummaryTitle),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: content,
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.commonOk),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<List<String>> _fetchFilteredVarNames(VarsQueryParams query) async {
@@ -1469,7 +1557,25 @@ class _HomePageState extends ConsumerState<HomePage> {
         );
       }
     });
-    await _runJob('packswitch_set', args: {'name': name});
+    final result = await _runJob('packswitch_set', args: {'name': name});
+    final payloadRaw = result.result;
+    final payload = payloadRaw is Map
+        ? Map<String, dynamic>.from(payloadRaw)
+        : null;
+    final status = payload?['status']?.toString();
+    if (status == 'update_db_required') {
+      await _loadPackSwitches();
+      if (!mounted) return;
+      final addonPath = payload?['addon_path']?.toString() ?? '';
+      final confirmed = await _confirmUpdateDbRequired(addonPath);
+      if (confirmed) {
+        final updateResult = await _runJob('update_db');
+        ref.invalidate(varsListProvider);
+        await _showUpdateDbSummary(updateResult);
+        await _loadPackSwitches();
+      }
+      return;
+    }
     await _loadPackSwitches();
   }
 
@@ -1485,6 +1591,24 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _formatNumber(double? value) {
     if (value == null) return '';
     return value.toString();
+  }
+
+  String _formatSizeLabel(double? sizeMb) {
+    if (sizeMb == null || sizeMb <= 0) return '';
+    final precision = sizeMb >= 10 ? 0 : 1;
+    return '${sizeMb.toStringAsFixed(precision)} MB';
+  }
+
+  String _moveStatusLabel(String dest, AppLocalizations l10n) {
+    final normalized = dest.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    final leaf = normalized.isEmpty ? '' : normalized.split('/').last.toLowerCase();
+    if (leaf == '___varnotcomplyrule___') {
+      return l10n.updateDbSummaryStatusInvalid;
+    }
+    if (leaf == '___varredundant___') {
+      return l10n.updateDbSummaryStatusRedundant;
+    }
+    return l10n.updateDbSummaryStatusSucceed;
   }
 
   String _formatInt(int? value) {
