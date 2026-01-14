@@ -1001,7 +1001,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateDbRequiredMessage.
   ///
   /// In en, this message translates to:
-  /// **'AddonPackages at {path} is not a symlink. Run Update DB before switching packs.'**
+  /// **'AddonPackages at {path} contains real .var files or is not a symlink. Run Update DB before switching packs.'**
   String updateDbRequiredMessage(Object path);
 
   /// No description provided for @updateDbSummaryTitle.

@@ -9,6 +9,8 @@ CAsign
 ./.idea
 
 doc/
+LoadScene/
+MMDLoader/
 
 # Plugin directory (vam_downloader.exe is built externally)
 plugin/
