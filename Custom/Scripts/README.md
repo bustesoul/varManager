@@ -10,10 +10,8 @@ This directory contains C# scripts designed to run inside **Virt-A-Mate (VaM)** 
 - Loads MMD (MikuMikuDance) models and animations
 - Converts VMD motion data to VaM Timeline
 - Supports PMX model import
-- Integrates with LibMMD library
 
 **Dependencies:**
-- Full LibMMD implementation in `../../LoadScene/src/LibMMD/`
 - VaM Unity engine APIs
 
 ### 2. MorphMerger.cs
@@ -34,15 +32,6 @@ This directory contains C# scripts designed to run inside **Virt-A-Mate (VaM)** 
 3. Find the plugins in the plugin list
 4. VaM's Unity engine will compile these scripts automatically
 
-### For Developers:
-- **Source Library:** `../../LoadScene/` contains the full LibMMD implementation
-- **Build LoadScene.dll:** Only needed if modifying the library
-  ```bash
-  cd ../../LoadScene
-  # Note: Requires Unity DLLs from VaM installation
-  msbuild LoadScene.csproj /p:Configuration=Release
-  ```
-
 ## Technical Details
 
 - **Language:** C# (Unity scripting)
@@ -54,8 +43,6 @@ This directory contains C# scripts designed to run inside **Virt-A-Mate (VaM)** 
 
 These scripts are maintained as part of the varManager project:
 - **Main Repository:** https://github.com/bustesoul/varManager
-- **LoadScene Library:** `../../LoadScene/src/`
-- **Archived C# Project:** `../../_archived/varManager/Custom/Scripts/`
 
 ## Note
 

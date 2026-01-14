@@ -20,7 +20,7 @@ A modern var package manager for Virt-A-Mate. Manage your var files efficiently 
 └─────────────────────────────────┘
 ```
 
-#### Key Improvements (vs v1.0.4.x)
+#### Key Improvements
 
 **1. Modern UI & Workflows**
 - Material Design 3 with responsive layouts and navigation rail
@@ -124,27 +124,6 @@ The varManager backend has built-in support for downloading var packages directl
 - Windows first: macOS and Linux builds are not yet available in this release
 - Hub limits: some Hub resources may encounter rate limiting during heavy bulk downloads
 
-#### What Happened to the C# Version?
-
-The legacy C# WinForms application (v1.0.4.x) has been **archived** to the `_archived/` folder for reference. All functionality has been migrated to the new Flutter + Rust architecture with feature parity and improvements.
-
-**If you need the old C# version:**
-- You can find it in the `_archived/varManager/` directory
-- Requires .NET 9.0 Runtime
-- No longer actively maintained
-
-#### Migration from v1.0.4.x
-
-Your data is safe! varManager will not delete your var packages. The new version uses the same SQLite database format:
-- ✅ Your var repository configuration is preserved
-- ✅ All package install states are retained
-- ✅ Scene favorites and hide lists are kept
-- ✅ Missing var link mappings are maintained
-
-Simply run the new version in the same folder and click "Update DB" to rebuild the database.
-
-**Full Changelog:** [View on GitHub](https://github.com/bustesoul/varManager/compare/v1.0.4.13...v2.0.0)
-
 ---
 
 ## Building from Source (Developers)
@@ -170,26 +149,3 @@ The build script automatically:
 2. Compiles the Rust backend
 3. Copies VaM plugin scripts
 4. Packages everything into `release/varManager_<version>/`
-
----
-
-## Legacy Version History
-
-### Version 1.0.4.13 Update Tips (Archived):
-0. **Upgrade Notice**: Before deploying the new version, remove the old program directory. Cleanup guide (if you keep the folder): `varManager.mdb` (old Access DB), `varManager.exe`, `varManager.pdb`, `varManager.dll.config` (you can edit it to extract old settings), `varManager.db*`, `varManager.log`.
-1. **Upgrade**: Switch database to SQLite and upgrade to .NET 9.
-2. **First Run Notice**: On first run, please click `UPD_DB` to rebuild the database.
-3. **No Data Loss**: Your var files and profile settings are not stored in the database, so they will not be lost.
-4. **Form UX**: More windows are resizable, and redundant UpdateDB duplicate-file logs are reduced.
-
-### Version 1.0.4.11 Update Tips:
-1. **Support Multiple Download**: Support download multiple var by once click in 
-MissingVarPage(after fetch missing var) and HubPage (after Generate Download List).
-2. **Notice**: This new feature function is not stable now, you might be manually check download result and re-use it again.
-You *MUST* click UPD_DB button after downloaded, otherwise it will repeatedly download the same var.
-
-### Version 1.0.4.10 Update Tips:
-0. **Upgrade Notice**: If you wish to retain your old variable profile, make sure to back up `varManager.mdb`. It is recommended to use the new version with a completely updated profile for optimal performance.
-1. **Administrator IS NECESSARY**: Starting from version 1.0.4.9, `varManager.exe` must be run as an administrator due to the necessity of creating symlinks in .NET 6.0.
-2. **Runtime Installation**: If `varManager.exe` fails to run, try installing the .NET Desktop Runtime 6.0 from [here](https://dotnet.microsoft.com/en-us/download/dotnet/6.0).
-3. **New Button**: New `FetchDownloadFromHub` Button for Hub var resource get and download, it supports download missing single var at `depends analyse` page for now, download function powered by plugin [vam_downloader](https://github.com/bustesoul/vam_downloader).
