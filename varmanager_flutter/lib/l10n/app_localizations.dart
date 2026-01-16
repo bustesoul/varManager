@@ -1987,6 +1987,24 @@ abstract class AppLocalizations {
   /// **'None'**
   String get downloadStatusNone;
 
+  /// No description provided for @downloadStatusDirectTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact version download link found on Hub.'**
+  String get downloadStatusDirectTip;
+
+  /// No description provided for @downloadStatusNoVersionTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub link found, but version differs; download may not match.'**
+  String get downloadStatusNoVersionTip;
+
+  /// No description provided for @downloadStatusNoneTip.
+  ///
+  /// In en, this message translates to:
+  /// **'No Hub download link found.'**
+  String get downloadStatusNoneTip;
+
   /// No description provided for @missingSelectFirst.
   ///
   /// In en, this message translates to:

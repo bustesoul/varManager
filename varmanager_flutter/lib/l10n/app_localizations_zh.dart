@@ -1019,6 +1019,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get downloadStatusNone => '无';
 
   @override
+  String get downloadStatusDirectTip => 'Hub 已找到对应版本的下载链接。';
+
+  @override
+  String get downloadStatusNoVersionTip => 'Hub 有链接但版本不一致，下载可能不匹配。';
+
+  @override
+  String get downloadStatusNoneTip => '未在 Hub 找到下载链接。';
+
+  @override
   String get missingSelectFirst => '请先选择一个缺失 Var。';
 
   @override

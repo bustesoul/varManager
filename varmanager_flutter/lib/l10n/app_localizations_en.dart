@@ -1044,6 +1044,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadStatusNone => 'None';
 
   @override
+  String get downloadStatusDirectTip =>
+      'Exact version download link found on Hub.';
+
+  @override
+  String get downloadStatusNoVersionTip =>
+      'Hub link found, but version differs; download may not match.';
+
+  @override
+  String get downloadStatusNoneTip => 'No Hub download link found.';
+
+  @override
   String get missingSelectFirst => 'Please select a missing var first.';
 
   @override

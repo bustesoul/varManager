@@ -454,6 +454,18 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     }
   }
 
+  String _downloadStatusTooltip(_DownloadStatus status) {
+    final l10n = context.l10n;
+    switch (status) {
+      case _DownloadStatus.direct:
+        return l10n.downloadStatusDirectTip;
+      case _DownloadStatus.noVersion:
+        return l10n.downloadStatusNoVersionTip;
+      case _DownloadStatus.none:
+        return l10n.downloadStatusNoneTip;
+    }
+  }
+
   IconData _downloadIcon(String name) {
     final status = _downloadStatus(name);
     switch (status) {
@@ -1057,8 +1069,20 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                                     ),
                                     SizedBox(
                                       width: 32,
-                                      child: Icon(_downloadIcon(entry.displayName),
-                                          color: _downloadColor(entry.displayName), size: 18),
+                                      child: Builder(
+                                        builder: (context) {
+                                          final status =
+                                              _downloadStatus(entry.displayName);
+                                          return Tooltip(
+                                            message: _downloadStatusTooltip(status),
+                                            child: Icon(
+                                              _downloadIcon(entry.displayName),
+                                              color: _downloadColor(entry.displayName),
+                                              size: 18,
+                                            ),
+                                          );
+                                        },
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1091,10 +1115,18 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                           Text(l10n.resolvedLabel(
                               selectedVar == null ? '-' : _resolvedDisplay(selectedVar))),
                           const SizedBox(height: 4),
-                          Text(l10n.downloadLabel(
-                              selectedVar == null
-                                  ? '-'
-                                  : _downloadStatusLabel(_downloadStatus(selectedVar)))),
+                          if (selectedVar == null)
+                            Text(l10n.downloadLabel('-'))
+                          else
+                            Tooltip(
+                              message:
+                                  _downloadStatusTooltip(_downloadStatus(selectedVar)),
+                              child: Text(
+                                l10n.downloadLabel(
+                                  _downloadStatusLabel(_downloadStatus(selectedVar)),
+                                ),
+                              ),
+                            ),
                           const SizedBox(height: 4),
                           Text(l10n.linkStatusLabel(linkStatusLabel),
                               style: TextStyle(color: linkStatusColor)),
