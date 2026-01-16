@@ -118,7 +118,7 @@ The varManager backend has built-in support for downloading var packages directl
 
 **Configuration Tips:**
 - Proxy support: configure HTTP proxy in Settings (system auto-detect or manual) for Hub downloads
-- Paths: `varspath` is your VaM `AddonPackages` directory; `vampath` is your main VaM install path
+- Paths: `vampath` is your main VaM install path; `varspath` defaults to the same path (only set it separately if your .var files live on another folder/drive)
 
 **Known Issues:**
 - Windows first: macOS and Linux builds are not yet available in this release

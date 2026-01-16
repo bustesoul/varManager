@@ -1577,6 +1577,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
     await _loadPackSwitches();
+    ref.invalidate(varsListProvider);
   }
 
   void _syncController(TextEditingController controller, String value) {

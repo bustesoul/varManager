@@ -118,7 +118,7 @@ varManager 后端内置了从 VaM Hub 下载 var 包的支持：
 
 **配置贴士：**
 - **代理支持:** 在设置中配置 HTTP 代理（系统自动检测或手动设置），以加速 Hub 资源下载
-- **路径说明:** `varspath` 为 VaM `AddonPackages` 目录；`vampath` 为 VaM 主安装目录
+- **路径说明:** `vampath` 为 VaM 主安装目录；`varspath` 默认与 `vampath` 相同（仅当 var 文件与 VaM 分开放置时单独设置）
 
 **已知问题：**
 - **Windows 优先:** 本次发布暂不包含 macOS 和 Linux 版本

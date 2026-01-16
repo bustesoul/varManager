@@ -102,24 +102,46 @@ class BootstrapController extends Notifier<BootstrapState> {
   Future<void> runChecks(
     String backendLabel,
     String varspathLabel,
+    String vampathLabel,
     String downloaderLabel,
     String fileOpsLabel,
     String symlinkLabel,
     String vamExecLabel, {
     required String varspathHint,
+    required String vampathHint,
     required String downloaderHint,
     required String fileOpsHint,
     required String symlinkHint,
     required String vamExecHint,
+    required String varspathName,
+    required String vampathName,
   }) async {
     state = state.copyWith(checksRunning: true, checksRan: true, errorMessage: null);
+
+    final config = state.config;
+    final varspath = config.varspath.trim();
+    final vampath = config.vampath.trim();
+    final samePaths = _pathsMatch(varspath, vampath);
+    final varFileOpsLabel = _withPathSuffix(fileOpsLabel, varspathName);
+    final vampathFileOpsLabel = _withPathSuffix(fileOpsLabel, vampathName);
+    final varSymlinkLabel = _withPathSuffix(symlinkLabel, varspathName);
+    final vampathSymlinkLabel = _withPathSuffix(symlinkLabel, vampathName);
 
     final checks = <BootstrapCheckItem>[];
     checks.add(_pending('backend', backendLabel));
     checks.add(_pending('varspath', varspathLabel));
+    if (!samePaths) {
+      checks.add(_pending('vampath', vampathLabel));
+    }
     checks.add(_pending('downloader', downloaderLabel));
-    checks.add(_pending('fileops', fileOpsLabel));
-    checks.add(_pending('symlink', symlinkLabel));
+    checks.add(_pending('fileops_varspath', varFileOpsLabel));
+    if (!samePaths) {
+      checks.add(_pending('fileops_vampath', vampathFileOpsLabel));
+    }
+    checks.add(_pending('symlink_varspath', varSymlinkLabel));
+    if (!samePaths) {
+      checks.add(_pending('symlink_vampath', vampathSymlinkLabel));
+    }
     checks.add(_pending('vamexec', vamExecLabel));
     state = state.copyWith(checks: checks);
 
@@ -128,21 +150,69 @@ class BootstrapController extends Notifier<BootstrapState> {
     final backendCheck = await _checkBackend(client, backendLabel);
     _setCheck(backendCheck);
 
-    final config = state.config;
-    final varspathCheck = await _checkVarspath(config, varspathLabel, varspathHint);
+    final varspathCheck = await _checkPathExists(
+      'varspath',
+      varspath,
+      varspathLabel,
+      varspathHint,
+      emptyMessage: '$varspathName not set',
+    );
     _setCheck(varspathCheck);
+
+    if (!samePaths) {
+      final vampathCheck = await _checkPathExists(
+        'vampath',
+        vampath,
+        vampathLabel,
+        vampathHint,
+        emptyMessage: '$vampathName not set',
+      );
+      _setCheck(vampathCheck);
+    }
 
     final downloaderCheck =
         await _checkDownloaderPath(config, downloaderLabel, downloaderHint);
     _setCheck(downloaderCheck);
 
-    final fileOpsCheck =
-        await _checkFileOps(config, fileOpsLabel, fileOpsHint);
-    _setCheck(fileOpsCheck);
+    final fileOpsVarCheck = await _checkFileOps(
+      'fileops_varspath',
+      varspath,
+      varFileOpsLabel,
+      fileOpsHint,
+      emptyMessage: '$varspathName not set',
+    );
+    _setCheck(fileOpsVarCheck);
 
-    final symlinkCheck =
-        await _checkSymlink(config, symlinkLabel, symlinkHint);
-    _setCheck(symlinkCheck);
+    if (!samePaths) {
+      final fileOpsVamCheck = await _checkFileOps(
+        'fileops_vampath',
+        vampath,
+        vampathFileOpsLabel,
+        fileOpsHint,
+        emptyMessage: '$vampathName not set',
+      );
+      _setCheck(fileOpsVamCheck);
+    }
+
+    final symlinkVarCheck = await _checkSymlink(
+      'symlink_varspath',
+      varspath,
+      varSymlinkLabel,
+      symlinkHint,
+      emptyMessage: '$varspathName not set',
+    );
+    _setCheck(symlinkVarCheck);
+
+    if (!samePaths) {
+      final symlinkVamCheck = await _checkSymlink(
+        'symlink_vampath',
+        vampath,
+        vampathSymlinkLabel,
+        symlinkHint,
+        emptyMessage: '$vampathName not set',
+      );
+      _setCheck(symlinkVamCheck);
+    }
 
     final vamExecCheck =
         await _checkVamExec(config, vamExecLabel, vamExecHint);
@@ -181,8 +251,11 @@ class BootstrapController extends Notifier<BootstrapState> {
   }
 
   BootstrapConfig _resolveBootstrapConfig(AppConfig? config) {
-    final varspath = config?.varspath ?? '';
+    var varspath = config?.varspath ?? '';
     final vampath = config?.vampath ?? '';
+    if (varspath.trim().isEmpty && vampath.trim().isNotEmpty) {
+      varspath = vampath;
+    }
     final downloader = config?.downloaderSavePath ?? '';
     var vamExec = config?.vamExec ?? '';
     final proxy = config?.proxy ?? ProxyConfig.empty;
@@ -262,6 +335,20 @@ class BootstrapController extends Notifier<BootstrapState> {
     }
   }
 
+  String _normalizePath(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    return p.normalize(trimmed).toLowerCase();
+  }
+
+  bool _pathsMatch(String left, String right) {
+    return _normalizePath(left) == _normalizePath(right);
+  }
+
+  String _withPathSuffix(String label, String pathName) {
+    return '$label ($pathName)';
+  }
+
   Future<BootstrapCheckItem> _checkBackend(
     BackendClient client,
     String label,
@@ -286,25 +373,26 @@ class BootstrapController extends Notifier<BootstrapState> {
     }
   }
 
-  Future<BootstrapCheckItem> _checkVarspath(
-    BootstrapConfig config,
+  Future<BootstrapCheckItem> _checkPathExists(
+    String id,
+    String path,
     String label,
-    String hint,
-  ) async {
-    final path = config.varspath.trim();
+    String hint, {
+    required String emptyMessage,
+  }) async {
     if (path.isEmpty) {
       return BootstrapCheckItem(
-        id: 'varspath',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.fail,
-        message: 'varspath not set',
+        message: emptyMessage,
         hints: [hint],
       );
     }
     final dir = Directory(path);
     if (!await dir.exists()) {
       return BootstrapCheckItem(
-        id: 'varspath',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.fail,
         message: 'Directory not found',
@@ -312,7 +400,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       );
     }
     return BootstrapCheckItem(
-      id: 'varspath',
+      id: id,
       label: label,
       status: BootstrapCheckStatus.pass,
       message: 'OK',
@@ -362,17 +450,18 @@ class BootstrapController extends Notifier<BootstrapState> {
   }
 
   Future<BootstrapCheckItem> _checkFileOps(
-    BootstrapConfig config,
+    String id,
+    String path,
     String label,
-    String hint,
-  ) async {
-    final path = config.varspath.trim();
+    String hint, {
+    required String emptyMessage,
+  }) async {
     if (path.isEmpty) {
       return BootstrapCheckItem(
-        id: 'fileops',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.fail,
-        message: 'varspath not set',
+        message: emptyMessage,
         hints: [hint],
       );
     }
@@ -398,7 +487,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       await fileA.delete().onError((_, _) => fileA);
       await fileD.delete().onError((_, _) => fileD);
       return BootstrapCheckItem(
-        id: 'fileops',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.pass,
         message: 'OK',
@@ -406,7 +495,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       );
     } catch (err) {
       return BootstrapCheckItem(
-        id: 'fileops',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.fail,
         message: err.toString(),
@@ -418,17 +507,18 @@ class BootstrapController extends Notifier<BootstrapState> {
   }
 
   Future<BootstrapCheckItem> _checkSymlink(
-    BootstrapConfig config,
+    String id,
+    String path,
     String label,
-    String hint,
-  ) async {
-    final path = config.varspath.trim();
+    String hint, {
+    required String emptyMessage,
+  }) async {
     if (path.isEmpty) {
       return BootstrapCheckItem(
-        id: 'symlink',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.fail,
-        message: 'varspath not set',
+        message: emptyMessage,
         hints: [hint],
       );
     }
@@ -457,7 +547,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       await moved.delete().onError((_, _) => moved);
       await target.delete().onError((_, _) => target);
       return BootstrapCheckItem(
-        id: 'symlink',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.pass,
         message: 'OK',
@@ -465,7 +555,7 @@ class BootstrapController extends Notifier<BootstrapState> {
       );
     } catch (err) {
       return BootstrapCheckItem(
-        id: 'symlink',
+        id: id,
         label: label,
         status: BootstrapCheckStatus.fail,
         message: err.toString(),
