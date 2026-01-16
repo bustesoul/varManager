@@ -212,10 +212,10 @@ fn set_switch_blocking(
     fs::create_dir_all(&target).map_err(|err| err.to_string())?;
 
     let addon_path = addon_packages_dir(&vampath);
-    fs::create_dir_all(&addon_path).map_err(|err| err.to_string())?;
+    let addon_was_symlink = ensure_addonpackages_dir(&addon_path, reporter)?;
 
     let managed_dirs = collect_managed_dirs();
-    if managed_dirs_have_real_vars(&addon_path, &managed_dirs) {
+    if !addon_was_symlink && managed_dirs_have_real_vars(&addon_path, &managed_dirs) {
         reporter.log(format!(
             "Managed link folders contain real var files; update DB required: {}",
             addon_path.display()
@@ -250,6 +250,28 @@ fn collect_managed_dirs() -> BTreeSet<String> {
         dirs.insert(name.to_string());
     }
     dirs
+}
+
+fn ensure_addonpackages_dir(addon_path: &Path, reporter: &JobReporter) -> Result<bool, String> {
+    if fs_util::is_symlink(addon_path) {
+        reporter.log(format!(
+            "AddonPackages is a symlink; migrating to folder-based packswitch: {}",
+            addon_path.display()
+        ));
+        if fs::remove_file(addon_path).is_err() {
+            fs::remove_dir_all(addon_path).map_err(|err| err.to_string())?;
+        }
+        fs::create_dir_all(addon_path).map_err(|err| err.to_string())?;
+        return Ok(true);
+    }
+    if addon_path.exists() && !addon_path.is_dir() {
+        return Err(format!(
+            "AddonPackages is not a directory: {}",
+            addon_path.display()
+        ));
+    }
+    fs::create_dir_all(addon_path).map_err(|err| err.to_string())?;
+    Ok(false)
 }
 
 fn managed_dirs_have_real_vars(addon_path: &Path, managed_dirs: &BTreeSet<String>) -> bool {
@@ -598,6 +620,28 @@ mod tests {
             before.to_string_lossy().to_ascii_lowercase(),
             after.to_string_lossy().to_ascii_lowercase()
         );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn migrate_addonpackages_symlink_to_directory() {
+        if !symlink_supported() {
+            return;
+        }
+        let root = make_temp_dir("packswitch_migrate_symlink");
+        let addon_path = root.join("AddonPackages");
+        let target = root.join("legacy_target");
+        fs::create_dir_all(&target).unwrap();
+        winfs::create_symlink_dir(&addon_path, &target).unwrap();
+
+        let (tx, _rx) = create_job_channel();
+        let reporter = JobReporter::new(1, tx);
+        let was_symlink = ensure_addonpackages_dir(&addon_path, &reporter).unwrap();
+
+        assert!(was_symlink);
+        assert!(addon_path.exists());
+        assert!(!fs_util::is_symlink(&addon_path));
 
         let _ = fs::remove_dir_all(&root);
     }
