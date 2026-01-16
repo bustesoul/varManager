@@ -1893,6 +1893,7 @@ pub async fn list_packswitch(
 
     let addon_path = crate::infra::paths::addon_packages_dir(&vampath);
     let link_root = addon_path.join(crate::infra::paths::INSTALL_LINK_DIR);
+    let switch_root = crate::infra::paths::addon_switch_root(&vampath);
     let current = if let Ok(target) = crate::infra::winfs::read_link_target(&link_root) {
         let resolved = if target.is_absolute() {
             target
@@ -1902,11 +1903,28 @@ pub async fn list_packswitch(
                 .unwrap_or(&addon_path)
                 .join(target)
         };
-        let switch_root = crate::infra::paths::addon_switch_root(&vampath);
         if resolved.starts_with(&switch_root) {
             resolved
                 .parent()
                 .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .unwrap_or("default")
+                .to_string()
+        } else {
+            "default".to_string()
+        }
+    } else if let Ok(target) = crate::infra::winfs::read_link_target(&addon_path) {
+        let resolved = if target.is_absolute() {
+            target
+        } else {
+            addon_path
+                .parent()
+                .unwrap_or(&addon_path)
+                .join(target)
+        };
+        if resolved.starts_with(&switch_root) {
+            resolved
+                .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("default")
                 .to_string()

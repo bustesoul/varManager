@@ -731,6 +731,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         final result = await _runJob('update_db');
                         ref.invalidate(varsListProvider);
                         await _showUpdateDbSummary(result);
+                        await _loadPackSwitches();
                       },
                 icon: const Icon(Icons.sync),
                 label: Text(l10n.updateDbLabel),
