@@ -312,6 +312,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get vampathLabel => 'vampath';
 
   @override
+  String get varspathSameAsVampathHint => '默认与 vampath 相同';
+
+  @override
+  String get varspathSeparateLabel => '我确定需要单独设置 varspath';
+
+  @override
+  String get varspathSeparateTip => '仅在 var 文件与 VaM 放在不同文件夹或磁盘时才需要单独配置。';
+
+  @override
   String get vamExecLabel => 'vam_exec';
 
   @override
@@ -476,7 +485,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String updateDbRequiredMessage(Object path) {
-    return '检测到 AddonPackages 包含实际 .var 文件或不是符号链接（$path）。请先执行更新数据库。';
+    return '检测到 AddonPackages 受管链接目录中包含实际 .var 文件（$path）。请先执行更新数据库或移出这些文件。';
   }
 
   @override
@@ -1008,6 +1017,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get downloadStatusNone => '无';
+
+  @override
+  String get downloadStatusDirectTip => 'Hub 已找到对应版本的下载链接。';
+
+  @override
+  String get downloadStatusNoVersionTip => 'Hub 有链接但版本不一致，下载可能不匹配。';
+
+  @override
+  String get downloadStatusNoneTip => '未在 Hub 找到下载链接。';
 
   @override
   String get missingSelectFirst => '请先选择一个缺失 Var。';
@@ -1588,7 +1606,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapConfigBody => '填写关键路径，确保能够索引包并启动 VaM。';
 
   @override
-  String get bootstrapConfigVarspathRequired => '必须填写 varspath。';
+  String get bootstrapConfigVarspathRequired => '单独设置时必须填写 varspath。';
+
+  @override
+  String get bootstrapConfigVampathRequired => '必须填写 vampath。';
 
   @override
   String get bootstrapConfigVamExecHint => '推荐：VaM (Desktop Mode).bat';
@@ -1615,6 +1636,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapCheckVarspathLabel => 'varspath 可用性';
 
   @override
+  String get bootstrapCheckVampathLabel => 'vampath 可用性';
+
+  @override
   String get bootstrapCheckDownloaderLabel => '下载目录写入权限';
 
   @override
@@ -1627,7 +1651,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapCheckVamExecLabel => 'VaM 启动脚本路径';
 
   @override
-  String get bootstrapCheckVarspathHint => '请先在配置中设置 varspath。';
+  String get bootstrapCheckVarspathHint => '请先在配置中设置 varspath（默认同 vampath）。';
+
+  @override
+  String get bootstrapCheckVampathHint => '请先在配置中设置 vampath。';
 
   @override
   String get bootstrapCheckDownloaderHint => '请选择可写的下载目录。';

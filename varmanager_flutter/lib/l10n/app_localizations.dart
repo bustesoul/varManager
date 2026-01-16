@@ -680,6 +680,24 @@ abstract class AppLocalizations {
   /// **'vampath'**
   String get vampathLabel;
 
+  /// No description provided for @varspathSameAsVampathHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Default: same as vampath'**
+  String get varspathSameAsVampathHint;
+
+  /// No description provided for @varspathSeparateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'I need to set varspath separately'**
+  String get varspathSeparateLabel;
+
+  /// No description provided for @varspathSeparateTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a separate varspath only when .var files are stored in a different folder or drive from VaM.'**
+  String get varspathSeparateTip;
+
   /// No description provided for @vamExecLabel.
   ///
   /// In en, this message translates to:
@@ -1001,7 +1019,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateDbRequiredMessage.
   ///
   /// In en, this message translates to:
-  /// **'AddonPackages at {path} contains real .var files or is not a symlink. Run Update DB before switching packs.'**
+  /// **'Managed link folders under AddonPackages at {path} contain real .var files. Run Update DB or move them out before switching packs.'**
   String updateDbRequiredMessage(Object path);
 
   /// No description provided for @updateDbSummaryTitle.
@@ -1968,6 +1986,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'None'**
   String get downloadStatusNone;
+
+  /// No description provided for @downloadStatusDirectTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact version download link found on Hub.'**
+  String get downloadStatusDirectTip;
+
+  /// No description provided for @downloadStatusNoVersionTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hub link found, but version differs; download may not match.'**
+  String get downloadStatusNoVersionTip;
+
+  /// No description provided for @downloadStatusNoneTip.
+  ///
+  /// In en, this message translates to:
+  /// **'No Hub download link found.'**
+  String get downloadStatusNoneTip;
 
   /// No description provided for @missingSelectFirst.
   ///
@@ -3009,8 +3045,14 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapConfigVarspathRequired.
   ///
   /// In en, this message translates to:
-  /// **'varspath is required.'**
+  /// **'varspath is required when separate is enabled.'**
   String get bootstrapConfigVarspathRequired;
+
+  /// No description provided for @bootstrapConfigVampathRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'vampath is required.'**
+  String get bootstrapConfigVampathRequired;
 
   /// No description provided for @bootstrapConfigVamExecHint.
   ///
@@ -3060,6 +3102,12 @@ abstract class AppLocalizations {
   /// **'varspath availability'**
   String get bootstrapCheckVarspathLabel;
 
+  /// No description provided for @bootstrapCheckVampathLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'vampath availability'**
+  String get bootstrapCheckVampathLabel;
+
   /// No description provided for @bootstrapCheckDownloaderLabel.
   ///
   /// In en, this message translates to:
@@ -3087,8 +3135,14 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapCheckVarspathHint.
   ///
   /// In en, this message translates to:
-  /// **'Set varspath in configuration.'**
+  /// **'Set varspath in configuration (defaults to vampath).'**
   String get bootstrapCheckVarspathHint;
+
+  /// No description provided for @bootstrapCheckVampathHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Set vampath in configuration.'**
+  String get bootstrapCheckVampathHint;
 
   /// No description provided for @bootstrapCheckDownloaderHint.
   ///

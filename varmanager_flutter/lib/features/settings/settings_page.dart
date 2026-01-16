@@ -34,6 +34,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _proxyUsername = TextEditingController();
   final _proxyPassword = TextEditingController();
   ProxyMode _proxyMode = ProxyMode.system;
+  bool _separateVarspath = false;
 
   AppConfig? _config;
   String? _backendVersion;
@@ -57,6 +58,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       backendVersion = null;
     }
     if (!mounted) return;
+    final vampath = cfg.vampath ?? '';
+    final varspath = cfg.varspath ?? '';
+    final samePaths = _pathsMatch(vampath, varspath);
+    final hasVampath = vampath.trim().isNotEmpty;
+    final hasVarspath = varspath.trim().isNotEmpty;
+    final separate = hasVampath && hasVarspath && !samePaths;
+    final effectiveVarspath = (!separate && hasVampath) ? vampath : varspath;
     setState(() {
       _config = cfg;
       _backendVersion = backendVersion;
@@ -65,8 +73,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _listenPort.text = cfg.listenPort.toString();
       _logLevel.text = cfg.logLevel;
       _jobConcurrency.text = cfg.jobConcurrency.toString();
-      _varspath.text = cfg.varspath ?? '';
-      _vampath.text = cfg.vampath ?? '';
+      _varspath.text = effectiveVarspath;
+      _vampath.text = vampath;
       _vamExec.text = cfg.vamExec ?? '';
       _downloaderSavePath.text = cfg.downloaderSavePath ?? '';
       _proxyHost.text = cfg.proxy.host;
@@ -74,6 +82,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _proxyUsername.text = cfg.proxy.username ?? '';
       _proxyPassword.text = cfg.proxy.password ?? '';
       _proxyMode = cfg.proxyMode;
+      _separateVarspath = separate;
     });
   }
 
@@ -96,20 +105,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_downloaderSavePath.text.trim().isEmpty) {
-      final next = _addonPackagesPath(_varspath.text);
-      if (next.isNotEmpty) {
-        _downloaderSavePath.text = next;
-      }
-    }
     final previous = _config;
     if (previous == null) return;
     final listenHost = _listenHost.text.trim();
     final listenPort = int.tryParse(_listenPort.text.trim()) ?? 57123;
     final logLevel = _logLevel.text.trim();
     final jobConcurrency = int.tryParse(_jobConcurrency.text.trim()) ?? 10;
-    final varspath = _varspath.text.trim();
     final vampath = _vampath.text.trim();
+    final varspath = _separateVarspath ? _varspath.text.trim() : vampath;
+    if (!_separateVarspath && _varspath.text.trim() != varspath) {
+      _varspath.text = varspath;
+    }
+    if (_downloaderSavePath.text.trim().isEmpty) {
+      final next = _addonPackagesPath(varspath);
+      if (next.isNotEmpty) {
+        _downloaderSavePath.text = next;
+      }
+    }
     final vamExec = _vamExec.text.trim();
     final downloaderSavePath = _downloaderSavePath.text.trim();
     final proxyMode = _proxyMode;
@@ -164,7 +176,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     });
   }
 
+  Future<void> _pickVampathDirectory() async {
+    final path = await getDirectoryPath();
+    if (path == null) return;
+    setState(() {
+      _vampath.text = path;
+      if (!_separateVarspath) {
+        _varspath.text = path;
+      }
+      if (_downloaderSavePath.text.trim().isEmpty && !_separateVarspath) {
+        _downloaderSavePath.text = _addonPackagesPath(path);
+      }
+    });
+  }
+
   Future<void> _pickVarspathDirectory() async {
+    if (!_separateVarspath) return;
     final path = await getDirectoryPath();
     if (path == null) return;
     setState(() {
@@ -187,6 +214,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final trimmed = base.trim();
     if (trimmed.isEmpty) return '';
     return p.join(trimmed, 'AddonPackages');
+  }
+
+  String _normalizePath(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    return p.normalize(trimmed).toLowerCase();
+  }
+
+  bool _pathsMatch(String left, String right) {
+    return _normalizePath(left) == _normalizePath(right);
+  }
+
+  void _syncVarspathToVampath(String value) {
+    if (_separateVarspath) return;
+    _varspath.text = value;
   }
 
   @override
@@ -274,16 +316,58 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: Column(
                 children: [
                   _pathField(
-                    _varspath,
-                    l10n.varspathLabel,
-                    hintText: l10n.chooseVamHint,
-                    onBrowse: _pickVarspathDirectory,
-                  ),
-                  _pathField(
                     _vampath,
                     l10n.vampathLabel,
                     hintText: l10n.chooseVamHint,
-                    onBrowse: () => _pickDirectory(_vampath),
+                    onChanged: _syncVarspathToVampath,
+                    onBrowse: _pickVampathDirectory,
+                  ),
+                  CheckboxListTile(
+                    value: _separateVarspath,
+                    title: Text(l10n.varspathSeparateLabel),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _separateVarspath = value;
+                        if (!value) {
+                          _varspath.text = _vampath.text.trim();
+                        }
+                      });
+                    },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 18,
+                          color: Colors.orange.shade700,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            l10n.varspathSeparateTip,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _pathField(
+                    _varspath,
+                    l10n.varspathLabel,
+                    hintText: l10n.varspathSameAsVampathHint,
+                    enabled: _separateVarspath,
+                    onBrowse: _separateVarspath ? _pickVarspathDirectory : null,
                   ),
                   _pathField(
                     _vamExec,
@@ -369,6 +453,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     TextInputType keyboard = TextInputType.text,
     VoidCallback? onBrowse,
     Key? anchorKey,
+    ValueChanged<String>? onChanged,
+    bool enabled = true,
   }) {
     final l10n = context.l10n;
     return Padding(
@@ -380,6 +466,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: TextFormField(
               controller: controller,
               keyboardType: keyboard,
+              onChanged: onChanged,
+              enabled: enabled,
               decoration: InputDecoration(
                 labelText: label,
                 hintText: hintText,
@@ -393,7 +481,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (onBrowse != null) ...[
             const SizedBox(width: 8),
             OutlinedButton(
-              onPressed: onBrowse,
+              onPressed: enabled ? onBrowse : null,
               child: Text(l10n.commonBrowse),
             ),
           ],

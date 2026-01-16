@@ -680,6 +680,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
   final _proxyPassword = TextEditingController();
   String _proxyMode = 'system';
   bool _loaded = false;
+  bool _separateVarspath = false;
 
   @override
   void dispose() {
@@ -697,8 +698,14 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
   void _loadConfigIfNeeded(BootstrapConfig config) {
     if (_loaded) return;
     _loaded = true;
-    _varspath.text = config.varspath;
-    _vampath.text = config.vampath;
+    final vampath = config.vampath;
+    final varspath = config.varspath;
+    final samePaths = _pathsMatch(vampath, varspath);
+    final hasVampath = vampath.trim().isNotEmpty;
+    final hasVarspath = varspath.trim().isNotEmpty;
+    _separateVarspath = hasVampath && hasVarspath && !samePaths;
+    _varspath.text = (!_separateVarspath && hasVampath) ? vampath : varspath;
+    _vampath.text = vampath;
     _vamExec.text = config.vamExec;
     _downloaderSavePath.text = config.downloaderSavePath;
     _proxyMode = config.proxyMode;
@@ -708,7 +715,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     _proxyPassword.text = config.proxyPassword;
   }
 
-  void _applyVarspathDefaults(String path) {
+  void _applyPathDefaults(String path) {
     if (path.trim().isEmpty) return;
     if (_downloaderSavePath.text.trim().isEmpty) {
       _downloaderSavePath.text = p.join(path.trim(), 'AddonPackages');
@@ -719,11 +726,26 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
   }
 
   Future<void> _pickVarspath() async {
+    if (!_separateVarspath) return;
     final path = await getDirectoryPath();
     if (path == null) return;
     setState(() {
       _varspath.text = path;
-      _applyVarspathDefaults(path);
+      _applyPathDefaults(path);
+    });
+  }
+
+  Future<void> _pickVampath() async {
+    final path = await getDirectoryPath();
+    if (path == null) return;
+    setState(() {
+      _vampath.text = path;
+      if (!_separateVarspath) {
+        _varspath.text = path;
+      }
+      if (!_separateVarspath) {
+        _applyPathDefaults(path);
+      }
     });
   }
 
@@ -744,9 +766,11 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
   }
 
   BootstrapConfig _currentConfig() {
+    final vampath = _vampath.text.trim();
+    final varspath = _separateVarspath ? _varspath.text.trim() : vampath;
     return BootstrapConfig(
-      varspath: _varspath.text.trim(),
-      vampath: _vampath.text.trim(),
+      varspath: varspath,
+      vampath: vampath,
       vamExec: _vamExec.text.trim(),
       downloaderSavePath: _downloaderSavePath.text.trim(),
       proxyMode: _proxyMode.trim(),
@@ -755,6 +779,22 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
       proxyUsername: _proxyUsername.text.trim(),
       proxyPassword: _proxyPassword.text.trim(),
     );
+  }
+
+  String _normalizePath(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    return p.normalize(trimmed).toLowerCase();
+  }
+
+  bool _pathsMatch(String left, String right) {
+    return _normalizePath(left) == _normalizePath(right);
+  }
+
+  void _syncVarspathToVampath(String value) {
+    if (_separateVarspath) return;
+    _varspath.text = value;
+    _applyPathDefaults(value);
   }
 
   @override
@@ -794,23 +834,72 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
             Text(l10n.bootstrapConfigBody),
             const SizedBox(height: 12),
             _pathField(
-              controller: _varspath,
-              label: l10n.varspathLabel,
+              controller: _vampath,
+              label: l10n.vampathLabel,
               hint: l10n.chooseVamHint,
-              onBrowse: _pickVarspath,
+              onBrowse: _pickVampath,
+              onChanged: _syncVarspathToVampath,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
+                  return l10n.bootstrapConfigVampathRequired;
+                }
+                return null;
+              },
+            ),
+            CheckboxListTile(
+              value: _separateVarspath,
+              title: Text(l10n.varspathSeparateLabel),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _separateVarspath = value;
+                  if (!value) {
+                    _varspath.text = _vampath.text.trim();
+                  }
+                });
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 18,
+                    color: Colors.orange.shade700,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      l10n.varspathSeparateTip,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _pathField(
+              controller: _varspath,
+              label: l10n.varspathLabel,
+              hint: l10n.varspathSameAsVampathHint,
+              onBrowse: _separateVarspath ? _pickVarspath : null,
+              enabled: _separateVarspath,
+              validator: (value) {
+                if (_separateVarspath &&
+                    (value == null || value.trim().isEmpty)) {
                   return l10n.bootstrapConfigVarspathRequired;
                 }
                 return null;
               },
-              onChanged: (value) => _applyVarspathDefaults(value),
-            ),
-            _pathField(
-              controller: _vampath,
-              label: l10n.vampathLabel,
-              hint: l10n.chooseVamHint,
-              onBrowse: () => _pickDirectory(_vampath),
+              onChanged: (value) => _applyPathDefaults(value),
             ),
             _pathField(
               controller: _vamExec,
@@ -891,9 +980,10 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
     required TextEditingController controller,
     required String label,
     required String hint,
-    required VoidCallback onBrowse,
+    VoidCallback? onBrowse,
     String? Function(String?)? validator,
     ValueChanged<String>? onChanged,
+    bool enabled = true,
   }) {
     final l10n = context.l10n;
     return Padding(
@@ -905,6 +995,7 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
               controller: controller,
               onChanged: onChanged,
               validator: validator,
+              enabled: enabled,
               decoration: InputDecoration(
                 labelText: label,
                 hintText: hint,
@@ -913,11 +1004,13 @@ class _ConfigStepState extends ConsumerState<_ConfigStep> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: onBrowse,
-            child: Text(l10n.commonBrowse),
-          ),
+          if (onBrowse != null) ...[
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: enabled ? onBrowse : null,
+              child: Text(l10n.commonBrowse),
+            ),
+          ],
         ],
       ),
     );
@@ -1029,15 +1122,19 @@ class _ChecksStep extends ConsumerWidget {
                   : () => ref.read(bootstrapProvider.notifier).runChecks(
                         l10n.bootstrapCheckBackendLabel,
                         l10n.bootstrapCheckVarspathLabel,
+                        l10n.bootstrapCheckVampathLabel,
                         l10n.bootstrapCheckDownloaderLabel,
                         l10n.bootstrapCheckFileOpsLabel,
                         l10n.bootstrapCheckSymlinkLabel,
                         l10n.bootstrapCheckVamExecLabel,
                         varspathHint: l10n.bootstrapCheckVarspathHint,
+                        vampathHint: l10n.bootstrapCheckVampathHint,
                         downloaderHint: l10n.bootstrapCheckDownloaderHint,
                         fileOpsHint: l10n.bootstrapCheckFileOpsHint,
                         symlinkHint: l10n.bootstrapCheckSymlinkHint,
                         vamExecHint: l10n.bootstrapCheckVamExecHint,
+                        varspathName: l10n.varspathLabel,
+                        vampathName: l10n.vampathLabel,
                       ),
               icon: state.checksRunning
                   ? const SizedBox(

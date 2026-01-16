@@ -840,15 +840,16 @@ class _HomePageState extends ConsumerState<HomePage> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _withTooltip(
+              _withTooltip(
               l10n.rebuildLinksTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
                     : () async {
-                        await _runJob('rebuild_links',
-                            args: {'include_missing': true});
-                      },
+                      await _runJob('rebuild_links',
+                          args: {'include_missing': true});
+                      ref.invalidate(varsListProvider);
+                    },
                 icon: const Icon(Icons.link),
                 label: Text(l10n.rebuildLinksLabel),
                 style: OutlinedButton.styleFrom(
@@ -873,14 +874,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
             ),
-            _withTooltip(
+              _withTooltip(
               l10n.staleVarsTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
                     : () async {
-                        await _runJob('stale_vars');
-                      },
+                      await _runJob('stale_vars');
+                      ref.invalidate(varsListProvider);
+                    },
                 icon: const Icon(Icons.inventory_2_outlined),
                 label: Text(l10n.staleVarsLabel),
                 style: OutlinedButton.styleFrom(
@@ -889,14 +891,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
             ),
-            _withTooltip(
+              _withTooltip(
               l10n.oldVersionsTooltip,
               OutlinedButton.icon(
                 onPressed: isBusy
                     ? null
                     : () async {
-                        await _runJob('old_version_vars');
-                      },
+                      await _runJob('old_version_vars');
+                      ref.invalidate(varsListProvider);
+                    },
                 icon: const Icon(Icons.layers_clear),
                 label: Text(l10n.oldVersionsLabel),
                 style: OutlinedButton.styleFrom(
@@ -1577,6 +1580,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
     await _loadPackSwitches();
+    ref.invalidate(varsListProvider);
   }
 
   void _syncController(TextEditingController controller, String value) {

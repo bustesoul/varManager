@@ -315,6 +315,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vampathLabel => 'vampath';
 
   @override
+  String get varspathSameAsVampathHint => 'Default: same as vampath';
+
+  @override
+  String get varspathSeparateLabel => 'I need to set varspath separately';
+
+  @override
+  String get varspathSeparateTip =>
+      'Use a separate varspath only when .var files are stored in a different folder or drive from VaM.';
+
+  @override
   String get vamExecLabel => 'vam_exec';
 
   @override
@@ -481,7 +491,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String updateDbRequiredMessage(Object path) {
-    return 'AddonPackages at $path contains real .var files or is not a symlink. Run Update DB before switching packs.';
+    return 'Managed link folders under AddonPackages at $path contain real .var files. Run Update DB or move them out before switching packs.';
   }
 
   @override
@@ -1032,6 +1042,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloadStatusNone => 'None';
+
+  @override
+  String get downloadStatusDirectTip =>
+      'Exact version download link found on Hub.';
+
+  @override
+  String get downloadStatusNoVersionTip =>
+      'Hub link found, but version differs; download may not match.';
+
+  @override
+  String get downloadStatusNoneTip => 'No Hub download link found.';
 
   @override
   String get missingSelectFirst => 'Please select a missing var first.';
@@ -1623,7 +1644,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Fill in key paths so varManager can index packages and launch VaM.';
 
   @override
-  String get bootstrapConfigVarspathRequired => 'varspath is required.';
+  String get bootstrapConfigVarspathRequired =>
+      'varspath is required when separate is enabled.';
+
+  @override
+  String get bootstrapConfigVampathRequired => 'vampath is required.';
 
   @override
   String get bootstrapConfigVamExecHint =>
@@ -1653,6 +1678,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bootstrapCheckVarspathLabel => 'varspath availability';
 
   @override
+  String get bootstrapCheckVampathLabel => 'vampath availability';
+
+  @override
   String get bootstrapCheckDownloaderLabel => 'Download path write access';
 
   @override
@@ -1665,7 +1693,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bootstrapCheckVamExecLabel => 'VaM executable path';
 
   @override
-  String get bootstrapCheckVarspathHint => 'Set varspath in configuration.';
+  String get bootstrapCheckVarspathHint =>
+      'Set varspath in configuration (defaults to vampath).';
+
+  @override
+  String get bootstrapCheckVampathHint => 'Set vampath in configuration.';
 
   @override
   String get bootstrapCheckDownloaderHint => 'Choose a writable download path.';
