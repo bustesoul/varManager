@@ -59,6 +59,9 @@ class AppConfig {
     required this.proxy,
     this.uiTheme,
     this.uiLanguage,
+    required this.uiPerPageVars,
+    required this.uiPerPageScenes,
+    required this.uiUninstallSelectedOnly,
   });
 
   final String listenHost;
@@ -73,6 +76,9 @@ class AppConfig {
   final ProxyConfig proxy;
   final String? uiTheme;
   final String? uiLanguage;
+  final int uiPerPageVars;
+  final int uiPerPageScenes;
+  final bool uiUninstallSelectedOnly;
 
   String get baseUrl => 'http://$listenHost:$listenPort';
 
@@ -93,6 +99,10 @@ class AppConfig {
           : ProxyConfig.empty,
       uiTheme: json['ui_theme'] as String?,
       uiLanguage: json['ui_language'] as String?,
+      uiPerPageVars: (json['ui_per_page_vars'] as num?)?.toInt() ?? 50,
+      uiPerPageScenes: (json['ui_per_page_scenes'] as num?)?.toInt() ?? 50,
+      uiUninstallSelectedOnly:
+          (json['ui_uninstall_selected_only'] as bool?) ?? false,
     );
   }
 
@@ -110,6 +120,9 @@ class AppConfig {
       'proxy': proxy.toJson(),
       'ui_theme': uiTheme,
       'ui_language': uiLanguage,
+      'ui_per_page_vars': uiPerPageVars,
+      'ui_per_page_scenes': uiPerPageScenes,
+      'ui_uninstall_selected_only': uiUninstallSelectedOnly,
     };
   }
 
@@ -126,6 +139,9 @@ class AppConfig {
     ProxyConfig? proxy,
     String? uiTheme,
     String? uiLanguage,
+    int? uiPerPageVars,
+    int? uiPerPageScenes,
+    bool? uiUninstallSelectedOnly,
   }) {
     return AppConfig(
       listenHost: listenHost ?? this.listenHost,
@@ -140,6 +156,10 @@ class AppConfig {
       proxy: proxy ?? this.proxy,
       uiTheme: uiTheme ?? this.uiTheme,
       uiLanguage: uiLanguage ?? this.uiLanguage,
+      uiPerPageVars: uiPerPageVars ?? this.uiPerPageVars,
+      uiPerPageScenes: uiPerPageScenes ?? this.uiPerPageScenes,
+      uiUninstallSelectedOnly:
+          uiUninstallSelectedOnly ?? this.uiUninstallSelectedOnly,
     );
   }
 }

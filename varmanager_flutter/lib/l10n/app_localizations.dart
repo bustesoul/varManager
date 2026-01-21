@@ -518,6 +518,12 @@ abstract class AppLocalizations {
   /// **'UI'**
   String get settingsSectionUi;
 
+  /// No description provided for @settingsSectionList.
+  ///
+  /// In en, this message translates to:
+  /// **'List & Uninstall'**
+  String get settingsSectionList;
+
   /// No description provided for @settingsSectionListen.
   ///
   /// In en, this message translates to:
@@ -595,6 +601,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'中文'**
   String get languageChinese;
+
+  /// No description provided for @settingsPerPageVarsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Default vars per page'**
+  String get settingsPerPageVarsLabel;
+
+  /// No description provided for @settingsPerPageScenesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Default scenes per page'**
+  String get settingsPerPageScenesLabel;
+
+  /// No description provided for @settingsUninstallSelectedOnlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall selected vars only'**
+  String get settingsUninstallSelectedOnlyLabel;
+
+  /// No description provided for @settingsUninstallSelectedOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip uninstall preview and do not remove dependent vars automatically.'**
+  String get settingsUninstallSelectedOnlyHint;
 
   /// No description provided for @listenHostLabel.
   ///
@@ -763,6 +793,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All creators'**
   String get allCreators;
+
+  /// No description provided for @creatorFilterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a creator and press comma or Enter'**
+  String get creatorFilterHint;
+
+  /// No description provided for @creatorListButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Creator list'**
+  String get creatorListButton;
+
+  /// No description provided for @creatorListTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse creator list'**
+  String get creatorListTooltip;
+
+  /// No description provided for @creatorListTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Creators'**
+  String get creatorListTitle;
+
+  /// No description provided for @creatorListSearchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Search creators'**
+  String get creatorListSearchLabel;
+
+  /// No description provided for @creatorListClearLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All creators'**
+  String get creatorListClearLabel;
+
+  /// No description provided for @creatorListEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No creators available'**
+  String get creatorListEmpty;
+
+  /// No description provided for @creatorStatsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Vars {varCount} - Installed {installedCount}'**
+  String creatorStatsLabel(Object varCount, Object installedCount);
 
   /// No description provided for @statusAllLabel.
   ///
@@ -1234,7 +1312,7 @@ abstract class AppLocalizations {
   /// No description provided for @uninstallSelectedTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Uninstall selected vars and affected items.'**
+  /// **'Uninstall selected vars.'**
   String get uninstallSelectedTooltip;
 
   /// No description provided for @deleteSelectedLabel.
@@ -1246,7 +1324,7 @@ abstract class AppLocalizations {
   /// No description provided for @deleteSelectedTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Delete selected vars and affected items.'**
+  /// **'Delete selected vars.'**
   String get deleteSelectedTooltip;
 
   /// No description provided for @moveLinksLabel.

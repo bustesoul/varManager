@@ -70,6 +70,7 @@
   "confirmDeleteTitle": "Confirm Delete",
   "confirmDeleteMessage": "This will permanently delete the file. Are you sure?",
   "settingsSectionUi": "UI",
+  "settingsSectionList": "List & Uninstall",
   "settingsSectionListen": "Listen & Logs",
   "settingsSectionPaths": "Paths",
   "settingsSectionAbout": "About",
@@ -83,6 +84,10 @@
   "languageLabel": "Language",
   "languageEnglish": "English",
   "languageChinese": "中文",
+  "settingsPerPageVarsLabel": "Default vars per page",
+  "settingsPerPageScenesLabel": "Default scenes per page",
+  "settingsUninstallSelectedOnlyLabel": "Uninstall selected vars only",
+  "settingsUninstallSelectedOnlyHint": "Skip uninstall preview and do not remove dependent vars automatically.",
   "listenHostLabel": "Listen host",
   "listenPortLabel": "Listen port",
   "logLevelLabel": "Log level",
@@ -111,6 +116,14 @@
   "searchVarPackageLabel": "Search var/package",
   "creatorLabel": "Creator",
   "allCreators": "All creators",
+  "creatorFilterHint": "Type a creator and press comma or Enter",
+  "creatorListButton": "Creator list",
+  "creatorListTooltip": "Browse creator list",
+  "creatorListTitle": "Creators",
+  "creatorListSearchLabel": "Search creators",
+  "creatorListClearLabel": "All creators",
+  "creatorListEmpty": "No creators available",
+  "creatorStatsLabel": "Vars {varCount} - Installed {installedCount}",
   "statusAllLabel": "All status",
   "statusInstalled": "Installed",
   "statusNotInstalled": "Not installed",
@@ -188,9 +201,9 @@
   "installSelectedLabel": "Install Selected",
   "installSelectedTooltip": "Install selected vars and dependencies.",
   "uninstallSelectedLabel": "Uninstall Selected",
-  "uninstallSelectedTooltip": "Uninstall selected vars and affected items.",
+  "uninstallSelectedTooltip": "Uninstall selected vars.",
   "deleteSelectedLabel": "Delete Selected",
-  "deleteSelectedTooltip": "Delete selected vars and affected items.",
+  "deleteSelectedTooltip": "Delete selected vars.",
   "moveLinksLabel": "Move Links",
   "moveLinksTooltip": "Move selected symlink entries to a target folder.",
   "targetDirLabel": "Target dir",
@@ -565,6 +578,12 @@
   "@perPageLabel": {
     "placeholders": {
       "value": {}
+    }
+  },
+  "@creatorStatsLabel": {
+    "placeholders": {
+      "varCount": {},
+      "installedCount": {}
     }
   },
   "@selectedCount": {

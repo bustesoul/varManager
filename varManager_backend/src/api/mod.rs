@@ -5,11 +5,12 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use sqlx::{QueryBuilder, Row, SqlitePool};
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
+use serde::de::{self, Deserializer, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Component, Path as StdPath, PathBuf},
     sync::atomic::Ordering,
     sync::Arc,
@@ -82,6 +83,17 @@ pub(crate) struct CreatorsQuery {
     q: Option<String>,
     offset: Option<u32>,
     limit: Option<u32>,
+    prefix: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct CreatorsStatsQuery {
+    #[serde(default, deserialize_with = "deserialize_names")]
+    names: Vec<String>,
+    q: Option<String>,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    prefix: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -223,6 +235,9 @@ pub(crate) struct UpdateConfigRequest {
     proxy: Option<crate::app::ProxyConfig>,
     ui_theme: Option<String>,
     ui_language: Option<String>,
+    ui_per_page_vars: Option<u32>,
+    ui_per_page_scenes: Option<u32>,
+    ui_uninstall_selected_only: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -358,6 +373,19 @@ pub(crate) struct ScenesListResponse {
 #[derive(Serialize)]
 pub(crate) struct CreatorsResponse {
     creators: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) struct CreatorStatsItem {
+    name: String,
+    var_count: u64,
+    installed_count: u64,
+}
+
+#[derive(Serialize)]
+pub(crate) struct CreatorsStatsResponse {
+    items: Vec<CreatorStatsItem>,
 }
 
 #[derive(Serialize)]
@@ -739,6 +767,21 @@ fn apply_config_update(current: &Config, req: UpdateConfigRequest) -> Result<Con
     if req.ui_language.is_some() {
         next.ui_language = normalize_optional(req.ui_language);
     }
+    if let Some(per_page) = req.ui_per_page_vars {
+        if !(1..=200).contains(&per_page) {
+            return Err("ui_per_page_vars must be between 1 and 200".to_string());
+        }
+        next.ui_per_page_vars = per_page;
+    }
+    if let Some(per_page) = req.ui_per_page_scenes {
+        if !(1..=200).contains(&per_page) {
+            return Err("ui_per_page_scenes must be between 1 and 200".to_string());
+        }
+        next.ui_per_page_scenes = per_page;
+    }
+    if let Some(value) = req.ui_uninstall_selected_only {
+        next.ui_uninstall_selected_only = value;
+    }
     Ok(next)
 }
 
@@ -772,6 +815,209 @@ pub async fn update_config(
     Ok(Json(next))
 }
 
+fn deserialize_names<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct NamesVisitor;
+
+    impl<'de> Visitor<'de> for NamesVisitor {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or a list of strings")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(value
+                .split(',')
+                .map(|item| item.trim())
+                .filter(|item| !item.is_empty())
+                .map(|item| item.to_string())
+                .collect())
+        }
+
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            self.visit_str(&value)
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut items = Vec::new();
+            while let Some(value) = seq.next_element::<String>()? {
+                items.push(value);
+            }
+            Ok(items)
+        }
+    }
+
+    deserializer.deserialize_any(NamesVisitor)
+}
+
+#[derive(Clone, Copy)]
+enum CreatorPrefix {
+    Letter(char),
+    Other,
+}
+
+fn parse_creator_prefix(raw: Option<&str>) -> Option<CreatorPrefix> {
+    let trimmed = raw?.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let ch = trimmed.chars().next()?.to_ascii_uppercase();
+    if ch == '#' {
+        return Some(CreatorPrefix::Other);
+    }
+    if ch.is_ascii_alphabetic() {
+        return Some(CreatorPrefix::Letter(ch));
+    }
+    None
+}
+
+fn parse_creator_list(raw: Option<&str>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut creators = Vec::new();
+    let Some(value) = raw else {
+        return creators;
+    };
+    for part in value.split(',') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("all") {
+            continue;
+        }
+        let key = trimmed.to_ascii_lowercase();
+        if seen.insert(key) {
+            creators.push(trimmed.to_string());
+        }
+    }
+    creators
+}
+
+fn parse_creator_names(values: &[String]) -> Vec<String> {
+    if values.is_empty() {
+        return Vec::new();
+    }
+    let mut seen = HashSet::new();
+    let mut names = Vec::new();
+    for raw in values {
+        for part in raw.split(',') {
+            let trimmed = part.trim();
+            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("all") {
+                continue;
+            }
+            let key = trimmed.to_ascii_lowercase();
+            if seen.insert(key) {
+                names.push(trimmed.to_string());
+            }
+        }
+    }
+    names
+}
+
+async fn query_creators(
+    pool: &SqlitePool,
+    q: &str,
+    prefix: Option<CreatorPrefix>,
+    offset: u32,
+    limit: u32,
+) -> Result<Vec<String>, ApiError> {
+    let mut builder = QueryBuilder::<Sqlite>::new(
+        "SELECT DISTINCT creatorName FROM vars WHERE creatorName IS NOT NULL AND TRIM(creatorName) <> ''",
+    );
+    if !q.is_empty() {
+        builder
+            .push(" AND creatorName LIKE ")
+            .push_bind(format!("%{}%", q))
+            .push(" COLLATE NOCASE");
+    }
+    if let Some(prefix) = prefix {
+        match prefix {
+            CreatorPrefix::Letter(ch) => {
+                builder
+                    .push(" AND UPPER(SUBSTR(TRIM(creatorName), 1, 1)) = ")
+                    .push_bind(ch.to_string());
+            }
+            CreatorPrefix::Other => {
+                builder
+                    .push(" AND (UPPER(SUBSTR(TRIM(creatorName), 1, 1)) NOT BETWEEN 'A' AND 'Z')");
+            }
+        }
+    }
+    if !q.is_empty() {
+        builder
+            .push(" ORDER BY CASE WHEN creatorName LIKE ")
+            .push_bind(format!("{}%", q))
+            .push(" COLLATE NOCASE THEN 0 ELSE 1 END, creatorName COLLATE NOCASE");
+    } else {
+        builder.push(" ORDER BY creatorName");
+    }
+    builder
+        .push(" LIMIT ")
+        .push_bind(limit as i64)
+        .push(" OFFSET ")
+        .push_bind(offset as i64);
+
+    let rows = builder
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(internal_error)?;
+    let mut creators = Vec::new();
+    for row in rows {
+        creators.push(row.try_get::<String, _>(0).map_err(internal_error)?);
+    }
+    Ok(creators)
+}
+
+async fn query_creator_stats(
+    pool: &SqlitePool,
+    names: &[String],
+) -> Result<HashMap<String, (u64, u64)>, ApiError> {
+    if names.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let mut builder = QueryBuilder::<Sqlite>::new(
+        "SELECT v.creatorName, COUNT(1), \
+                COALESCE(SUM(CASE WHEN i.installed = 1 THEN 1 ELSE 0 END), 0) \
+         FROM vars v \
+         LEFT JOIN installStatus i ON v.varName = i.varName \
+         WHERE v.creatorName IN (",
+    );
+    let mut separated = builder.separated(", ");
+    for name in names {
+        separated.push_bind(name);
+    }
+    separated.push_unseparated(") GROUP BY v.creatorName");
+    let rows = builder
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(internal_error)?;
+    let mut map = HashMap::new();
+    for row in rows {
+        let name: String = row.try_get(0).map_err(internal_error)?;
+        let var_count: i64 = row.try_get(1).map_err(internal_error)?;
+        let installed_count: i64 = row.try_get(2).map_err(internal_error)?;
+        let var_count = if var_count < 0 { 0 } else { var_count as u64 };
+        let installed_count = if installed_count < 0 {
+            0
+        } else {
+            installed_count as u64
+        };
+        map.insert(name, (var_count, installed_count));
+    }
+    Ok(map)
+}
+
 pub async fn list_vars(
     State(state): State<AppState>,
     Query(query): Query<VarsQuery>,
@@ -792,9 +1038,20 @@ pub async fn list_vars(
     let mut conditions = Vec::new();
     let mut params: Vec<BindValue> = Vec::new();
 
-    if let Some(creator) = query.creator.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        conditions.push("v.creatorName = ?".to_string());
-        params.push(BindValue::Text(creator.to_string()));
+    let creator_list = parse_creator_list(query.creator.as_deref());
+    if !creator_list.is_empty() {
+        if creator_list.len() == 1 {
+            conditions.push("v.creatorName COLLATE NOCASE = ?".to_string());
+        } else {
+            let placeholders = vec!["?"; creator_list.len()].join(", ");
+            conditions.push(format!(
+                "v.creatorName COLLATE NOCASE IN ({})",
+                placeholders
+            ));
+        }
+        for creator in &creator_list {
+            params.push(BindValue::Text(creator.to_string()));
+        }
     }
     if let Some(package) = query.package.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         conditions.push("v.packageName LIKE ?".to_string());
@@ -1285,14 +1542,25 @@ pub async fn list_scenes(
     }
     let mut conditions = Vec::new();
     let mut params: Vec<BindValue> = Vec::new();
+    let creator_list = parse_creator_list(query.creator.as_deref());
 
     if let Some(category) = query.category.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         conditions.push("s.atomType = ?".to_string());
         params.push(BindValue::Text(category.to_string()));
     }
-    if let Some(creator) = query.creator.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        conditions.push("v.creatorName = ?".to_string());
-        params.push(BindValue::Text(creator.to_string()));
+    if !creator_list.is_empty() {
+        if creator_list.len() == 1 {
+            conditions.push("v.creatorName COLLATE NOCASE = ?".to_string());
+        } else {
+            let placeholders = vec!["?"; creator_list.len()].join(", ");
+            conditions.push(format!(
+                "v.creatorName COLLATE NOCASE IN ({})",
+                placeholders
+            ));
+        }
+        for creator in &creator_list {
+            params.push(BindValue::Text(creator.to_string()));
+        }
     }
     if let Some(search) = query.search.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
         conditions.push("(s.scenePath LIKE ? OR v.varName LIKE ?)".to_string());
@@ -1404,7 +1672,8 @@ pub async fn list_scenes(
     let installed_filter = parse_bool_filter(query.installed.as_deref());
     let hide_fav_filter = parse_hide_fav_filter(query.hide_fav.as_deref());
     let category_filter = query.category.as_ref().map(|s| s.trim().to_string());
-    let creator_filter = query.creator.as_ref().map(|s| s.trim().to_string());
+    let creator_filter: HashSet<String> =
+        creator_list.iter().map(|value| value.to_lowercase()).collect();
     let search_filter = query
         .search
         .as_ref()
@@ -1432,16 +1701,14 @@ pub async fn list_scenes(
                     return false;
                 }
             }
-            if let Some(creator) = creator_filter.as_ref() {
-                if !creator.is_empty()
-                    && item
-                        .creator_name
-                        .as_ref()
-                        .map(|c| c != creator)
-                        .unwrap_or(true)
-                {
-                    return false;
-                }
+            if !creator_filter.is_empty()
+                && item
+                    .creator_name
+                    .as_ref()
+                    .map(|c| !creator_filter.contains(&c.to_lowercase()))
+                    .unwrap_or(true)
+            {
+                return false;
             }
             if let Some(search) = search_filter.as_ref() {
                 let name = item.var_name.to_lowercase();
@@ -1799,49 +2066,61 @@ pub async fn list_creators(
     let _cfg = read_config(&state).map_err(internal_error)?;
     let pool = &state.db_pool;
 
-    let q = query.q.unwrap_or_default().trim().to_string();
+    let q_raw = query.q.unwrap_or_default();
+    let q = q_raw.trim();
+    let prefix = parse_creator_prefix(query.prefix.as_deref());
     let limit = query
         .limit
-        .unwrap_or(if q.is_empty() { 0 } else { 10 })
-        .clamp(0, 100);
-    let offset = query.offset.unwrap_or(0) as i64;
-
-    let mut builder = QueryBuilder::new(
-        "SELECT DISTINCT creatorName FROM vars WHERE creatorName IS NOT NULL AND creatorName <> ''",
-    );
-    if !q.is_empty() {
-        builder
-            .push(" AND creatorName LIKE ")
-            .push_bind(format!("%{}%", q))
-            .push(" COLLATE NOCASE");
-    }
-    if !q.is_empty() {
-        builder
-            .push(" ORDER BY CASE WHEN creatorName LIKE ")
-            .push_bind(format!("{}%", q))
-            .push(" COLLATE NOCASE THEN 0 ELSE 1 END, creatorName COLLATE NOCASE");
-    } else {
-        builder.push(" ORDER BY creatorName");
-    }
-    if limit > 0 || offset > 0 {
-        builder
-            .push(" LIMIT ")
-            .push_bind(limit as i64)
-            .push(" OFFSET ")
-            .push_bind(offset);
-    }
-
-    let rows = builder
-        .build()
-        .fetch_all(pool)
-        .await
-        .map_err(internal_error)?;
-    let mut creators = Vec::new();
-    for row in rows {
-        creators.push(row.try_get::<String, _>(0).map_err(internal_error)?);
-    }
+        .unwrap_or(if q.is_empty() { 200 } else { 10 })
+        .clamp(1, 200);
+    let offset = query.offset.unwrap_or(0);
+    let creators = query_creators(pool, q, prefix, offset, limit).await?;
 
     Ok(Json(CreatorsResponse { creators }))
+}
+
+pub async fn list_creator_stats(
+    State(state): State<AppState>,
+    Query(query): Query<CreatorsStatsQuery>,
+) -> ApiResult<Json<CreatorsStatsResponse>> {
+    let _cfg = read_config(&state).map_err(internal_error)?;
+    let pool = &state.db_pool;
+
+    let mut names = parse_creator_names(&query.names);
+    if names.is_empty() {
+        let q_raw = query.q.unwrap_or_default();
+        let q = q_raw.trim();
+        let prefix = parse_creator_prefix(query.prefix.as_deref());
+        let limit = query
+            .limit
+            .unwrap_or(if q.is_empty() { 200 } else { 10 })
+            .clamp(1, 200);
+        let offset = query.offset.unwrap_or(0);
+        names = query_creators(pool, q, prefix, offset, limit).await?;
+    }
+    if names.is_empty() {
+        return Ok(Json(CreatorsStatsResponse { items: Vec::new() }));
+    }
+
+    let stats = query_creator_stats(pool, &names).await?;
+    let mut items = Vec::new();
+    for name in names {
+        if let Some((var_count, installed_count)) = stats.get(&name) {
+            items.push(CreatorStatsItem {
+                name,
+                var_count: *var_count,
+                installed_count: *installed_count,
+            });
+        } else {
+            items.push(CreatorStatsItem {
+                name,
+                var_count: 0,
+                installed_count: 0,
+            });
+        }
+    }
+
+    Ok(Json(CreatorsStatsResponse { items }))
 }
 
 pub async fn list_hub_options(

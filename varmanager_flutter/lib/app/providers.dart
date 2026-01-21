@@ -7,6 +7,7 @@ import '../core/backend/backend_client.dart';
 import '../core/backend/backend_process_manager.dart';
 import '../core/backend/job_log_controller.dart';
 import '../core/backend/job_runner.dart';
+import '../core/models/config.dart';
 import '../l10n/locale_config.dart';
 import 'theme.dart';
 
@@ -141,6 +142,28 @@ class ThemeNotifier extends Notifier<AppThemeType> {
 
 final themeProvider = NotifierProvider<ThemeNotifier, AppThemeType>(
   ThemeNotifier.new,
+);
+
+class AppConfigNotifier extends Notifier<AppConfig?> {
+  @override
+  AppConfig? build() => null;
+
+  Future<void> loadFromBackend() async {
+    try {
+      final client = ref.read(backendClientProvider);
+      state = await client.getConfig();
+    } catch (_) {
+      // Keep existing config on load errors.
+    }
+  }
+
+  void setConfig(AppConfig config) {
+    state = config;
+  }
+}
+
+final appConfigProvider = NotifierProvider<AppConfigNotifier, AppConfig?>(
+  AppConfigNotifier.new,
 );
 
 final backendClientProvider = Provider<BackendClient>((ref) {

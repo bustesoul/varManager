@@ -4,11 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/backend/query_params.dart';
+import '../../core/models/config.dart';
 import '../../core/models/extra_models.dart';
 import '../../core/models/job_models.dart';
 import '../../core/models/var_models.dart';
 import '../../core/utils/debounce.dart';
-import '../../widgets/lazy_dropdown_field.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
 import '../bootstrap/bootstrap_keys.dart';
@@ -17,6 +17,8 @@ import '../prepare_saves/prepare_saves_page.dart';
 import '../uninstall_vars/uninstall_vars_page.dart';
 import '../var_detail/var_detail_page.dart';
 import 'providers.dart';
+import 'widgets/creator_filter_field.dart';
+import 'widgets/creator_list_dialog.dart';
 import 'widgets/preview_panel.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -40,6 +42,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _showAdvancedFilters = false;
   _ActionGroup _actionGroup = _ActionGroup.core;
   String _missingDepsScope = 'installed';
+  bool _uninstallSelectedOnly = false;
 
   static const Duration _tooltipDelay = Duration(seconds: 1);
 
@@ -50,7 +53,27 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
+    final config = ref.read(appConfigProvider);
+    if (config != null) {
+      _uninstallSelectedOnly = config.uiUninstallSelectedOnly;
+    }
     Future.microtask(_loadPackSwitches);
+    ref.listen<AppConfig?>(appConfigProvider, (previous, next) {
+      if (next == null) return;
+      final current = ref.read(varsQueryProvider);
+      final previousDefault = previous?.uiPerPageVars ?? 50;
+      if (current.perPage == previousDefault &&
+          current.perPage != next.uiPerPageVars) {
+        _updateQuery(
+          (state) => state.copyWith(page: 1, perPage: next.uiPerPageVars),
+        );
+      }
+      if (_uninstallSelectedOnly != next.uiUninstallSelectedOnly && mounted) {
+        setState(() {
+          _uninstallSelectedOnly = next.uiUninstallSelectedOnly;
+        });
+      }
+    });
   }
 
   @override
@@ -144,6 +167,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final selected = ref.watch(selectedVarsProvider);
     final focusedVar = ref.watch(focusedVarProvider);
     final query = ref.watch(varsQueryProvider);
+    final creatorSelections = _splitCreators(query.creator);
     _syncController(_packageController, query.package);
     _syncController(_versionController, query.version);
     _syncController(_minSizeController, _formatNumber(query.minSize));
@@ -183,23 +207,39 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   ),
                   SizedBox(
-                    width: 220,
-                    child: LazyDropdownField(
+                    width: 240,
+                    child: CreatorFilterField(
                       label: l10n.creatorLabel,
-                      value: query.creator.isEmpty ? 'ALL' : query.creator,
-                      allValue: 'ALL',
-                      allLabel: l10n.allCreators,
-                      optionsLoader: (queryText, offset, limit) async {
-                        final client = ref.read(backendClientProvider);
-                        return client.listCreators(
-                          query: queryText,
-                          offset: offset,
-                          limit: limit,
+                      hintText: l10n.creatorFilterHint,
+                      selections: creatorSelections,
+                      listTooltip: l10n.creatorListTooltip,
+                      onListPressed: () async {
+                        final result = await showDialog<String>(
+                          context: context,
+                          builder: (_) => const CreatorListDialog(),
+                        );
+                        if (!context.mounted || result == null) return;
+                        if (result.isEmpty) {
+                          _updateQuery(
+                            (state) => state.copyWith(page: 1, creator: ''),
+                          );
+                          return;
+                        }
+                        final current = _splitCreators(
+                          ref.read(varsQueryProvider).creator,
+                        );
+                        final next = _mergeCreators(current, [result]);
+                        _updateQuery(
+                          (state) => state.copyWith(
+                            page: 1,
+                            creator: next.join(','),
+                          ),
                         );
                       },
-                      onChanged: (value) {
+                      onChanged: (values) {
+                        final next = values.join(',');
                         _updateQuery(
-                          (state) => state.copyWith(page: 1, creator: value),
+                          (state) => state.copyWith(page: 1, creator: next),
                         );
                       },
                     ),
@@ -922,6 +962,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       String? focusedVar) {
     final l10n = context.l10n;
     final isBusy = ref.watch(jobBusyProvider);
+    final includeImplicated = !_uninstallSelectedOnly;
     final totalPages =
         data.total == 0 ? 1 : (data.total + query.perPage - 1) ~/ query.perPage;
     if (data.total > 0 && data.page > totalPages) {
@@ -1102,10 +1143,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                       onPressed: isBusy
                           ? null
                           : () async {
+                              if (_uninstallSelectedOnly) {
+                                await _runJob('uninstall_vars', args: {
+                                  'var_names': selected.toList(),
+                                  'include_implicated': includeImplicated,
+                                });
+                                ref.invalidate(varsListProvider);
+                                return;
+                              }
                               final preview =
                                   await _runJob('preview_uninstall', args: {
                                 'var_names': selected.toList(),
-                                'include_implicated': true,
+                                'include_implicated': includeImplicated,
                               });
                               if (!context.mounted) return;
                               final result =
@@ -1121,7 +1170,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               if (confirmed == true) {
                                 await _runJob('uninstall_vars', args: {
                                   'var_names': selected.toList(),
-                                  'include_implicated': true,
+                                  'include_implicated': includeImplicated,
                                 });
                                 ref.invalidate(varsListProvider);
                               }
@@ -1137,7 +1186,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           : () async {
                               await _runJob('delete_vars', args: {
                                 'var_names': selected.toList(),
-                                'include_implicated': true,
+                                'include_implicated': includeImplicated,
                               });
                               ref.invalidate(varsListProvider);
                             },
@@ -1591,6 +1640,46 @@ class _HomePageState extends ConsumerState<HomePage> {
         TextPosition(offset: controller.text.length),
       );
     }
+  }
+
+  List<String> _splitCreators(String raw) {
+    if (raw.trim().isEmpty) return const [];
+    final seen = <String>{};
+    final creators = <String>[];
+    for (final part in raw.split(',')) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty || trimmed.toUpperCase() == 'ALL') {
+        continue;
+      }
+      final key = trimmed.toLowerCase();
+      if (seen.add(key)) {
+        creators.add(trimmed);
+      }
+    }
+    return creators;
+  }
+
+  List<String> _mergeCreators(List<String> current, List<String> additions) {
+    final seen = <String>{};
+    final merged = <String>[];
+    void addCreator(String value) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty || trimmed.toUpperCase() == 'ALL') {
+        return;
+      }
+      final key = trimmed.toLowerCase();
+      if (seen.add(key)) {
+        merged.add(trimmed);
+      }
+    }
+
+    for (final creator in current) {
+      addCreator(creator);
+    }
+    for (final creator in additions) {
+      addCreator(creator);
+    }
+    return merged;
   }
 
   String _formatNumber(double? value) {

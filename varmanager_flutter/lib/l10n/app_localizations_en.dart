@@ -232,6 +232,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSectionUi => 'UI';
 
   @override
+  String get settingsSectionList => 'List & Uninstall';
+
+  @override
   String get settingsSectionListen => 'Listen & Logs';
 
   @override
@@ -271,6 +274,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageChinese => '中文';
+
+  @override
+  String get settingsPerPageVarsLabel => 'Default vars per page';
+
+  @override
+  String get settingsPerPageScenesLabel => 'Default scenes per page';
+
+  @override
+  String get settingsUninstallSelectedOnlyLabel =>
+      'Uninstall selected vars only';
+
+  @override
+  String get settingsUninstallSelectedOnlyHint =>
+      'Skip uninstall preview and do not remove dependent vars automatically.';
 
   @override
   String get listenHostLabel => 'Listen host';
@@ -357,6 +374,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get allCreators => 'All creators';
+
+  @override
+  String get creatorFilterHint => 'Type a creator and press comma or Enter';
+
+  @override
+  String get creatorListButton => 'Creator list';
+
+  @override
+  String get creatorListTooltip => 'Browse creator list';
+
+  @override
+  String get creatorListTitle => 'Creators';
+
+  @override
+  String get creatorListSearchLabel => 'Search creators';
+
+  @override
+  String get creatorListClearLabel => 'All creators';
+
+  @override
+  String get creatorListEmpty => 'No creators available';
+
+  @override
+  String creatorStatsLabel(Object varCount, Object installedCount) {
+    return 'Vars $varCount - Installed $installedCount';
+  }
 
   @override
   String get statusAllLabel => 'All status';
@@ -618,15 +661,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uninstallSelectedLabel => 'Uninstall Selected';
 
   @override
-  String get uninstallSelectedTooltip =>
-      'Uninstall selected vars and affected items.';
+  String get uninstallSelectedTooltip => 'Uninstall selected vars.';
 
   @override
   String get deleteSelectedLabel => 'Delete Selected';
 
   @override
-  String get deleteSelectedTooltip =>
-      'Delete selected vars and affected items.';
+  String get deleteSelectedTooltip => 'Delete selected vars.';
 
   @override
   String get moveLinksLabel => 'Move Links';

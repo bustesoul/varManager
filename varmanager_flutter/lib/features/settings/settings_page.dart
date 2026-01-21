@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/app_version.dart';
 import '../../core/models/config.dart';
+import '../../core/utils/debounce.dart';
 import '../../l10n/l10n.dart';
 import '../../l10n/locale_config.dart';
 import '../bootstrap/bootstrap_keys.dart';
@@ -35,6 +36,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _proxyPassword = TextEditingController();
   ProxyMode _proxyMode = ProxyMode.system;
   bool _separateVarspath = false;
+  int _uiPerPageVars = 50;
+  int _uiPerPageScenes = 50;
+  bool _uninstallSelectedOnly = false;
+  final _autoSaveDebounce = Debouncer(const Duration(milliseconds: 600));
+  bool _autoSaveEnabled = false;
+  bool _saving = false;
+  bool _pendingSave = false;
 
   AppConfig? _config;
   String? _backendVersion;
@@ -83,7 +91,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _proxyPassword.text = cfg.proxy.password ?? '';
       _proxyMode = cfg.proxyMode;
       _separateVarspath = separate;
+      _uiPerPageVars = cfg.uiPerPageVars;
+      _uiPerPageScenes = cfg.uiPerPageScenes;
+      _uninstallSelectedOnly = cfg.uiUninstallSelectedOnly;
     });
+    ref.read(appConfigProvider.notifier).setConfig(cfg);
+    _pendingSave = false;
+    _autoSaveEnabled = true;
   }
 
   @override
@@ -100,10 +114,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _proxyPort.dispose();
     _proxyUsername.dispose();
     _proxyPassword.dispose();
+    _autoSaveDebounce.dispose();
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool showSnackBar = true}) async {
     if (!_formKey.currentState!.validate()) return;
     final previous = _config;
     if (previous == null) return;
@@ -153,19 +168,48 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         'username': proxyUsername,
         'password': proxyPassword,
       },
+      'ui_per_page_vars': _uiPerPageVars,
+      'ui_per_page_scenes': _uiPerPageScenes,
+      'ui_uninstall_selected_only': _uninstallSelectedOnly,
     };
     final cfg = await client.updateConfig(update);
     if (!mounted) return;
     setState(() {
       _config = cfg;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(needsRestartHint
-            ? context.l10n.configSavedRestartHint
-            : context.l10n.configSaved),
-      ),
-    );
+    ref.read(appConfigProvider.notifier).setConfig(cfg);
+    if (showSnackBar || needsRestartHint) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(needsRestartHint
+              ? context.l10n.configSavedRestartHint
+              : context.l10n.configSaved),
+        ),
+      );
+    }
+  }
+
+  void _scheduleAutoSave() {
+    if (!_autoSaveEnabled) return;
+    _pendingSave = true;
+    _autoSaveDebounce.run(() {
+      if (!mounted) return;
+      _flushAutoSave();
+    });
+  }
+
+  Future<void> _flushAutoSave() async {
+    if (_saving || !_pendingSave) return;
+    _pendingSave = false;
+    _saving = true;
+    try {
+      await _save(showSnackBar: false);
+    } finally {
+      _saving = false;
+    }
+    if (_pendingSave) {
+      _scheduleAutoSave();
+    }
   }
 
   Future<void> _pickDirectory(TextEditingController controller) async {
@@ -174,6 +218,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() {
       controller.text = path;
     });
+    _scheduleAutoSave();
   }
 
   Future<void> _pickVampathDirectory() async {
@@ -188,6 +233,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _downloaderSavePath.text = _addonPackagesPath(path);
       }
     });
+    _scheduleAutoSave();
   }
 
   Future<void> _pickVarspathDirectory() async {
@@ -200,6 +246,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _downloaderSavePath.text = _addonPackagesPath(path);
       }
     });
+    _scheduleAutoSave();
   }
 
   Future<void> _pickFile(TextEditingController controller) async {
@@ -208,6 +255,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() {
       controller.text = file.path;
     });
+    _scheduleAutoSave();
   }
 
   String _addonPackagesPath(String base) {
@@ -257,6 +305,73 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             const SizedBox(height: 12),
             _section(
+              title: l10n.settingsSectionList,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<int>(
+                    value: _uiPerPageVars,
+                    decoration: InputDecoration(
+                      labelText: l10n.settingsPerPageVarsLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: const [50, 100, 200]
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _uiPerPageVars = value;
+                      });
+                      _scheduleAutoSave();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: _uiPerPageScenes,
+                    decoration: InputDecoration(
+                      labelText: l10n.settingsPerPageScenesLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: const [50, 100, 200]
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _uiPerPageScenes = value;
+                      });
+                      _scheduleAutoSave();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _uninstallSelectedOnly,
+                    title: Text(l10n.settingsUninstallSelectedOnlyLabel),
+                    subtitle: Text(l10n.settingsUninstallSelectedOnlyHint),
+                    onChanged: (value) {
+                      setState(() {
+                        _uninstallSelectedOnly = value;
+                      });
+                      _scheduleAutoSave();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _section(
               title: l10n.settingsSectionListen,
               child: Column(
                 children: [
@@ -291,6 +406,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       setState(() {
                         _proxyMode = value;
                       });
+                      _scheduleAutoSave();
                     },
                   ),
                   const SizedBox(height: 12),
@@ -335,6 +451,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           _varspath.text = _vampath.text.trim();
                         }
                       });
+                      _scheduleAutoSave();
                     },
                   ),
                   Padding(
@@ -393,14 +510,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: _save,
-                child: Text(l10n.commonSave),
-              ),
-            ),
           ],
         ),
       ),
@@ -428,6 +537,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       bool obscureText = false,
       bool enableSuggestions = true,
       bool autocorrect = true,
+      ValueChanged<String>? onChanged,
       bool enabled = true}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -438,6 +548,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         enableSuggestions: enableSuggestions,
         autocorrect: autocorrect,
         enabled: enabled,
+        onChanged: (value) {
+          onChanged?.call(value);
+          _scheduleAutoSave();
+        },
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -466,7 +580,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: TextFormField(
               controller: controller,
               keyboardType: keyboard,
-              onChanged: onChanged,
+              onChanged: (value) {
+                onChanged?.call(value);
+                _scheduleAutoSave();
+              },
               enabled: enabled,
               decoration: InputDecoration(
                 labelText: label,

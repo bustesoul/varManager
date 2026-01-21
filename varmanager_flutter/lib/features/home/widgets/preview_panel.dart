@@ -178,26 +178,35 @@ class _PreviewPanelState extends ConsumerState<PreviewPanel> {
 
   Future<void> _togglePreviewInstall(
       BuildContext context, PreviewItem item) async {
+    final includeImplicated =
+        !(ref.read(appConfigProvider)?.uiUninstallSelectedOnly ?? false);
     if (item.installed) {
-      final preview = await _runJob('preview_uninstall', args: {
-        'var_names': [item.varName],
-        'include_implicated': true,
-      });
-      if (!context.mounted) return;
-      final payload = preview.result as Map<String, dynamic>?;
-      if (payload == null) return;
-      final confirmed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => UninstallVarsPage(payload: payload),
-        ),
-      );
-      if (confirmed == true) {
+      if (!includeImplicated) {
         await _runJob('uninstall_vars', args: {
           'var_names': [item.varName],
-          'include_implicated': true,
+          'include_implicated': includeImplicated,
         });
       } else {
-        return;
+        final preview = await _runJob('preview_uninstall', args: {
+          'var_names': [item.varName],
+          'include_implicated': includeImplicated,
+        });
+        if (!context.mounted) return;
+        final payload = preview.result as Map<String, dynamic>?;
+        if (payload == null) return;
+        final confirmed = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => UninstallVarsPage(payload: payload),
+          ),
+        );
+        if (confirmed == true) {
+          await _runJob('uninstall_vars', args: {
+            'var_names': [item.varName],
+            'include_implicated': includeImplicated,
+          });
+        } else {
+          return;
+        }
       }
     } else {
       final l10n = context.l10n;

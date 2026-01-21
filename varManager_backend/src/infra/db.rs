@@ -99,112 +99,112 @@ pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
             .map_err(|err| err.to_string())?;
     }
 
-    sqlx::query(
-        r#"
-                CREATE TABLE IF NOT EXISTS dependencies (
-                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                    varName TEXT,
-                    dependency TEXT
-                );
-                CREATE TABLE IF NOT EXISTS HideFav (
-                    varName TEXT NOT NULL,
-                    scenePath TEXT NOT NULL,
-                    hide INTEGER NOT NULL,
-                    fav INTEGER NOT NULL,
-                    PRIMARY KEY (varName, scenePath)
-                );
-                CREATE TABLE IF NOT EXISTS installStatus (
-                    varName TEXT PRIMARY KEY,
-                    installed INTEGER NOT NULL,
-                    disabled INTEGER NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS savedepens (
-                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                    varName TEXT,
-                    dependency TEXT,
-                    SavePath TEXT,
-                    ModiDate TEXT
-                );
-                CREATE TABLE IF NOT EXISTS scenes (
-                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                    varName TEXT,
-                    atomType TEXT,
-                    previewPic TEXT,
-                    scenePath TEXT,
-                    isPreset INTEGER NOT NULL,
-                    isLoadable INTEGER NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS vars (
-                    varName TEXT PRIMARY KEY,
-                    creatorName TEXT,
-                    packageName TEXT,
-                    metaDate TEXT,
-                    varDate TEXT,
-                    version TEXT,
-                    description TEXT,
-                    morph INTEGER,
-                    cloth INTEGER,
-                    hair INTEGER,
-                    skin INTEGER,
-                    pose INTEGER,
-                    scene INTEGER,
-                    script INTEGER,
-                    plugin INTEGER,
-                    asset INTEGER,
-                    texture INTEGER,
-                    look INTEGER,
-                    subScene INTEGER,
-                    appearance INTEGER,
-                    dependencyCnt INTEGER,
-                    fsize REAL
-                );
-                CREATE TABLE IF NOT EXISTS image_cache_entries (
-                    cache_key TEXT PRIMARY KEY,
-                    file_name TEXT NOT NULL,
-                    source_type TEXT NOT NULL,
-                    source_url TEXT,
-                    source_root TEXT,
-                    source_path TEXT,
-                    size_bytes INTEGER NOT NULL,
-                    content_type TEXT NOT NULL,
-                    created_at INTEGER NOT NULL,
-                    last_accessed INTEGER NOT NULL,
-                    access_count INTEGER NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS downloads (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    url TEXT NOT NULL,
-                    name TEXT,
-                    status TEXT NOT NULL,
-                    downloaded_bytes INTEGER NOT NULL DEFAULT 0,
-                    total_bytes INTEGER,
-                    speed_bytes INTEGER NOT NULL DEFAULT 0,
-                    error TEXT,
-                    save_path TEXT,
-                    temp_path TEXT,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_vars_creatorName ON vars(creatorName);
-                CREATE INDEX IF NOT EXISTS idx_vars_packageName ON vars(packageName);
-                CREATE INDEX IF NOT EXISTS idx_vars_metaDate ON vars(metaDate);
-                CREATE INDEX IF NOT EXISTS idx_vars_varDate ON vars(varDate);
-                CREATE INDEX IF NOT EXISTS idx_vars_fsize ON vars(fsize);
-                CREATE INDEX IF NOT EXISTS idx_vars_dependencyCnt ON vars(dependencyCnt);
-                CREATE INDEX IF NOT EXISTS idx_scenes_varName ON scenes(varName);
-                CREATE INDEX IF NOT EXISTS idx_scenes_atomType ON scenes(atomType);
-                CREATE INDEX IF NOT EXISTS idx_dependencies_varName ON dependencies(varName);
-                CREATE INDEX IF NOT EXISTS idx_dependencies_dependency ON dependencies(dependency);
-                CREATE INDEX IF NOT EXISTS idx_savedepens_dependency ON savedepens(dependency);
-                CREATE INDEX IF NOT EXISTS idx_image_cache_last_accessed ON image_cache_entries(last_accessed);
-                CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);
-                CREATE INDEX IF NOT EXISTS idx_downloads_created_at ON downloads(created_at);
-                "#
-    )
-    .execute(pool)
-    .await
-    .map_err(|err| err.to_string())?;
+    let schema_statements = [
+        r#"CREATE TABLE IF NOT EXISTS dependencies (
+                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                varName TEXT,
+                dependency TEXT
+            )"#,
+        r#"CREATE TABLE IF NOT EXISTS HideFav (
+                varName TEXT NOT NULL,
+                scenePath TEXT NOT NULL,
+                hide INTEGER NOT NULL,
+                fav INTEGER NOT NULL,
+                PRIMARY KEY (varName, scenePath)
+            )"#,
+        r#"CREATE TABLE IF NOT EXISTS installStatus (
+                varName TEXT PRIMARY KEY,
+                installed INTEGER NOT NULL,
+                disabled INTEGER NOT NULL
+            )"#,
+        r#"CREATE TABLE IF NOT EXISTS savedepens (
+                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                varName TEXT,
+                dependency TEXT,
+                SavePath TEXT,
+                ModiDate TEXT
+            )"#,
+        r#"CREATE TABLE IF NOT EXISTS scenes (
+                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                varName TEXT,
+                atomType TEXT,
+                previewPic TEXT,
+                scenePath TEXT,
+                isPreset INTEGER NOT NULL,
+                isLoadable INTEGER NOT NULL
+            )"#,
+        r#"CREATE TABLE IF NOT EXISTS vars (
+                varName TEXT PRIMARY KEY,
+                creatorName TEXT,
+                packageName TEXT,
+                metaDate TEXT,
+                varDate TEXT,
+                version TEXT,
+                description TEXT,
+                morph INTEGER,
+                cloth INTEGER,
+                hair INTEGER,
+                skin INTEGER,
+                pose INTEGER,
+                scene INTEGER,
+                script INTEGER,
+                plugin INTEGER,
+                asset INTEGER,
+                texture INTEGER,
+                look INTEGER,
+                subScene INTEGER,
+                appearance INTEGER,
+                dependencyCnt INTEGER,
+                fsize REAL
+            )"#,
+        r#"CREATE TABLE IF NOT EXISTS image_cache_entries (
+                cache_key TEXT PRIMARY KEY,
+                file_name TEXT NOT NULL,
+                source_type TEXT NOT NULL,
+                source_url TEXT,
+                source_root TEXT,
+                source_path TEXT,
+                size_bytes INTEGER NOT NULL,
+                content_type TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                last_accessed INTEGER NOT NULL,
+                access_count INTEGER NOT NULL
+            )"#,
+        r#"CREATE TABLE IF NOT EXISTS downloads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                name TEXT,
+                status TEXT NOT NULL,
+                downloaded_bytes INTEGER NOT NULL DEFAULT 0,
+                total_bytes INTEGER,
+                speed_bytes INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                save_path TEXT,
+                temp_path TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )"#,
+        "CREATE INDEX IF NOT EXISTS idx_vars_creatorName ON vars(creatorName)",
+        "CREATE INDEX IF NOT EXISTS idx_vars_packageName ON vars(packageName)",
+        "CREATE INDEX IF NOT EXISTS idx_vars_metaDate ON vars(metaDate)",
+        "CREATE INDEX IF NOT EXISTS idx_vars_varDate ON vars(varDate)",
+        "CREATE INDEX IF NOT EXISTS idx_vars_fsize ON vars(fsize)",
+        "CREATE INDEX IF NOT EXISTS idx_vars_dependencyCnt ON vars(dependencyCnt)",
+        "CREATE INDEX IF NOT EXISTS idx_scenes_varName ON scenes(varName)",
+        "CREATE INDEX IF NOT EXISTS idx_scenes_atomType ON scenes(atomType)",
+        "CREATE INDEX IF NOT EXISTS idx_dependencies_varName ON dependencies(varName)",
+        "CREATE INDEX IF NOT EXISTS idx_dependencies_dependency ON dependencies(dependency)",
+        "CREATE INDEX IF NOT EXISTS idx_savedepens_dependency ON savedepens(dependency)",
+        "CREATE INDEX IF NOT EXISTS idx_image_cache_last_accessed ON image_cache_entries(last_accessed)",
+        "CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status)",
+        "CREATE INDEX IF NOT EXISTS idx_downloads_created_at ON downloads(created_at)",
+    ];
+    for statement in schema_statements {
+        sqlx::query(statement)
+            .execute(pool)
+            .await
+            .map_err(|err| err.to_string())?;
+    }
 
     let _ = sqlx::query("ALTER TABLE vars ADD COLUMN fsize REAL")
         .execute(pool)

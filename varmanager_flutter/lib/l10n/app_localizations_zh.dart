@@ -229,6 +229,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSectionUi => '界面';
 
   @override
+  String get settingsSectionList => '列表与卸载';
+
+  @override
   String get settingsSectionListen => '监听与日志';
 
   @override
@@ -268,6 +271,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get languageChinese => '中文';
+
+  @override
+  String get settingsPerPageVarsLabel => 'Vars 默认每页条数';
+
+  @override
+  String get settingsPerPageScenesLabel => 'Scenes 默认每页条数';
+
+  @override
+  String get settingsUninstallSelectedOnlyLabel => '只卸载勾选的 var';
+
+  @override
+  String get settingsUninstallSelectedOnlyHint => '卸载不弹预览，不自动处理依赖它的 var。';
 
   @override
   String get listenHostLabel => '监听地址';
@@ -352,6 +367,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get allCreators => '全部作者';
+
+  @override
+  String get creatorFilterHint => '输入作者，逗号或回车添加';
+
+  @override
+  String get creatorListButton => '作者列表';
+
+  @override
+  String get creatorListTooltip => '浏览作者列表';
+
+  @override
+  String get creatorListTitle => '作者列表';
+
+  @override
+  String get creatorListSearchLabel => '搜索作者';
+
+  @override
+  String get creatorListClearLabel => '全部作者';
+
+  @override
+  String get creatorListEmpty => '暂无作者';
+
+  @override
+  String creatorStatsLabel(Object varCount, Object installedCount) {
+    return '包数 $varCount · 已安装 $installedCount';
+  }
 
   @override
   String get statusAllLabel => '全部状态';
@@ -606,13 +647,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uninstallSelectedLabel => '卸载所选';
 
   @override
-  String get uninstallSelectedTooltip => '卸载所选 Vars 及相关项。';
+  String get uninstallSelectedTooltip => '卸载所选 Vars。';
 
   @override
   String get deleteSelectedLabel => '删除所选';
 
   @override
-  String get deleteSelectedTooltip => '删除所选 Vars 及相关项。';
+  String get deleteSelectedTooltip => '删除所选 Vars。';
 
   @override
   String get moveLinksLabel => '移动链接';

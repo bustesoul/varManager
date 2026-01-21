@@ -289,6 +289,40 @@ class DependentsResponse {
   }
 }
 
+class CreatorStatsItem {
+  CreatorStatsItem({
+    required this.name,
+    required this.varCount,
+    required this.installedCount,
+  });
+
+  final String name;
+  final int varCount;
+  final int installedCount;
+
+  factory CreatorStatsItem.fromJson(Map<String, dynamic> json) {
+    return CreatorStatsItem(
+      name: json['name'] as String? ?? '',
+      varCount: (json['var_count'] as num?)?.toInt() ?? 0,
+      installedCount: (json['installed_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class CreatorStatsResponse {
+  CreatorStatsResponse({required this.items});
+
+  final List<CreatorStatsItem> items;
+
+  factory CreatorStatsResponse.fromJson(Map<String, dynamic> json) {
+    return CreatorStatsResponse(
+      items: (json['items'] as List<dynamic>? ?? [])
+          .map((item) => CreatorStatsItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
 class PackSwitchListResponse {
   PackSwitchListResponse({required this.current, required this.switches});
 
