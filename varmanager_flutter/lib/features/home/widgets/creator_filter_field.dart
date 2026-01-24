@@ -26,6 +26,8 @@ class CreatorFilterField extends StatefulWidget {
 class _CreatorFilterFieldState extends State<CreatorFilterField> {
   final TextEditingController _controller = TextEditingController();
   bool _suppressChange = false;
+  static const double _chipAreaHeight = 28;
+  static const double _chipMaxWidthRatio = 0.5;
 
   @override
   void didUpdateWidget(covariant CreatorFilterField oldWidget) {
@@ -92,15 +94,66 @@ class _CreatorFilterFieldState extends State<CreatorFilterField> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasSelections = widget.selections.isNotEmpty;
+        final maxChipWidth = (constraints.maxWidth * _chipMaxWidthRatio)
+            .clamp(0.0, 140.0)
+            .toDouble();
+        return TextField(
           controller: _controller,
           decoration: InputDecoration(
             labelText: widget.label,
             hintText: widget.hintText,
             border: const OutlineInputBorder(),
+            prefixIcon: hasSelections
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 8, right: 6),
+                    child: SizedBox(
+                      width: maxChipWidth,
+                      height: _chipAreaHeight,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final creator in widget.selections)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Chip(
+                                    label: Text(
+                                      creator,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                    onDeleted: () => _removeCreator(creator),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    labelPadding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    deleteIcon: const Icon(Icons.close, size: 14),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
+            prefixIconConstraints: hasSelections
+                ? BoxConstraints(
+                    minWidth: 0,
+                    maxWidth: maxChipWidth + 14,
+                    minHeight: 0,
+                    maxHeight: _chipAreaHeight,
+                  )
+                : null,
             suffixIcon: widget.onListPressed == null
                 ? null
                 : IconButton(
@@ -111,23 +164,8 @@ class _CreatorFilterFieldState extends State<CreatorFilterField> {
           ),
           onChanged: _handleInputChanged,
           onSubmitted: (_) => _commitAndClear(),
-        ),
-        if (widget.selections.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final creator in widget.selections)
-                Chip(
-                  label: Text(creator),
-                  onDeleted: () => _removeCreator(creator),
-                  visualDensity: VisualDensity.compact,
-                ),
-            ],
-          ),
-        ],
-      ],
+        );
+      },
     );
   }
 }

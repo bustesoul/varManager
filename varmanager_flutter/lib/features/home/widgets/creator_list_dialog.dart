@@ -7,7 +7,12 @@ import '../../../core/utils/debounce.dart';
 import '../../../l10n/l10n.dart';
 
 class CreatorListDialog extends ConsumerStatefulWidget {
-  const CreatorListDialog({super.key});
+  const CreatorListDialog({
+    super.key,
+    required this.selectedCreators,
+  });
+
+  final List<String> selectedCreators;
 
   @override
   ConsumerState<CreatorListDialog> createState() => _CreatorListDialogState();
@@ -30,10 +35,23 @@ class _CreatorListDialogState extends ConsumerState<CreatorListDialog> {
   int _requestId = 0;
   List<String> _creators = [];
   final Map<String, CreatorStatsItem> _stats = {};
+  late final List<String> _selectedCreators;
+  late final Set<String> _selectedCreatorKeys;
 
   @override
   void initState() {
     super.initState();
+    _selectedCreators = [];
+    _selectedCreatorKeys = {};
+    for (final creator in widget.selectedCreators) {
+      final trimmed = creator.trim();
+      final key = _normalize(trimmed);
+      if (key.isEmpty || _selectedCreatorKeys.contains(key)) {
+        continue;
+      }
+      _selectedCreatorKeys.add(key);
+      _selectedCreators.add(trimmed);
+    }
     _scrollController.addListener(_handleScroll);
     Future.microtask(_loadFirstPage);
   }
@@ -65,6 +83,28 @@ class _CreatorListDialogState extends ConsumerState<CreatorListDialog> {
       _prefix = _prefix == value ? null : value;
     });
     _loadFirstPage();
+  }
+
+  String _normalize(String value) => value.trim().toLowerCase();
+
+  void _toggleSelection(String name) {
+    final key = _normalize(name);
+    if (key.isEmpty) return;
+    setState(() {
+      if (_selectedCreatorKeys.remove(key)) {
+        _selectedCreators.removeWhere((value) => _normalize(value) == key);
+      } else {
+        _selectedCreatorKeys.add(key);
+        _selectedCreators.add(name);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedCreators.clear();
+      _selectedCreatorKeys.clear();
+    });
   }
 
   Future<void> _loadFirstPage() async {
@@ -154,8 +194,10 @@ class _CreatorListDialogState extends ConsumerState<CreatorListDialog> {
         }
         final name = _creators[index];
         final stats = _stats[name];
+        final isSelected = _selectedCreatorKeys.contains(_normalize(name));
         return ListTile(
           dense: true,
+          selected: isSelected,
           title: Text(name),
           subtitle: stats == null
               ? null
@@ -163,7 +205,14 @@ class _CreatorListDialogState extends ConsumerState<CreatorListDialog> {
                   stats.varCount,
                   stats.installedCount,
                 )),
-          onTap: () => Navigator.of(context).pop(name),
+          trailing: isSelected
+              ? Icon(
+                  Icons.check,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                )
+              : null,
+          onTap: () => _toggleSelection(name),
         );
       },
     );
@@ -199,7 +248,7 @@ class _CreatorListDialogState extends ConsumerState<CreatorListDialog> {
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(''),
+                  onPressed: _clearSelection,
                   child: Text(l10n.creatorListClearLabel),
                 ),
               ],
@@ -225,7 +274,9 @@ class _CreatorListDialogState extends ConsumerState<CreatorListDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context).pop(
+            List<String>.from(_selectedCreators),
+          ),
           child: Text(l10n.commonClose),
         ),
       ],

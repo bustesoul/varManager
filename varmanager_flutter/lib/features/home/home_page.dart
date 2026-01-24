@@ -188,7 +188,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.start,
                 children: [
                   SizedBox(
                     width: 240,
@@ -214,25 +214,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                       selections: creatorSelections,
                       listTooltip: l10n.creatorListTooltip,
                       onListPressed: () async {
-                        final result = await showDialog<String>(
+                        final result = await showDialog<List<String>>(
                           context: context,
-                          builder: (_) => const CreatorListDialog(),
+                          builder: (_) => CreatorListDialog(
+                            selectedCreators: creatorSelections,
+                          ),
                         );
                         if (!context.mounted || result == null) return;
-                        if (result.isEmpty) {
-                          _updateQuery(
-                            (state) => state.copyWith(page: 1, creator: ''),
-                          );
-                          return;
-                        }
-                        final current = _splitCreators(
-                          ref.read(varsQueryProvider).creator,
-                        );
-                        final next = _mergeCreators(current, [result]);
+                        final next = result.join(',');
                         _updateQuery(
                           (state) => state.copyWith(
                             page: 1,
-                            creator: next.join(','),
+                            creator: next,
                           ),
                         );
                       },
@@ -1657,29 +1650,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
     }
     return creators;
-  }
-
-  List<String> _mergeCreators(List<String> current, List<String> additions) {
-    final seen = <String>{};
-    final merged = <String>[];
-    void addCreator(String value) {
-      final trimmed = value.trim();
-      if (trimmed.isEmpty || trimmed.toUpperCase() == 'ALL') {
-        return;
-      }
-      final key = trimmed.toLowerCase();
-      if (seen.add(key)) {
-        merged.add(trimmed);
-      }
-    }
-
-    for (final creator in current) {
-      addCreator(creator);
-    }
-    for (final creator in additions) {
-      addCreator(creator);
-    }
-    return merged;
   }
 
   String _formatNumber(double? value) {
