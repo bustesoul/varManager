@@ -156,3 +156,58 @@ pub async fn dispatch(
         _ => Err(format!("job kind not implemented: {}", kind)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::Config;
+    use crate::infra::db::ensure_schema;
+    use crate::infra::download_manager::DownloadManager;
+    use crate::jobs::job_channel::{create_job_channel, create_job_map};
+    use crate::services::image_cache::ImageCacheService;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::sync::{Arc, RwLock};
+    use std::sync::atomic::AtomicU64;
+    use tokio::sync::{oneshot, Semaphore};
+
+    async fn build_state() -> AppState {
+        let mut config = Config::default();
+        config.image_cache.enabled = false;
+        let config_state = Arc::new(RwLock::new(config.clone()));
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        ensure_schema(&pool).await.unwrap();
+        let (job_tx, _job_rx) = create_job_channel();
+        let jobs = create_job_map();
+        let image_cache = Arc::new(
+            ImageCacheService::new(config.image_cache.clone(), pool.clone())
+                .await
+                .unwrap(),
+        );
+        let download_manager = Arc::new(DownloadManager::new(pool.clone(), Arc::clone(&config_state)));
+        AppState {
+            config: Arc::clone(&config_state),
+            shutdown_tx: Arc::new(tokio::sync::Mutex::new(None::<oneshot::Sender<()>>)),
+            jobs,
+            job_counter: Arc::new(AtomicU64::new(1)),
+            job_semaphore: Arc::new(RwLock::new(Arc::new(Semaphore::new(1)))),
+            job_tx,
+            db_pool: pool,
+            image_cache,
+            download_manager,
+        }
+    }
+
+    #[tokio::test]
+    async fn dispatch_unknown_job_returns_error() {
+        let state = build_state().await;
+        let reporter = JobReporter::new(1, state.job_tx.clone());
+        let err = dispatch(&state, &reporter, "unknown_job", None)
+            .await
+            .unwrap_err();
+        assert!(err.contains("job kind not implemented"));
+    }
+}

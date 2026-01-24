@@ -373,3 +373,35 @@ pub async fn send_job_finished(tx: &JobEventSender, id: u64, message: String) {
 pub async fn send_job_failed(tx: &JobEventSender, id: u64, error: String) {
     let _ = tx.send(JobEvent::Failed { id, error }).await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn min_job_log_level_parses_variants() {
+        assert!(matches!(min_job_log_level("warn"), JobLogLevel::Warn));
+        assert!(matches!(min_job_log_level("WARNING"), JobLogLevel::Warn));
+        assert!(matches!(min_job_log_level("error"), JobLogLevel::Error));
+        assert!(matches!(min_job_log_level("debug"), JobLogLevel::Debug));
+        assert!(matches!(min_job_log_level("unknown"), JobLogLevel::Info));
+    }
+
+    #[test]
+    fn infer_log_level_detects_prefixes() {
+        assert!(matches!(infer_log_level("[warn] something"), JobLogLevel::Warn));
+        assert!(matches!(infer_log_level("error: bad"), JobLogLevel::Error));
+        assert!(matches!(infer_log_level("info: ok"), JobLogLevel::Info));
+        assert!(matches!(infer_log_level("plain message"), JobLogLevel::Info));
+    }
+
+    #[test]
+    fn job_state_caps_log_buffer() {
+        let mut job = JobState::new(1, "test".to_string());
+        for idx in 0..(MAX_LOG_LINES + 5) {
+            job.push_log(JobLogLevel::Info, format!("log {}", idx));
+        }
+        assert_eq!(job.logs.len(), MAX_LOG_LINES);
+        assert_eq!(job.log_offset, 5);
+    }
+}

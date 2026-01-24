@@ -1016,3 +1016,42 @@ pub fn get_overview_panel(resource_id: &str) -> Result<HubOverviewPanelData, Str
         images,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn split_var_version_uses_last_dot() {
+        let parts = split_var_version("creator.package.12").unwrap();
+        assert_eq!(parts.0, "creator.package");
+        assert_eq!(parts.1, "12");
+    }
+
+    #[test]
+    fn parse_file_size_accepts_int_and_string() {
+        assert_eq!(parse_file_size(Some(&json!(123))), Some(123));
+        assert_eq!(parse_file_size(Some(&json!("456"))), Some(456));
+        assert_eq!(parse_file_size(Some(&json!("bad"))), None);
+    }
+
+    #[test]
+    fn build_download_urls_no_version_strips_versions() {
+        let mut urls = HashMap::new();
+        urls.insert("creator.pack.1".to_string(), "a".to_string());
+        urls.insert("creator.pack.2".to_string(), "b".to_string());
+        urls.insert("other.item.latest".to_string(), "c".to_string());
+        let no_version = build_download_urls_no_version(&urls);
+        assert_eq!(no_version.get("creator.pack").unwrap(), "b");
+        assert_eq!(no_version.get("other.item").unwrap(), "c");
+    }
+
+    #[test]
+    fn is_filter_value_rejects_all() {
+        assert!(!is_filter_value("all"));
+        assert!(!is_filter_value(" "));
+        assert!(is_filter_value("paid"));
+    }
+}

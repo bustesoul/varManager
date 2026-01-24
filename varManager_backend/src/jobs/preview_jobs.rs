@@ -144,3 +144,27 @@ fn reextract_preview(
     out.flush().map_err(|err| err.to_string())?;
     Ok(true)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn preview_file_path_uses_expected_layout() {
+        let varspath = PathBuf::from("C:\\vars");
+        let scene = ScenePreview {
+            var_name: "creator.pack.1".to_string(),
+            atom_type: "scenes".to_string(),
+            preview_pic: "preview.jpg".to_string(),
+            scene_path: "Saves/scene/test.json".to_string(),
+        };
+        let path = preview_file_path(&varspath, &scene);
+        assert!(path.ends_with(
+            PathBuf::from(PREVIEW_DIR)
+                .join("scenes")
+                .join("creator.pack.1")
+                .join("preview.jpg")
+        ));
+    }
+}
