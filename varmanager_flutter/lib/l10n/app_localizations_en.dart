@@ -1287,6 +1287,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prepareSavesTitle => 'Prepare Saves';
 
   @override
+  String get prepareSavesAnalyzeInstallTooltip =>
+      'Analyze save dependencies and install missing packages (creates links).';
+
+  @override
   String get outputFolderLabel => 'Output folder';
 
   @override
@@ -1767,6 +1771,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Possible reasons: admin/dev mode required, unsupported filesystem, or read-only drive.';
 
   @override
+  String get bootstrapCheckSymlinkHintFsUnsupported =>
+      'Filesystem does not support symlinks (exFAT/FAT32). Use an NTFS drive.';
+
+  @override
+  String get bootstrapCheckSymlinkHintReadOnly =>
+      'Drive is read-only; symlink creation requires write access.';
+
+  @override
+  String get bootstrapCheckSymlinkHintDeveloperMode =>
+      'Developer Mode is off. Enable it to allow symlink creation.';
+
+  @override
+  String get bootstrapCheckSymlinkActionOpenDevSettings =>
+      'Open Developer Settings';
+
+  @override
   String get bootstrapCheckVamExecHint =>
       'Set the correct VaM launch script in Settings.';
 
@@ -1787,7 +1807,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bootstrapTourHomeBody =>
-      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)';
+      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)';
 
   @override
   String get bootstrapTourHomeBodyIntro =>
@@ -1795,7 +1815,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bootstrapTourHomeBodyWarning =>
-      '(If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)';
+      '(This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)';
 
   @override
   String get bootstrapTourScenesTitle => 'Scenes: 3-column board';

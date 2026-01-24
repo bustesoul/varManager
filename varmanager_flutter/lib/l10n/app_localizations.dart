@@ -2412,6 +2412,12 @@ abstract class AppLocalizations {
   /// **'Prepare Saves'**
   String get prepareSavesTitle;
 
+  /// No description provided for @prepareSavesAnalyzeInstallTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze save dependencies and install missing packages (creates links).'**
+  String get prepareSavesAnalyzeInstallTooltip;
+
   /// No description provided for @outputFolderLabel.
   ///
   /// In en, this message translates to:
@@ -3270,6 +3276,30 @@ abstract class AppLocalizations {
   /// **'Possible reasons: admin/dev mode required, unsupported filesystem, or read-only drive.'**
   String get bootstrapCheckSymlinkHint;
 
+  /// No description provided for @bootstrapCheckSymlinkHintFsUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Filesystem does not support symlinks (exFAT/FAT32). Use an NTFS drive.'**
+  String get bootstrapCheckSymlinkHintFsUnsupported;
+
+  /// No description provided for @bootstrapCheckSymlinkHintReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Drive is read-only; symlink creation requires write access.'**
+  String get bootstrapCheckSymlinkHintReadOnly;
+
+  /// No description provided for @bootstrapCheckSymlinkHintDeveloperMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer Mode is off. Enable it to allow symlink creation.'**
+  String get bootstrapCheckSymlinkHintDeveloperMode;
+
+  /// No description provided for @bootstrapCheckSymlinkActionOpenDevSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Developer Settings'**
+  String get bootstrapCheckSymlinkActionOpenDevSettings;
+
   /// No description provided for @bootstrapCheckVamExecHint.
   ///
   /// In en, this message translates to:
@@ -3309,7 +3339,7 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapTourHomeBody.
   ///
   /// In en, this message translates to:
-  /// **'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)'**
+  /// **'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)'**
   String get bootstrapTourHomeBody;
 
   /// No description provided for @bootstrapTourHomeBodyIntro.
@@ -3321,7 +3351,7 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapTourHomeBodyWarning.
   ///
   /// In en, this message translates to:
-  /// **'(If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)'**
+  /// **'(This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)'**
   String get bootstrapTourHomeBodyWarning;
 
   /// No description provided for @bootstrapTourScenesTitle.

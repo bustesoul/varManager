@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -791,6 +794,90 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ),
             _withTooltip(
+              l10n.exportInstalledTooltip,
+              OutlinedButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        final location = await getSaveLocation(
+                          suggestedName: 'installed_vars.txt',
+                          acceptedTypeGroups: [
+                            XTypeGroup(
+                              label: l10n.textFileTypeLabel,
+                              extensions: const ['txt'],
+                            ),
+                          ],
+                        );
+                        if (location == null) return;
+                        await _runJob('vars_export_installed', args: {
+                          'path': location.path,
+                        });
+                      },
+                icon: const Icon(Icons.download),
+                label: Text(l10n.exportInstalledLabel),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            _withTooltip(
+              l10n.installFromListTooltip,
+              OutlinedButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () async {
+                        final files = await openFiles(
+                          acceptedTypeGroups: [
+                            XTypeGroup(
+                              label: l10n.textFileTypeLabel,
+                              extensions: const ['txt'],
+                            ),
+                          ],
+                        );
+                        if (files.isEmpty) return;
+                        Directory? tempDir;
+                        String path;
+                        if (files.length == 1) {
+                          path = files.first.path;
+                        } else {
+                          tempDir = await Directory.systemTemp
+                              .createTemp('varmanager_install_list_');
+                          final tempFile = File(
+                            '${tempDir.path}${Platform.pathSeparator}install_list.txt',
+                          );
+                          final buffer = StringBuffer();
+                          for (final file in files) {
+                            final contents =
+                                await File(file.path).readAsString();
+                            if (buffer.isNotEmpty) {
+                              buffer.writeln();
+                            }
+                            buffer.write(contents);
+                          }
+                          await tempFile.writeAsString(buffer.toString());
+                          path = tempFile.path;
+                        }
+                        try {
+                          await _runJob('vars_install_batch', args: {
+                            'path': path,
+                          });
+                          ref.invalidate(varsListProvider);
+                        } finally {
+                          if (tempDir != null) {
+                            await tempDir.delete(recursive: true);
+                          }
+                        }
+                      },
+                icon: const Icon(Icons.playlist_add),
+                label: Text(l10n.installFromListLabel),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: compactPadding,
+                ),
+              ),
+            ),
+            _withTooltip(
               l10n.prepareSavesTooltip,
               OutlinedButton.icon(
                 onPressed: () {
@@ -1203,45 +1290,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                               });
                             },
                       child: Text(l10n.moveLinksLabel),
-                    ),
-                  ),
-                  _withTooltip(
-                    l10n.exportInstalledTooltip,
-                    OutlinedButton(
-                      onPressed: isBusy
-                          ? null
-                          : () async {
-                              final path = await _askText(
-                                context,
-                                l10n.exportPathTitle,
-                                hint: 'installed_vars.txt',
-                              );
-                              if (path == null || path.trim().isEmpty) return;
-                              await _runJob('vars_export_installed', args: {
-                                'path': path.trim(),
-                              });
-                            },
-                      child: Text(l10n.exportInstalledLabel),
-                    ),
-                  ),
-                  _withTooltip(
-                    l10n.installFromListTooltip,
-                    OutlinedButton(
-                      onPressed: isBusy
-                          ? null
-                          : () async {
-                              final path = await _askText(
-                                context,
-                                l10n.installListPathLabel,
-                                hint: 'install_list.txt',
-                              );
-                              if (path == null || path.trim().isEmpty) return;
-                              await _runJob('vars_install_batch', args: {
-                                'path': path.trim(),
-                              });
-                              ref.invalidate(varsListProvider);
-                            },
-                      child: Text(l10n.installFromListLabel),
                     ),
                   ),
                 ],

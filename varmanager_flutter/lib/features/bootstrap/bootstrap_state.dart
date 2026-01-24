@@ -19,6 +19,16 @@ enum BootstrapCheckStatus {
   fail,
 }
 
+class BootstrapCheckAction {
+  const BootstrapCheckAction({
+    required this.label,
+    required this.url,
+  });
+
+  final String label;
+  final String url;
+}
+
 class BootstrapConfig {
   const BootstrapConfig({
     required this.varspath,
@@ -74,6 +84,7 @@ class BootstrapCheckItem {
     required this.status,
     required this.message,
     required this.hints,
+    this.actions = const [],
   });
 
   final String id;
@@ -81,11 +92,13 @@ class BootstrapCheckItem {
   final BootstrapCheckStatus status;
   final String message;
   final List<String> hints;
+  final List<BootstrapCheckAction> actions;
 
   BootstrapCheckItem copyWith({
     BootstrapCheckStatus? status,
     String? message,
     List<String>? hints,
+    List<BootstrapCheckAction>? actions,
   }) {
     return BootstrapCheckItem(
       id: id,
@@ -93,6 +106,7 @@ class BootstrapCheckItem {
       status: status ?? this.status,
       message: message ?? this.message,
       hints: hints ?? this.hints,
+      actions: actions ?? this.actions,
     );
   }
 }

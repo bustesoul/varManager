@@ -81,6 +81,7 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
     });
   }
 
+  // ignore: unused_element
   Future<void> _validateOutput() async {
     final path = _outputController.text.trim();
     if (path.isEmpty) return;
@@ -102,6 +103,7 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
     await Clipboard.setData(ClipboardData(text: _missing.join('\n')));
   }
 
+  // ignore: unused_element
   Future<void> _pickOutputDir() async {
     final path = await getDirectoryPath();
     if (path == null) return;
@@ -127,6 +129,7 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
                     Expanded(
                       child: TextField(
                         controller: _outputController,
+                        enabled: false,
                         decoration: InputDecoration(
                           labelText: l10n.outputFolderLabel,
                           border: const OutlineInputBorder(),
@@ -135,18 +138,21 @@ class _PrepareSavesPageState extends ConsumerState<PrepareSavesPage> {
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
-                      onPressed: _pickOutputDir,
+                      onPressed: null,
                       child: Text(l10n.commonBrowse),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
-                      onPressed: _validateOutput,
+                      onPressed: null,
                       child: Text(l10n.validateOutputLabel),
                     ),
                     const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _analyze,
-                      child: Text(l10n.commonAnalyze),
+                    Tooltip(
+                      message: l10n.prepareSavesAnalyzeInstallTooltip,
+                      child: FilledButton(
+                        onPressed: _analyze,
+                        child: Text(l10n.commonAnalyze),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
