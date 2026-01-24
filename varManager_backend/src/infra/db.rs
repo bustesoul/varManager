@@ -1,10 +1,11 @@
 use crate::app::data_dir;
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
     Row, Sqlite, SqlitePool, Transaction,
 };
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct VarRecord {
@@ -67,7 +68,10 @@ pub async fn open_default_pool() -> Result<SqlitePool, String> {
     }
     let options = SqliteConnectOptions::new()
         .filename(&path)
-        .create_if_missing(true);
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .busy_timeout(Duration::from_secs(10));
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect_with(options)
