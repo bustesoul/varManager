@@ -351,3 +351,49 @@ fn distinct(mut items: Vec<String>) -> Vec<String> {
     items.dedup();
     items
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn make_temp_dir(prefix: &str) -> PathBuf {
+        let base = std::env::temp_dir();
+        let pid = std::process::id();
+        for idx in 0..1000 {
+            let candidate = base.join(format!("{prefix}_{pid}_{idx}"));
+            if !candidate.exists() {
+                fs::create_dir_all(&candidate).unwrap();
+                return candidate;
+            }
+        }
+        panic!("failed to create temp dir");
+    }
+
+    #[test]
+    fn extract_dependencies_strips_prefix_and_dedups() {
+        let regex = dependency_regex().unwrap();
+        let json = r#"{"dependencies":{"creator.pack.1":{},"path/creator.pack.2":{},"creator.pack.1":{}}}"#;
+        let deps = extract_dependencies(&regex, json);
+        assert_eq!(deps, vec!["creator.pack.1", "creator.pack.2"]);
+    }
+
+    #[test]
+    fn normalize_save_path_relativizes_and_trims() {
+        let root = make_temp_dir("deps_normalize");
+        let vampath = root.join("VaM");
+        let short_file = vampath.join("Saves").join("short.json");
+        let short_normalized = normalize_save_path(&vampath, &short_file);
+        assert!(short_normalized.starts_with("Saves"));
+
+        let long_name = "a".repeat(300);
+        let long_file = vampath.join("Saves").join(&long_name);
+        let normalized = normalize_save_path(&vampath, &long_file);
+        assert!(normalized.len() <= 255);
+        let tail_len = 64.min(long_name.len());
+        let tail = &long_name[long_name.len() - tail_len..];
+        assert!(normalized.ends_with(tail));
+        let _ = fs::remove_dir_all(&root);
+    }
+}

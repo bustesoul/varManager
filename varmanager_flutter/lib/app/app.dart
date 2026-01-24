@@ -83,6 +83,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       await ref.read(themeProvider.notifier).loadFromConfig();
       // Load locale from config after backend is ready
       await ref.read(localeProvider.notifier).loadFromConfig();
+      await ref.read(appConfigProvider.notifier).loadFromBackend();
       await ref.read(localeProvider.notifier).persistInitialIfNeeded();
       if (!mounted) return;
       setState(() {

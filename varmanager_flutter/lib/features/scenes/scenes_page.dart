@@ -7,6 +7,7 @@ import '../../app/providers.dart';
 import '../../core/backend/backend_client.dart';
 import '../../core/backend/job_log_controller.dart';
 import '../../core/backend/query_params.dart';
+import '../../core/models/config.dart';
 import '../../core/models/scene_models.dart';
 import '../../core/utils/debounce.dart';
 import '../../widgets/image_preview_dialog.dart';
@@ -19,8 +20,21 @@ import '../var_detail/var_detail_page.dart';
 
 class ScenesQueryNotifier extends Notifier<ScenesQueryParams> {
   @override
-  ScenesQueryParams build() =>
-      ScenesQueryParams(location: 'installed,not_installed,save');
+  ScenesQueryParams build() {
+    ref.listen<AppConfig?>(appConfigProvider, (previous, next) {
+      if (next == null) return;
+      final previousDefault = previous?.uiPerPageScenes ?? 50;
+      if (state.perPage == previousDefault &&
+          state.perPage != next.uiPerPageScenes) {
+        state = state.copyWith(page: 1, perPage: next.uiPerPageScenes);
+      }
+    });
+    final perPage = ref.read(appConfigProvider)?.uiPerPageScenes ?? 50;
+    return ScenesQueryParams(
+      location: 'installed,not_installed,save',
+      perPage: perPage,
+    );
+  }
 
   void update(ScenesQueryParams Function(ScenesQueryParams) updater) {
     state = updater(state);
@@ -57,6 +71,22 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     'save',
   };
   final Set<int> _hideFavFilter = {-1, 0, 1};
+
+  @override
+  void initState() {
+    super.initState();
+    ref.listen<AppConfig?>(appConfigProvider, (previous, next) {
+      if (next == null) return;
+      final current = ref.read(scenesQueryProvider);
+      final previousDefault = previous?.uiPerPageScenes ?? 50;
+      if (current.perPage == previousDefault &&
+          current.perPage != next.uiPerPageScenes) {
+        _updateQuery(
+          (state) => state.copyWith(page: 1, perPage: next.uiPerPageScenes),
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -116,6 +146,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   void _resetFilters() {
+    final perPage = ref.read(appConfigProvider)?.uiPerPageScenes ?? 50;
     setState(() {
       _locationFilter
         ..clear()
@@ -125,7 +156,10 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         ..addAll([-1, 0, 1]);
     });
     _updateQuery(
-      (state) => ScenesQueryParams(location: _locationQueryValue()),
+      (state) => ScenesQueryParams(
+        location: _locationQueryValue(),
+        perPage: perPage,
+      ),
     );
   }
 
@@ -230,7 +264,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                   ),
                   DropdownButton<int>(
                     value: query.perPage,
-                    items: const [24, 48, 96, 200]
+                    items: const [50, 100, 200]
                         .map((value) => DropdownMenuItem(
                               value: value,
                               child: Text(l10n.perPageLabel(value)),

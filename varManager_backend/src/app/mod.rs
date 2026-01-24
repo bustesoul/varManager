@@ -146,6 +146,12 @@ pub struct Config {
     pub(crate) ui_theme: Option<String>,
     #[serde(default)]
     pub(crate) ui_language: Option<String>,
+    #[serde(default = "default_ui_per_page")]
+    pub(crate) ui_per_page_vars: u32,
+    #[serde(default = "default_ui_per_page")]
+    pub(crate) ui_per_page_scenes: u32,
+    #[serde(default)]
+    pub(crate) ui_uninstall_selected_only: bool,
 }
 
 impl Default for Config {
@@ -165,8 +171,15 @@ impl Default for Config {
             proxy: ProxyConfig::default(),
             ui_theme: None,
             ui_language: None,
+            ui_per_page_vars: default_ui_per_page(),
+            ui_per_page_scenes: default_ui_per_page(),
+            ui_uninstall_selected_only: false,
         }
     }
+}
+
+fn default_ui_per_page() -> u32 {
+    50
 }
 
 #[derive(Clone)]

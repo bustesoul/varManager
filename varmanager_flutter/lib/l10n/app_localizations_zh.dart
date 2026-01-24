@@ -229,6 +229,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSectionUi => '界面';
 
   @override
+  String get settingsSectionList => '列表与卸载';
+
+  @override
   String get settingsSectionListen => '监听与日志';
 
   @override
@@ -268,6 +271,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get languageChinese => '中文';
+
+  @override
+  String get settingsPerPageVarsLabel => 'Vars 默认每页条数';
+
+  @override
+  String get settingsPerPageScenesLabel => 'Scenes 默认每页条数';
+
+  @override
+  String get settingsUninstallSelectedOnlyLabel => '只卸载勾选的 var';
+
+  @override
+  String get settingsUninstallSelectedOnlyHint => '卸载不弹预览，不自动处理依赖它的 var。';
 
   @override
   String get listenHostLabel => '监听地址';
@@ -339,6 +354,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backendVersionLabel => '后端版本';
 
   @override
+  String get checkUpdatesLabel => '检查更新';
+
+  @override
+  String get checkUpdatesCheckingLabel => '检查中...';
+
+  @override
+  String get updateAvailableLabel => '发现新版本：';
+
+  @override
+  String get updateUpToDateLabel => '已是最新版本';
+
+  @override
+  String get updateCheckFailedLabel => '检查更新失败';
+
+  @override
   String get configSaved => '配置已保存';
 
   @override
@@ -352,6 +382,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get allCreators => '全部作者';
+
+  @override
+  String get creatorFilterHint => '输入作者，逗号或回车添加';
+
+  @override
+  String get creatorListButton => '作者列表';
+
+  @override
+  String get creatorListTooltip => '浏览作者列表';
+
+  @override
+  String get creatorListTitle => '作者列表';
+
+  @override
+  String get creatorListSearchLabel => '搜索作者';
+
+  @override
+  String get creatorListClearLabel => '全部作者';
+
+  @override
+  String get creatorListEmpty => '暂无作者';
+
+  @override
+  String creatorStatsLabel(Object varCount, Object installedCount) {
+    return '包数 $varCount · 已安装 $installedCount';
+  }
 
   @override
   String get statusAllLabel => '全部状态';
@@ -606,13 +662,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get uninstallSelectedLabel => '卸载所选';
 
   @override
-  String get uninstallSelectedTooltip => '卸载所选 Vars 及相关项。';
+  String get uninstallSelectedTooltip => '卸载所选 Vars。';
 
   @override
   String get deleteSelectedLabel => '删除所选';
 
   @override
-  String get deleteSelectedTooltip => '删除所选 Vars 及相关项。';
+  String get deleteSelectedTooltip => '删除所选 Vars。';
 
   @override
   String get moveLinksLabel => '移动链接';
@@ -1202,6 +1258,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get prepareSavesTitle => '准备存档';
 
   @override
+  String get prepareSavesAnalyzeInstallTooltip => '分析存档依赖并安装缺失项（创建链接）。';
+
+  @override
   String get outputFolderLabel => '输出文件夹';
 
   @override
@@ -1666,6 +1725,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bootstrapCheckSymlinkHint => '可能原因：需要管理员/开发者模式、文件系统不支持软链接或磁盘只读。';
 
   @override
+  String get bootstrapCheckSymlinkHintFsUnsupported =>
+      '该文件系统不支持软链接（exFAT/FAT32），请使用 NTFS 磁盘。';
+
+  @override
+  String get bootstrapCheckSymlinkHintReadOnly => '磁盘为只读，无法创建软链接。';
+
+  @override
+  String get bootstrapCheckSymlinkHintDeveloperMode => '未开启开发者模式，开启后可创建软链接。';
+
+  @override
+  String get bootstrapCheckSymlinkActionOpenDevSettings => '打开开发者模式设置';
+
+  @override
   String get bootstrapCheckVamExecHint => '请在设置中填写正确的 VaM 启动脚本。';
 
   @override
@@ -1685,7 +1757,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bootstrapTourHomeBody =>
-      '更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。(如果你是varManager新用户, 请注意执行此操作会永久改变varspath内的*.var包组织结构)';
+      '更新数据库后，使用高级筛选和批量操作管理 VAR，右侧 PackSwitch 快速切换配置。（请注意执行此操作会永久改变 varspath 内的 *.var 包组织结构：将按作者文件夹整理并集中到 ___VarTidied___ 中。）';
 
   @override
   String get bootstrapTourHomeBodyIntro =>
@@ -1693,7 +1765,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bootstrapTourHomeBodyWarning =>
-      '（请注意执行此操作会永久改变varspath内的*.var包组织结构）';
+      '（请注意执行此操作会永久改变 varspath 内的 *.var 包组织结构：将按作者文件夹整理并集中到 ___VarTidied___ 中。）';
 
   @override
   String get bootstrapTourScenesTitle => 'Scenes：三列拖拽';

@@ -518,6 +518,12 @@ abstract class AppLocalizations {
   /// **'UI'**
   String get settingsSectionUi;
 
+  /// No description provided for @settingsSectionList.
+  ///
+  /// In en, this message translates to:
+  /// **'List & Uninstall'**
+  String get settingsSectionList;
+
   /// No description provided for @settingsSectionListen.
   ///
   /// In en, this message translates to:
@@ -595,6 +601,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'中文'**
   String get languageChinese;
+
+  /// No description provided for @settingsPerPageVarsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Default vars per page'**
+  String get settingsPerPageVarsLabel;
+
+  /// No description provided for @settingsPerPageScenesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Default scenes per page'**
+  String get settingsPerPageScenesLabel;
+
+  /// No description provided for @settingsUninstallSelectedOnlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall selected vars only'**
+  String get settingsUninstallSelectedOnlyLabel;
+
+  /// No description provided for @settingsUninstallSelectedOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip uninstall preview and do not remove dependent vars automatically.'**
+  String get settingsUninstallSelectedOnlyHint;
 
   /// No description provided for @listenHostLabel.
   ///
@@ -734,6 +764,36 @@ abstract class AppLocalizations {
   /// **'Backend version'**
   String get backendVersionLabel;
 
+  /// No description provided for @checkUpdatesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Check updates'**
+  String get checkUpdatesLabel;
+
+  /// No description provided for @checkUpdatesCheckingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking...'**
+  String get checkUpdatesCheckingLabel;
+
+  /// No description provided for @updateAvailableLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available:'**
+  String get updateAvailableLabel;
+
+  /// No description provided for @updateUpToDateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'You are up to date.'**
+  String get updateUpToDateLabel;
+
+  /// No description provided for @updateCheckFailedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to check updates.'**
+  String get updateCheckFailedLabel;
+
   /// No description provided for @configSaved.
   ///
   /// In en, this message translates to:
@@ -763,6 +823,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All creators'**
   String get allCreators;
+
+  /// No description provided for @creatorFilterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a creator and press comma or Enter'**
+  String get creatorFilterHint;
+
+  /// No description provided for @creatorListButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Creator list'**
+  String get creatorListButton;
+
+  /// No description provided for @creatorListTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse creator list'**
+  String get creatorListTooltip;
+
+  /// No description provided for @creatorListTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Creators'**
+  String get creatorListTitle;
+
+  /// No description provided for @creatorListSearchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Search creators'**
+  String get creatorListSearchLabel;
+
+  /// No description provided for @creatorListClearLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All creators'**
+  String get creatorListClearLabel;
+
+  /// No description provided for @creatorListEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No creators available'**
+  String get creatorListEmpty;
+
+  /// No description provided for @creatorStatsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Vars {varCount} - Installed {installedCount}'**
+  String creatorStatsLabel(Object varCount, Object installedCount);
 
   /// No description provided for @statusAllLabel.
   ///
@@ -1234,7 +1342,7 @@ abstract class AppLocalizations {
   /// No description provided for @uninstallSelectedTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Uninstall selected vars and affected items.'**
+  /// **'Uninstall selected vars.'**
   String get uninstallSelectedTooltip;
 
   /// No description provided for @deleteSelectedLabel.
@@ -1246,7 +1354,7 @@ abstract class AppLocalizations {
   /// No description provided for @deleteSelectedTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Delete selected vars and affected items.'**
+  /// **'Delete selected vars.'**
   String get deleteSelectedTooltip;
 
   /// No description provided for @moveLinksLabel.
@@ -2304,6 +2412,12 @@ abstract class AppLocalizations {
   /// **'Prepare Saves'**
   String get prepareSavesTitle;
 
+  /// No description provided for @prepareSavesAnalyzeInstallTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze save dependencies and install missing packages (creates links).'**
+  String get prepareSavesAnalyzeInstallTooltip;
+
   /// No description provided for @outputFolderLabel.
   ///
   /// In en, this message translates to:
@@ -3162,6 +3276,30 @@ abstract class AppLocalizations {
   /// **'Possible reasons: admin/dev mode required, unsupported filesystem, or read-only drive.'**
   String get bootstrapCheckSymlinkHint;
 
+  /// No description provided for @bootstrapCheckSymlinkHintFsUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Filesystem does not support symlinks (exFAT/FAT32). Use an NTFS drive.'**
+  String get bootstrapCheckSymlinkHintFsUnsupported;
+
+  /// No description provided for @bootstrapCheckSymlinkHintReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Drive is read-only; symlink creation requires write access.'**
+  String get bootstrapCheckSymlinkHintReadOnly;
+
+  /// No description provided for @bootstrapCheckSymlinkHintDeveloperMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer Mode is off. Enable it to allow symlink creation.'**
+  String get bootstrapCheckSymlinkHintDeveloperMode;
+
+  /// No description provided for @bootstrapCheckSymlinkActionOpenDevSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Developer Settings'**
+  String get bootstrapCheckSymlinkActionOpenDevSettings;
+
   /// No description provided for @bootstrapCheckVamExecHint.
   ///
   /// In en, this message translates to:
@@ -3201,7 +3339,7 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapTourHomeBody.
   ///
   /// In en, this message translates to:
-  /// **'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)'**
+  /// **'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)'**
   String get bootstrapTourHomeBody;
 
   /// No description provided for @bootstrapTourHomeBodyIntro.
@@ -3213,7 +3351,7 @@ abstract class AppLocalizations {
   /// No description provided for @bootstrapTourHomeBodyWarning.
   ///
   /// In en, this message translates to:
-  /// **'(If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)'**
+  /// **'(This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)'**
   String get bootstrapTourHomeBodyWarning;
 
   /// No description provided for @bootstrapTourScenesTitle.

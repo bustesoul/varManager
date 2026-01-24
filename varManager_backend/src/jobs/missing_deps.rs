@@ -270,3 +270,68 @@ fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
     let created = meta.created().unwrap_or(modified);
     winfs::set_symlink_file_times(link, created, modified)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infra::db::ensure_schema;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn setup_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        ensure_schema(&pool).await.unwrap();
+        pool
+    }
+
+    async fn insert_var(
+        pool: &SqlitePool,
+        var_name: &str,
+        creator: &str,
+        package: &str,
+        version: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO vars (varName, creatorName, packageName, version) VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(var_name)
+        .bind(creator)
+        .bind(package)
+        .bind(version)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn resolve_dependency_latest_picks_latest() {
+        let pool = setup_pool().await;
+        insert_var(&pool, "creator.pkg.1", "creator", "pkg", "1").await;
+        insert_var(&pool, "creator.pkg.10", "creator", "pkg", "10").await;
+
+        let resolved = resolve_dependency(&pool, "creator.pkg.latest").await.unwrap();
+        match resolved {
+            ResolvedDep::Found(name) => assert_eq!(name, "creator.pkg.10"),
+            _ => panic!("expected latest version match"),
+        }
+    }
+
+    #[tokio::test]
+    async fn resolve_dependency_closest_version_returns_missing_version() {
+        let pool = setup_pool().await;
+        insert_var(&pool, "creator.pkg.1", "creator", "pkg", "1").await;
+        insert_var(&pool, "creator.pkg.7", "creator", "pkg", "7").await;
+        insert_var(&pool, "creator.pkg.10", "creator", "pkg", "10").await;
+
+        let resolved = resolve_dependency(&pool, "creator.pkg.5").await.unwrap();
+        match resolved {
+            ResolvedDep::MissingVersion { resolved } => {
+                assert_eq!(resolved, "creator.pkg.7");
+            }
+            _ => panic!("expected missing version match"),
+        }
+    }
+}

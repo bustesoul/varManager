@@ -1244,3 +1244,56 @@ impl Counts {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn make_temp_dir(prefix: &str) -> PathBuf {
+        let base = std::env::temp_dir();
+        let pid = std::process::id();
+        for idx in 0..1000 {
+            let candidate = base.join(format!("{prefix}_{pid}_{idx}"));
+            if !candidate.exists() {
+                fs::create_dir_all(&candidate).unwrap();
+                return candidate;
+            }
+        }
+        panic!("failed to create temp dir");
+    }
+
+    #[test]
+    fn comply_var_name_requires_numeric_version() {
+        assert!(comply_var_name("creator.pack.1"));
+        assert!(!comply_var_name("creator.pack.latest"));
+        assert!(!comply_var_name("creator.pack"));
+    }
+
+    #[test]
+    fn unique_path_appends_counter_on_collision() {
+        let root = make_temp_dir("update_db_unique");
+        let base = root.join("sample.var");
+        fs::write(&base, b"test").unwrap();
+        let candidate = unique_path(&root, "sample.var");
+        assert!(candidate.file_name().unwrap().to_string_lossy().contains("(1)"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn classify_entry_detects_known_types() {
+        assert_eq!(
+            classify_entry("saves/scene/test.json"),
+            Some(("scenes", false))
+        );
+        assert_eq!(
+            classify_entry("custom/atom/person/pose/test.vap"),
+            Some(("pose", true))
+        );
+        assert!(is_scene_record_type("scenes"));
+        assert!(!is_scene_record_type("unknown"));
+        assert!(is_plugin_cs("custom/scripts/test.cs"));
+        assert!(is_plugin_cslist("custom/scripts/test.cslist"));
+    }
+}

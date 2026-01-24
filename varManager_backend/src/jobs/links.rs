@@ -370,7 +370,7 @@ fn find_missing_matches(root: &Path, missing_var: &str) -> Vec<PathBuf> {
     };
     let walker = WalkDir::new(root).follow_links(false).into_iter();
     for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
+        if entry.file_type().is_file() || entry.file_type().is_symlink() {
             let file_name = entry.file_name().to_string_lossy().to_string();
             if !file_name.to_ascii_lowercase().ends_with(".var") {
                 continue;
@@ -396,4 +396,80 @@ fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
     let modified = meta.modified().map_err(|err| err.to_string())?;
     let created = meta.created().unwrap_or(modified);
     winfs::set_symlink_file_times(link, created, modified)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn make_temp_dir(prefix: &str) -> PathBuf {
+        let base = std::env::temp_dir();
+        let pid = std::process::id();
+        for idx in 0..1000 {
+            let candidate = base.join(format!("{prefix}_{pid}_{idx}"));
+            if !candidate.exists() {
+                fs::create_dir_all(&candidate).unwrap();
+                return candidate;
+            }
+        }
+        panic!("failed to create temp dir");
+    }
+
+    fn symlink_supported() -> bool {
+        let root = make_temp_dir("links_symlink_probe");
+        let target = root.join("target.var");
+        let link = root.join("link.var");
+        fs::write(&target, b"test").unwrap();
+        let ok = winfs::create_symlink_file(&link, &target).is_ok();
+        let _ = fs::remove_file(&link);
+        let _ = fs::remove_file(&target);
+        let _ = fs::remove_dir_all(&root);
+        ok
+    }
+
+    fn write_file(path: &Path) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, b"test").unwrap();
+    }
+
+    #[test]
+    fn find_missing_matches_includes_symlink() {
+        let root = make_temp_dir("missing_links_match");
+        let missing_dir = root.join("AddonPackages").join(MISSING_LINK_DIR);
+        fs::create_dir_all(&missing_dir).unwrap();
+        let link_path = missing_dir.join("creator.package.1.var");
+        if symlink_supported() {
+            let target = root.join("target.var");
+            write_file(&target);
+            winfs::create_symlink_file(&link_path, &target).unwrap();
+        } else {
+            write_file(&link_path);
+        }
+
+        let matches = find_missing_matches(&missing_dir, "creator.package.1");
+        assert!(matches.iter().any(|path| path == &link_path));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn find_missing_matches_latest_finds_versions() {
+        let root = make_temp_dir("missing_links_latest");
+        let missing_dir = root.join("AddonPackages").join(MISSING_LINK_DIR);
+        fs::create_dir_all(&missing_dir).unwrap();
+        let first = missing_dir.join("creator.package.1.var");
+        let second = missing_dir.join("creator.package.2.var");
+        write_file(&first);
+        write_file(&second);
+
+        let matches = find_missing_matches(&missing_dir, "creator.package.latest");
+        assert!(matches.iter().any(|path| path == &first));
+        assert!(matches.iter().any(|path| path == &second));
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }

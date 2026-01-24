@@ -90,6 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/vars/previews", post(api::list_var_previews))
         .route("/scenes", get(api::list_scenes))
         .route("/creators", get(api::list_creators))
+        .route("/creators/stats", get(api::list_creator_stats))
         .route("/stats", get(api::get_stats))
         .route("/preview", get(api::get_preview))
         .route("/cache/stats", get(api::get_cache_stats))

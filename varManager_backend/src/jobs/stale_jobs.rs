@@ -375,3 +375,17 @@ fn set_link_times(link: &Path, target: &Path) -> Result<(), String> {
     let created = meta.created().unwrap_or(modified);
     winfs::set_symlink_file_times(link, created, modified)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base_without_version_strips_last_segment() {
+        assert_eq!(
+            base_without_version("creator.package.5"),
+            Some("creator.package".to_string())
+        );
+        assert_eq!(base_without_version("invalid"), None);
+    }
+}

@@ -765,32 +765,6 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
     });
   }
 
-  Future<String?> _askText(BuildContext context, String title, {String hint = ''}) {
-    final controller = TextEditingController(text: hint);
-    return showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(context.l10n.commonCancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: Text(context.l10n.commonOk),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -1377,11 +1351,18 @@ class _MissingVarsPageState extends ConsumerState<MissingVarsPage> {
                             message: l10n.exportInstalledTooltip,
                             child: OutlinedButton(
                               onPressed: () async {
-                                final path = await _askText(context, l10n.exportPathTitle,
-                                    hint: 'installed_vars.txt');
-                                if (path == null || path.trim().isEmpty) return;
+                                final location = await getSaveLocation(
+                                  suggestedName: 'installed_vars.txt',
+                                  acceptedTypeGroups: [
+                                    XTypeGroup(
+                                      label: l10n.textFileTypeLabel,
+                                      extensions: const ['txt'],
+                                    ),
+                                  ],
+                                );
+                                if (location == null) return;
                                 await _runJob('vars_export_installed', {
-                                  'path': path.trim(),
+                                  'path': location.path,
                                 });
                               },
                               child: Text(l10n.exportInstalledLabel),

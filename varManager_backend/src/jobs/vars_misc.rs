@@ -452,6 +452,16 @@ async fn remove_install_status(pool: &SqlitePool, var_name: &str) -> Result<(), 
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_true_returns_true() {
+        assert!(default_true());
+    }
+}
+
 enum InstallOutcome {
     Installed,
     AlreadyInstalled,

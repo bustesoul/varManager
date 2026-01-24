@@ -85,6 +85,7 @@ class BackendClient {
     String? query,
     int? offset,
     int? limit,
+    String? prefix,
   }) async {
     final params = <String, String>{};
     if (query != null) {
@@ -96,10 +97,41 @@ class BackendClient {
     if (limit != null) {
       params['limit'] = limit.toString();
     }
+    if (prefix != null) {
+      params['prefix'] = prefix;
+    }
     final json =
         await _getJson('/creators', params.isEmpty ? null : params);
     final creators = json['creators'] as List<dynamic>? ?? [];
     return creators.map((item) => item.toString()).toList();
+  }
+
+  Future<CreatorStatsResponse> listCreatorStats({
+    List<String>? names,
+    String? query,
+    int? offset,
+    int? limit,
+    String? prefix,
+  }) async {
+    final params = <String, String>{};
+    if (names != null && names.isNotEmpty) {
+      params['names'] = names.join(',');
+    }
+    if (query != null) {
+      params['q'] = query;
+    }
+    if (offset != null) {
+      params['offset'] = offset.toString();
+    }
+    if (limit != null) {
+      params['limit'] = limit.toString();
+    }
+    if (prefix != null) {
+      params['prefix'] = prefix;
+    }
+    final json =
+        await _getJson('/creators/stats', params.isEmpty ? null : params);
+    return CreatorStatsResponse.fromJson(json);
   }
 
   Future<List<String>> listHubOptions({

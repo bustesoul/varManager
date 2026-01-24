@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:varmanager_flutter/l10n/app_localizations.dart';
 
@@ -8,9 +11,15 @@ import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/app_version.dart';
 import '../../core/models/config.dart';
+import '../../core/utils/debounce.dart';
 import '../../l10n/l10n.dart';
 import '../../l10n/locale_config.dart';
 import '../bootstrap/bootstrap_keys.dart';
+
+const String _githubLatestReleaseApi =
+    'https://api.github.com/repos/bustesoul/varManager/releases/latest';
+
+enum _UpdateCheckState { idle, checking, upToDate, updateAvailable, failed }
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -35,6 +44,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _proxyPassword = TextEditingController();
   ProxyMode _proxyMode = ProxyMode.system;
   bool _separateVarspath = false;
+  int _uiPerPageVars = 50;
+  int _uiPerPageScenes = 50;
+  bool _uninstallSelectedOnly = false;
+  final _autoSaveDebounce = Debouncer(const Duration(milliseconds: 600));
+  bool _autoSaveEnabled = false;
+  bool _saving = false;
+  bool _pendingSave = false;
+  _UpdateCheckState _updateState = _UpdateCheckState.idle;
+  String? _latestReleaseVersion;
+  String? _latestReleaseUrl;
 
   AppConfig? _config;
   String? _backendVersion;
@@ -83,7 +102,67 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _proxyPassword.text = cfg.proxy.password ?? '';
       _proxyMode = cfg.proxyMode;
       _separateVarspath = separate;
+      _uiPerPageVars = cfg.uiPerPageVars;
+      _uiPerPageScenes = cfg.uiPerPageScenes;
+      _uninstallSelectedOnly = cfg.uiUninstallSelectedOnly;
     });
+    ref.read(appConfigProvider.notifier).setConfig(cfg);
+    _pendingSave = false;
+    _autoSaveEnabled = true;
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (_updateState == _UpdateCheckState.checking) return;
+    setState(() {
+      _updateState = _UpdateCheckState.checking;
+    });
+    try {
+      final response = await http
+          .get(
+            Uri.parse(_githubLatestReleaseApi),
+            headers: const {
+              'Accept': 'application/vnd.github+json',
+              'User-Agent': 'varManager',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          )
+          .timeout(const Duration(seconds: 12));
+      if (response.statusCode >= 400) {
+        throw Exception('GitHub release check failed');
+      }
+      final payload = jsonDecode(response.body) as Map<String, dynamic>;
+      final version = _extractReleaseVersion(payload);
+      final releaseUrl = payload['html_url']?.toString().trim() ?? '';
+      if (version.isEmpty || releaseUrl.isEmpty) {
+        throw Exception('Missing release data');
+      }
+      final localVersion = _appVersion?.trim() ?? '';
+      final comparison = _compareVersions(localVersion, version);
+      if (!mounted) return;
+      setState(() {
+        _latestReleaseVersion = version;
+        _latestReleaseUrl = releaseUrl;
+        _updateState = comparison < 0
+            ? _UpdateCheckState.updateAvailable
+            : _UpdateCheckState.upToDate;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _latestReleaseVersion = null;
+        _latestReleaseUrl = null;
+        _updateState = _UpdateCheckState.failed;
+      });
+    }
+  }
+
+  String _extractReleaseVersion(Map<String, dynamic> payload) {
+    final tag = payload['tag_name']?.toString().trim() ?? '';
+    if (tag.isNotEmpty) return tag;
+    final name = payload['name']?.toString().trim() ?? '';
+    final match = RegExp(r'\d+(?:\.\d+)+').firstMatch(name);
+    if (match != null) return match.group(0) ?? '';
+    return name;
   }
 
   @override
@@ -100,10 +179,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _proxyPort.dispose();
     _proxyUsername.dispose();
     _proxyPassword.dispose();
+    _autoSaveDebounce.dispose();
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool showSnackBar = true}) async {
     if (!_formKey.currentState!.validate()) return;
     final previous = _config;
     if (previous == null) return;
@@ -153,19 +233,48 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         'username': proxyUsername,
         'password': proxyPassword,
       },
+      'ui_per_page_vars': _uiPerPageVars,
+      'ui_per_page_scenes': _uiPerPageScenes,
+      'ui_uninstall_selected_only': _uninstallSelectedOnly,
     };
     final cfg = await client.updateConfig(update);
     if (!mounted) return;
     setState(() {
       _config = cfg;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(needsRestartHint
-            ? context.l10n.configSavedRestartHint
-            : context.l10n.configSaved),
-      ),
-    );
+    ref.read(appConfigProvider.notifier).setConfig(cfg);
+    if (showSnackBar || needsRestartHint) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(needsRestartHint
+              ? context.l10n.configSavedRestartHint
+              : context.l10n.configSaved),
+        ),
+      );
+    }
+  }
+
+  void _scheduleAutoSave() {
+    if (!_autoSaveEnabled) return;
+    _pendingSave = true;
+    _autoSaveDebounce.run(() {
+      if (!mounted) return;
+      _flushAutoSave();
+    });
+  }
+
+  Future<void> _flushAutoSave() async {
+    if (_saving || !_pendingSave) return;
+    _pendingSave = false;
+    _saving = true;
+    try {
+      await _save(showSnackBar: false);
+    } finally {
+      _saving = false;
+    }
+    if (_pendingSave) {
+      _scheduleAutoSave();
+    }
   }
 
   Future<void> _pickDirectory(TextEditingController controller) async {
@@ -174,6 +283,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() {
       controller.text = path;
     });
+    _scheduleAutoSave();
   }
 
   Future<void> _pickVampathDirectory() async {
@@ -188,6 +298,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _downloaderSavePath.text = _addonPackagesPath(path);
       }
     });
+    _scheduleAutoSave();
   }
 
   Future<void> _pickVarspathDirectory() async {
@@ -200,6 +311,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _downloaderSavePath.text = _addonPackagesPath(path);
       }
     });
+    _scheduleAutoSave();
   }
 
   Future<void> _pickFile(TextEditingController controller) async {
@@ -208,6 +320,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() {
       controller.text = file.path;
     });
+    _scheduleAutoSave();
   }
 
   String _addonPackagesPath(String base) {
@@ -257,6 +370,73 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             const SizedBox(height: 12),
             _section(
+              title: l10n.settingsSectionList,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<int>(
+                    initialValue: _uiPerPageVars,
+                    decoration: InputDecoration(
+                      labelText: l10n.settingsPerPageVarsLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: const [50, 100, 200]
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _uiPerPageVars = value;
+                      });
+                      _scheduleAutoSave();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _uiPerPageScenes,
+                    decoration: InputDecoration(
+                      labelText: l10n.settingsPerPageScenesLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: const [50, 100, 200]
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _uiPerPageScenes = value;
+                      });
+                      _scheduleAutoSave();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _uninstallSelectedOnly,
+                    title: Text(l10n.settingsUninstallSelectedOnlyLabel),
+                    subtitle: Text(l10n.settingsUninstallSelectedOnlyHint),
+                    onChanged: (value) {
+                      setState(() {
+                        _uninstallSelectedOnly = value;
+                      });
+                      _scheduleAutoSave();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _section(
               title: l10n.settingsSectionListen,
               child: Column(
                 children: [
@@ -291,6 +471,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       setState(() {
                         _proxyMode = value;
                       });
+                      _scheduleAutoSave();
                     },
                   ),
                   const SizedBox(height: 12),
@@ -335,6 +516,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           _varspath.text = _vampath.text.trim();
                         }
                       });
+                      _scheduleAutoSave();
                     },
                   ),
                   Padding(
@@ -387,18 +569,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _section(
               title: l10n.settingsSectionAbout,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _infoRow(l10n.appVersionLabel, _appVersion ?? '-'),
                   _infoRow(l10n.backendVersionLabel, _backendVersion ?? '-'),
+                  const SizedBox(height: 8),
+                  _buildUpdateCheck(l10n),
                 ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: _save,
-                child: Text(l10n.commonSave),
               ),
             ),
           ],
@@ -428,6 +605,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       bool obscureText = false,
       bool enableSuggestions = true,
       bool autocorrect = true,
+      ValueChanged<String>? onChanged,
       bool enabled = true}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -438,6 +616,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         enableSuggestions: enableSuggestions,
         autocorrect: autocorrect,
         enabled: enabled,
+        onChanged: (value) {
+          onChanged?.call(value);
+          _scheduleAutoSave();
+        },
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -466,7 +648,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: TextFormField(
               controller: controller,
               keyboardType: keyboard,
-              onChanged: onChanged,
+              onChanged: (value) {
+                onChanged?.call(value);
+                _scheduleAutoSave();
+              },
               enabled: enabled,
               decoration: InputDecoration(
                 labelText: label,
@@ -505,6 +690,111 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildUpdateCheck(AppLocalizations l10n) {
+    final isChecking = _updateState == _UpdateCheckState.checking;
+    final theme = Theme.of(context);
+    Widget? status;
+    if (_updateState == _UpdateCheckState.updateAvailable &&
+        _latestReleaseVersion != null) {
+      final releaseUrl = _latestReleaseUrl;
+      status = Row(
+        children: [
+          Text(
+            l10n.updateAvailableLabel,
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: 6),
+          TextButton(
+            onPressed:
+                releaseUrl == null ? null : () => _openReleaseUrl(releaseUrl),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(_latestReleaseVersion!),
+          ),
+        ],
+      );
+    } else if (_updateState == _UpdateCheckState.upToDate) {
+      status = Text(
+        l10n.updateUpToDateLabel,
+        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+      );
+    } else if (_updateState == _UpdateCheckState.failed) {
+      status = Text(
+        l10n.updateCheckFailedLabel,
+        style: TextStyle(color: theme.colorScheme.error),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          onPressed: isChecking ? null : _checkForUpdates,
+          icon: isChecking
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.system_update_alt, size: 18),
+          label: Text(isChecking
+              ? l10n.checkUpdatesCheckingLabel
+              : l10n.checkUpdatesLabel),
+        ),
+        if (status != null) ...[
+          const SizedBox(height: 6),
+          status,
+        ],
+      ],
+    );
+  }
+
+  Future<void> _openReleaseUrl(String url) async {
+    final runner = ref.read(jobRunnerProvider);
+    await runner.runJob('open_url', args: {'url': url});
+  }
+
+  int _compareVersions(String left, String right) {
+    final leftParts = _parseVersionParts(left);
+    final rightParts = _parseVersionParts(right);
+    final length =
+        leftParts.length > rightParts.length ? leftParts.length : rightParts.length;
+    for (var i = 0; i < length; i += 1) {
+      final lValue = i < leftParts.length ? leftParts[i] : 0;
+      final rValue = i < rightParts.length ? rightParts[i] : 0;
+      if (lValue != rValue) {
+        return lValue.compareTo(rValue);
+      }
+    }
+    return 0;
+  }
+
+  List<int> _parseVersionParts(String version) {
+    var trimmed = version.trim();
+    if (trimmed.isEmpty) return const [0];
+    if (trimmed.startsWith('v') || trimmed.startsWith('V')) {
+      trimmed = trimmed.substring(1);
+    }
+    final main = trimmed.split(RegExp(r'[-+\s]')).first;
+    final parts = main.split('.');
+    final values = <int>[];
+    for (final part in parts) {
+      final match = RegExp(r'\d+').firstMatch(part);
+      if (match == null) {
+        values.add(0);
+        continue;
+      }
+      values.add(int.tryParse(match.group(0)!) ?? 0);
+    }
+    if (values.isEmpty) {
+      values.add(0);
+    }
+    return values;
   }
 
   Widget _buildThemeSelector(AppLocalizations l10n) {

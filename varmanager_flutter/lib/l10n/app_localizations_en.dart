@@ -232,6 +232,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSectionUi => 'UI';
 
   @override
+  String get settingsSectionList => 'List & Uninstall';
+
+  @override
   String get settingsSectionListen => 'Listen & Logs';
 
   @override
@@ -271,6 +274,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageChinese => '中文';
+
+  @override
+  String get settingsPerPageVarsLabel => 'Default vars per page';
+
+  @override
+  String get settingsPerPageScenesLabel => 'Default scenes per page';
+
+  @override
+  String get settingsUninstallSelectedOnlyLabel =>
+      'Uninstall selected vars only';
+
+  @override
+  String get settingsUninstallSelectedOnlyHint =>
+      'Skip uninstall preview and do not remove dependent vars automatically.';
 
   @override
   String get listenHostLabel => 'Listen host';
@@ -343,6 +360,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backendVersionLabel => 'Backend version';
 
   @override
+  String get checkUpdatesLabel => 'Check updates';
+
+  @override
+  String get checkUpdatesCheckingLabel => 'Checking...';
+
+  @override
+  String get updateAvailableLabel => 'Update available:';
+
+  @override
+  String get updateUpToDateLabel => 'You are up to date.';
+
+  @override
+  String get updateCheckFailedLabel => 'Failed to check updates.';
+
+  @override
   String get configSaved => 'Config saved';
 
   @override
@@ -357,6 +389,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get allCreators => 'All creators';
+
+  @override
+  String get creatorFilterHint => 'Type a creator and press comma or Enter';
+
+  @override
+  String get creatorListButton => 'Creator list';
+
+  @override
+  String get creatorListTooltip => 'Browse creator list';
+
+  @override
+  String get creatorListTitle => 'Creators';
+
+  @override
+  String get creatorListSearchLabel => 'Search creators';
+
+  @override
+  String get creatorListClearLabel => 'All creators';
+
+  @override
+  String get creatorListEmpty => 'No creators available';
+
+  @override
+  String creatorStatsLabel(Object varCount, Object installedCount) {
+    return 'Vars $varCount - Installed $installedCount';
+  }
 
   @override
   String get statusAllLabel => 'All status';
@@ -618,15 +676,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uninstallSelectedLabel => 'Uninstall Selected';
 
   @override
-  String get uninstallSelectedTooltip =>
-      'Uninstall selected vars and affected items.';
+  String get uninstallSelectedTooltip => 'Uninstall selected vars.';
 
   @override
   String get deleteSelectedLabel => 'Delete Selected';
 
   @override
-  String get deleteSelectedTooltip =>
-      'Delete selected vars and affected items.';
+  String get deleteSelectedTooltip => 'Delete selected vars.';
 
   @override
   String get moveLinksLabel => 'Move Links';
@@ -1231,6 +1287,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prepareSavesTitle => 'Prepare Saves';
 
   @override
+  String get prepareSavesAnalyzeInstallTooltip =>
+      'Analyze save dependencies and install missing packages (creates links).';
+
+  @override
   String get outputFolderLabel => 'Output folder';
 
   @override
@@ -1711,6 +1771,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Possible reasons: admin/dev mode required, unsupported filesystem, or read-only drive.';
 
   @override
+  String get bootstrapCheckSymlinkHintFsUnsupported =>
+      'Filesystem does not support symlinks (exFAT/FAT32). Use an NTFS drive.';
+
+  @override
+  String get bootstrapCheckSymlinkHintReadOnly =>
+      'Drive is read-only; symlink creation requires write access.';
+
+  @override
+  String get bootstrapCheckSymlinkHintDeveloperMode =>
+      'Developer Mode is off. Enable it to allow symlink creation.';
+
+  @override
+  String get bootstrapCheckSymlinkActionOpenDevSettings =>
+      'Open Developer Settings';
+
+  @override
   String get bootstrapCheckVamExecHint =>
       'Set the correct VaM launch script in Settings.';
 
@@ -1731,7 +1807,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bootstrapTourHomeBody =>
-      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)';
+      'Update DB to index new VARs, then use advanced filters, batch actions, and the PackSwitch sidebar to manage installs. (This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)';
 
   @override
   String get bootstrapTourHomeBodyIntro =>
@@ -1739,7 +1815,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bootstrapTourHomeBodyWarning =>
-      '(If you are a new varManager user, please note that performing this operation will permanently change the *.var package organization structure within Varspath.)';
+      '(This operation permanently changes *.var organization in varspath: packages are tidied into creator folders under ___VarTidied___.)';
 
   @override
   String get bootstrapTourScenesTitle => 'Scenes: 3-column board';

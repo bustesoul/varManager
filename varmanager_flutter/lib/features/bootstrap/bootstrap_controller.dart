@@ -11,6 +11,18 @@ import 'bootstrap_state.dart';
 final bootstrapProvider =
     NotifierProvider<BootstrapController, BootstrapState>(BootstrapController.new);
 
+const Set<String> _unsupportedSymlinkFileSystems = {'exfat', 'fat32', 'fat'};
+
+class _SymlinkHintResult {
+  const _SymlinkHintResult({
+    required this.hints,
+    required this.actions,
+  });
+
+  final List<String> hints;
+  final List<BootstrapCheckAction> actions;
+}
+
 class BootstrapController extends Notifier<BootstrapState> {
   static const String _installMarkerName = 'INSTALL.txt';
   static const String _vamDesktopBat = 'VaM (Desktop Mode).bat';
@@ -112,6 +124,10 @@ class BootstrapController extends Notifier<BootstrapState> {
     required String downloaderHint,
     required String fileOpsHint,
     required String symlinkHint,
+    required String symlinkHintFsUnsupported,
+    required String symlinkHintReadOnly,
+    required String symlinkHintDeveloperMode,
+    required String symlinkActionOpenDevSettings,
     required String vamExecHint,
     required String varspathName,
     required String vampathName,
@@ -198,8 +214,12 @@ class BootstrapController extends Notifier<BootstrapState> {
       'symlink_varspath',
       varspath,
       varSymlinkLabel,
-      symlinkHint,
       emptyMessage: '$varspathName not set',
+      hintFallback: symlinkHint,
+      hintFsUnsupported: symlinkHintFsUnsupported,
+      hintReadOnly: symlinkHintReadOnly,
+      hintDeveloperMode: symlinkHintDeveloperMode,
+      actionOpenDevSettingsLabel: symlinkActionOpenDevSettings,
     );
     _setCheck(symlinkVarCheck);
 
@@ -208,8 +228,12 @@ class BootstrapController extends Notifier<BootstrapState> {
         'symlink_vampath',
         vampath,
         vampathSymlinkLabel,
-        symlinkHint,
         emptyMessage: '$vampathName not set',
+        hintFallback: symlinkHint,
+        hintFsUnsupported: symlinkHintFsUnsupported,
+        hintReadOnly: symlinkHintReadOnly,
+        hintDeveloperMode: symlinkHintDeveloperMode,
+        actionOpenDevSettingsLabel: symlinkActionOpenDevSettings,
       );
       _setCheck(symlinkVamCheck);
     }
@@ -509,9 +533,13 @@ class BootstrapController extends Notifier<BootstrapState> {
   Future<BootstrapCheckItem> _checkSymlink(
     String id,
     String path,
-    String label,
-    String hint, {
+    String label, {
     required String emptyMessage,
+    required String hintFallback,
+    required String hintFsUnsupported,
+    required String hintReadOnly,
+    required String hintDeveloperMode,
+    required String actionOpenDevSettingsLabel,
   }) async {
     if (path.isEmpty) {
       return BootstrapCheckItem(
@@ -519,7 +547,7 @@ class BootstrapController extends Notifier<BootstrapState> {
         label: label,
         status: BootstrapCheckStatus.fail,
         message: emptyMessage,
-        hints: [hint],
+        hints: [hintFallback],
       );
     }
 
@@ -554,16 +582,157 @@ class BootstrapController extends Notifier<BootstrapState> {
         hints: const [],
       );
     } catch (err) {
+      final resolved = await _resolveSymlinkHints(
+        path,
+        err,
+        fallbackHint: hintFallback,
+        fsUnsupportedHint: hintFsUnsupported,
+        readOnlyHint: hintReadOnly,
+        devModeHint: hintDeveloperMode,
+        actionOpenDevSettingsLabel: actionOpenDevSettingsLabel,
+      );
       return BootstrapCheckItem(
         id: id,
         label: label,
         status: BootstrapCheckStatus.fail,
         message: err.toString(),
-        hints: [hint],
+        hints: resolved.hints,
+        actions: resolved.actions,
       );
     } finally {
       await _cleanupCheckDir(checkDir);
     }
+  }
+
+  Future<_SymlinkHintResult> _resolveSymlinkHints(
+    String path,
+    Object error, {
+    required String fallbackHint,
+    required String fsUnsupportedHint,
+    required String readOnlyHint,
+    required String devModeHint,
+    required String actionOpenDevSettingsLabel,
+  }) async {
+    final fsName = await _getWindowsFileSystemName(path);
+    if (fsName != null && _isUnsupportedSymlinkFs(fsName)) {
+      return _SymlinkHintResult(hints: [fsUnsupportedHint], actions: const []);
+    }
+
+    if (_isReadOnlyError(error)) {
+      return _SymlinkHintResult(hints: [readOnlyHint], actions: const []);
+    }
+
+    final devModeEnabled = await _isDeveloperModeEnabled();
+    if (Platform.isWindows &&
+        (devModeEnabled == false ||
+            (devModeEnabled == null && _isSymlinkPrivilegeError(error)))) {
+      final actions = actionOpenDevSettingsLabel.isEmpty
+          ? const <BootstrapCheckAction>[]
+          : [
+              BootstrapCheckAction(
+                label: actionOpenDevSettingsLabel,
+                url: 'ms-settings:developers',
+              ),
+            ];
+      return _SymlinkHintResult(hints: [devModeHint], actions: actions);
+    }
+
+    return _SymlinkHintResult(hints: [fallbackHint], actions: const []);
+  }
+
+  bool _isUnsupportedSymlinkFs(String fsName) {
+    return _unsupportedSymlinkFileSystems.contains(fsName.toLowerCase());
+  }
+
+  bool _isReadOnlyError(Object error) {
+    if (error is FileSystemException) {
+      final osError = error.osError;
+      final code = osError?.errorCode;
+      if (code == 19 || code == 30) {
+        return true;
+      }
+      final message = osError?.message.toLowerCase() ?? '';
+      if (message.contains('read-only') ||
+          message.contains('write protect') ||
+          message.contains('write-protect')) {
+        return true;
+      }
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('read-only file system') ||
+        text.contains('write protected');
+  }
+
+  bool _isSymlinkPrivilegeError(Object error) {
+    if (error is FileSystemException) {
+      final osError = error.osError;
+      if (osError?.errorCode == 1314) {
+        return true;
+      }
+      final message = osError?.message.toLowerCase() ?? '';
+      if (message.contains('privilege')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<String?> _getWindowsFileSystemName(String path) async {
+    if (!Platform.isWindows) return null;
+    final drive = _extractWindowsDrive(path);
+    if (drive == null) return null;
+    try {
+      final result = await Process.run(
+        'fsutil',
+        ['fsinfo', 'volumeinfo', drive],
+        runInShell: true,
+      );
+      if (result.exitCode != 0) return null;
+      final output = '${result.stdout}\n${result.stderr}';
+      final match = RegExp(
+        r'File System Name\s*:\s*(\S+)',
+        caseSensitive: false,
+      ).firstMatch(output);
+      return match?.group(1);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool?> _isDeveloperModeEnabled() async {
+    if (!Platform.isWindows) return null;
+    try {
+      final result = await Process.run(
+        'reg',
+        [
+          'query',
+          r'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock',
+          '/v',
+          'AllowDevelopmentWithoutDevLicense',
+        ],
+        runInShell: true,
+      );
+      if (result.exitCode != 0) return null;
+      final output = '${result.stdout}';
+      final match = RegExp(
+        r'AllowDevelopmentWithoutDevLicense\s+REG_DWORD\s+0x([0-9a-fA-F]+)',
+      ).firstMatch(output);
+      if (match == null) return null;
+      final raw = match.group(1);
+      final value = raw == null ? 0 : int.tryParse(raw, radix: 16) ?? 0;
+      return value != 0;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _extractWindowsDrive(String path) {
+    if (!Platform.isWindows) return null;
+    final root = p.rootPrefix(p.normalize(path));
+    if (root.length >= 2 && root[1] == ':') {
+      return root.substring(0, 2);
+    }
+    return null;
   }
 
   Future<BootstrapCheckItem> _checkVamExec(

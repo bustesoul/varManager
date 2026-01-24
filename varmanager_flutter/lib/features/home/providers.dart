@@ -4,12 +4,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/backend/query_params.dart';
+import '../../core/models/config.dart';
 import '../../core/models/var_models.dart';
 import 'models.dart';
 
 class VarsQueryNotifier extends Notifier<VarsQueryParams> {
   @override
-  VarsQueryParams build() => VarsQueryParams();
+  VarsQueryParams build() {
+    ref.listen<AppConfig?>(appConfigProvider, (previous, next) {
+      if (next == null) return;
+      final previousDefault = previous?.uiPerPageVars ?? 50;
+      if (state.perPage == previousDefault &&
+          state.perPage != next.uiPerPageVars) {
+        state = state.copyWith(page: 1, perPage: next.uiPerPageVars);
+      }
+    });
+    final perPage = ref.read(appConfigProvider)?.uiPerPageVars ?? 50;
+    return VarsQueryParams(perPage: perPage);
+  }
 
   void update(VarsQueryParams Function(VarsQueryParams) updater) {
     state = updater(state);
@@ -20,7 +32,8 @@ class VarsQueryNotifier extends Notifier<VarsQueryParams> {
   }
 
   void reset() {
-    state = VarsQueryParams();
+    final perPage = ref.read(appConfigProvider)?.uiPerPageVars ?? 50;
+    state = VarsQueryParams(perPage: perPage);
   }
 }
 

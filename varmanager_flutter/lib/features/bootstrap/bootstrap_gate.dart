@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
+import '../../app/providers.dart';
 import '../../core/app_version.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
@@ -1132,6 +1133,14 @@ class _ChecksStep extends ConsumerWidget {
                         downloaderHint: l10n.bootstrapCheckDownloaderHint,
                         fileOpsHint: l10n.bootstrapCheckFileOpsHint,
                         symlinkHint: l10n.bootstrapCheckSymlinkHint,
+                        symlinkHintFsUnsupported:
+                            l10n.bootstrapCheckSymlinkHintFsUnsupported,
+                        symlinkHintReadOnly:
+                            l10n.bootstrapCheckSymlinkHintReadOnly,
+                        symlinkHintDeveloperMode:
+                            l10n.bootstrapCheckSymlinkHintDeveloperMode,
+                        symlinkActionOpenDevSettings:
+                            l10n.bootstrapCheckSymlinkActionOpenDevSettings,
                         vamExecHint: l10n.bootstrapCheckVamExecHint,
                         varspathName: l10n.varspathLabel,
                         vampathName: l10n.vampathLabel,
@@ -1152,13 +1161,13 @@ class _ChecksStep extends ConsumerWidget {
   }
 }
 
-class _CheckTile extends StatelessWidget {
+class _CheckTile extends ConsumerWidget {
   const _CheckTile({required this.item});
 
   final BootstrapCheckItem item;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final (icon, color, label) = _statusMeta(context, item.status, l10n);
     return Card(
@@ -1193,6 +1202,29 @@ class _CheckTile extends StatelessWidget {
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+              ),
+            ],
+            if (item.actions.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: item.actions
+                    .map(
+                      (action) => TextButton(
+                        onPressed: action.url.isEmpty
+                            ? null
+                            : () async {
+                                final runner = ref.read(jobRunnerProvider);
+                                await runner.runJob(
+                                  'open_url',
+                                  args: {'url': action.url},
+                                );
+                              },
+                        child: Text(action.label),
+                      ),
+                    )
+                    .toList(),
               ),
             ],
           ],

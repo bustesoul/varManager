@@ -75,3 +75,17 @@ fn open_url_blocking(reporter: &JobReporter, args: Option<Value>) -> Result<(), 
     reporter.log("open_url completed");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jobs::job_channel::create_job_channel;
+
+    #[test]
+    fn open_url_requires_args() {
+        let (tx, _rx) = create_job_channel();
+        let reporter = JobReporter::new(1, tx);
+        let err = open_url_blocking(&reporter, None).unwrap_err();
+        assert!(err.contains("open_url args required"));
+    }
+}

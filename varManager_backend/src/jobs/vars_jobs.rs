@@ -541,6 +541,16 @@ fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_true_returns_true() {
+        assert!(default_true());
+    }
+}
+
 enum InstallOutcome {
     Installed,
     AlreadyInstalled,
