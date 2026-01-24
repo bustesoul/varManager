@@ -764,6 +764,36 @@ abstract class AppLocalizations {
   /// **'Backend version'**
   String get backendVersionLabel;
 
+  /// No description provided for @checkUpdatesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Check updates'**
+  String get checkUpdatesLabel;
+
+  /// No description provided for @checkUpdatesCheckingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking...'**
+  String get checkUpdatesCheckingLabel;
+
+  /// No description provided for @updateAvailableLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available:'**
+  String get updateAvailableLabel;
+
+  /// No description provided for @updateUpToDateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'You are up to date.'**
+  String get updateUpToDateLabel;
+
+  /// No description provided for @updateCheckFailedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to check updates.'**
+  String get updateCheckFailedLabel;
+
   /// No description provided for @configSaved.
   ///
   /// In en, this message translates to:

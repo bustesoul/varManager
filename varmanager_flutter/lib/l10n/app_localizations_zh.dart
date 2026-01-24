@@ -354,6 +354,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backendVersionLabel => '后端版本';
 
   @override
+  String get checkUpdatesLabel => '检查更新';
+
+  @override
+  String get checkUpdatesCheckingLabel => '检查中...';
+
+  @override
+  String get updateAvailableLabel => '发现新版本：';
+
+  @override
+  String get updateUpToDateLabel => '已是最新版本';
+
+  @override
+  String get updateCheckFailedLabel => '检查更新失败';
+
+  @override
   String get configSaved => '配置已保存';
 
   @override

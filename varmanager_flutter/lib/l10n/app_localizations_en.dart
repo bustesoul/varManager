@@ -360,6 +360,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backendVersionLabel => 'Backend version';
 
   @override
+  String get checkUpdatesLabel => 'Check updates';
+
+  @override
+  String get checkUpdatesCheckingLabel => 'Checking...';
+
+  @override
+  String get updateAvailableLabel => 'Update available:';
+
+  @override
+  String get updateUpToDateLabel => 'You are up to date.';
+
+  @override
+  String get updateCheckFailedLabel => 'Failed to check updates.';
+
+  @override
   String get configSaved => 'Config saved';
 
   @override
