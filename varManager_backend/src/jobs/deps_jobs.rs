@@ -383,11 +383,17 @@ mod tests {
     fn normalize_save_path_relativizes_and_trims() {
         let root = make_temp_dir("deps_normalize");
         let vampath = root.join("VaM");
+        let short_file = vampath.join("Saves").join("short.json");
+        let short_normalized = normalize_save_path(&vampath, &short_file);
+        assert!(short_normalized.starts_with("Saves"));
+
         let long_name = "a".repeat(300);
-        let file = vampath.join("Saves").join(long_name);
-        let normalized = normalize_save_path(&vampath, &file);
-        assert!(normalized.starts_with("Saves"));
+        let long_file = vampath.join("Saves").join(&long_name);
+        let normalized = normalize_save_path(&vampath, &long_file);
         assert!(normalized.len() <= 255);
+        let tail_len = 64.min(long_name.len());
+        let tail = &long_name[long_name.len() - tail_len..];
+        assert!(normalized.ends_with(tail));
         let _ = fs::remove_dir_all(&root);
     }
 }

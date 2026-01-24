@@ -375,7 +375,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   DropdownButtonFormField<int>(
-                    value: _uiPerPageVars,
+                    initialValue: _uiPerPageVars,
                     decoration: InputDecoration(
                       labelText: l10n.settingsPerPageVarsLabel,
                       border: const OutlineInputBorder(),
@@ -398,7 +398,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: _uiPerPageScenes,
+                    initialValue: _uiPerPageScenes,
                     decoration: InputDecoration(
                       labelText: l10n.settingsPerPageScenesLabel,
                       border: const OutlineInputBorder(),

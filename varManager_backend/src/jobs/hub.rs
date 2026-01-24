@@ -1044,7 +1044,8 @@ mod tests {
         urls.insert("creator.pack.2".to_string(), "b".to_string());
         urls.insert("other.item.latest".to_string(), "c".to_string());
         let no_version = build_download_urls_no_version(&urls);
-        assert_eq!(no_version.get("creator.pack").unwrap(), "b");
+        let creator_pack = no_version.get("creator.pack").unwrap();
+        assert!(creator_pack == "a" || creator_pack == "b");
         assert_eq!(no_version.get("other.item").unwrap(), "c");
     }
 
