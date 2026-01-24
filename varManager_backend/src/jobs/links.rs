@@ -370,7 +370,7 @@ fn find_missing_matches(root: &Path, missing_var: &str) -> Vec<PathBuf> {
     };
     let walker = WalkDir::new(root).follow_links(false).into_iter();
     for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
+        if entry.file_type().is_file() || entry.file_type().is_symlink() {
             let file_name = entry.file_name().to_string_lossy().to_string();
             if !file_name.to_ascii_lowercase().ends_with(".var") {
                 continue;
