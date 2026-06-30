@@ -1,18 +1,18 @@
+use crate::app::AppState;
 use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{
-    addon_packages_dir, addon_switch_root, config_paths, INSTALL_LINK_DIR, MISSING_LINK_DIR,
-    TEMP_LINK_DIR,
+    addon_packages_dir, addon_switch_root, config_paths, validate_file_name, INSTALL_LINK_DIR,
+    MISSING_LINK_DIR, TEMP_LINK_DIR,
 };
-use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
+use crate::jobs::job_channel::JobReporter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::SqlitePool;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use sqlx::SqlitePool;
 use walkdir::WalkDir;
 
 #[derive(Deserialize)]
@@ -98,18 +98,19 @@ pub async fn run_packswitch_set_job(
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "packswitch_set args required".to_string())?;
         let args: PackSwitchArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
-        let outcome = set_switch_blocking(&state, &reporter, &args.name)?;
-        let result = match outcome {
-            PackSwitchSetOutcome::Switched => PackSwitchSetResult {
-                status: "switched".to_string(),
-                name: args.name,
-                addon_path: None,
-            },
-            PackSwitchSetOutcome::UpdateDbRequired { addon_path } => PackSwitchSetResult {
-                status: "update_db_required".to_string(),
-                name: args.name,
-                addon_path: Some(addon_path.display().to_string()),
-            },
+        let name = validate_switch_name(&args.name)?;
+        let outcome = set_switch_blocking(&state, &reporter, &name)?;
+        let (status, addon_path) = match outcome {
+            PackSwitchSetOutcome::Switched => ("switched".to_string(), None),
+            PackSwitchSetOutcome::UpdateDbRequired { addon_path } => (
+                "update_db_required".to_string(),
+                Some(addon_path.display().to_string()),
+            ),
+        };
+        let result = PackSwitchSetResult {
+            status,
+            name,
+            addon_path,
         };
         reporter.set_result(serde_json::to_value(result).map_err(|err| err.to_string())?);
         Ok(())
@@ -118,49 +119,45 @@ pub async fn run_packswitch_set_job(
     .map_err(|err| err.to_string())?
 }
 
-fn add_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+fn add_switch_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: PackSwitchArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let name = args.name.trim();
-    if name.is_empty() {
-        return Err("switch name is required".to_string());
-    }
+    let name = validate_switch_name(&args.name)?;
     let root = addon_switch_root(&vampath);
     fs::create_dir_all(&root).map_err(|err| err.to_string())?;
-    let target = root.join(name);
+    let target = root.join(&name);
     if target.exists() {
         return Err(format!("switch already exists: {}", name));
     }
     fs::create_dir_all(&target).map_err(|err| err.to_string())?;
     reporter.set_result(
-        serde_json::to_value(PackSwitchResult {
-            name: name.to_string(),
-        })
-        .map_err(|err| err.to_string())?,
+        serde_json::to_value(PackSwitchResult { name }).map_err(|err| err.to_string())?,
     );
     Ok(())
 }
 
-fn delete_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+fn delete_switch_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: PackSwitchArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let name = args.name.trim();
-    if name.is_empty() {
-        return Err("switch name is required".to_string());
-    }
+    let name = validate_switch_name(&args.name)?;
     if name.eq_ignore_ascii_case(DEFAULT_SWITCH_NAME) {
         return Err("cannot delete default switch".to_string());
     }
     let root = addon_switch_root(&vampath);
-    let target = root.join(name);
+    let target = root.join(&name);
     if target.exists() {
         fs::remove_dir_all(&target).map_err(|err| err.to_string())?;
     }
     reporter.set_result(
-        serde_json::to_value(PackSwitchResult {
-            name: name.to_string(),
-        })
-        .map_err(|err| err.to_string())?,
+        serde_json::to_value(PackSwitchResult { name }).map_err(|err| err.to_string())?,
     );
     Ok(())
 }
@@ -172,17 +169,14 @@ fn rename_switch_blocking(
 ) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let old_name = args.old_name.trim();
-    let new_name = args.new_name.trim();
-    if old_name.is_empty() || new_name.is_empty() {
-        return Err("old_name and new_name are required".to_string());
-    }
+    let old_name = validate_switch_name(&args.old_name)?;
+    let new_name = validate_switch_name(&args.new_name)?;
     if old_name.eq_ignore_ascii_case(DEFAULT_SWITCH_NAME) {
         return Err("cannot rename default switch".to_string());
     }
     let root = addon_switch_root(&vampath);
-    let src = root.join(old_name);
-    let dest = root.join(new_name);
+    let src = root.join(&old_name);
+    let dest = root.join(&new_name);
     if !src.exists() {
         return Err(format!("switch not found: {}", old_name));
     }
@@ -190,12 +184,9 @@ fn rename_switch_blocking(
         return Err(format!("switch already exists: {}", new_name));
     }
     fs::rename(&src, &dest).map_err(|err| err.to_string())?;
-    set_switch_blocking(state, reporter, new_name)?;
+    set_switch_blocking(state, reporter, &new_name)?;
     reporter.set_result(
-        serde_json::to_value(PackSwitchResult {
-            name: new_name.to_string(),
-        })
-        .map_err(|err| err.to_string())?,
+        serde_json::to_value(PackSwitchResult { name: new_name }).map_err(|err| err.to_string())?,
     );
     Ok(())
 }
@@ -205,10 +196,11 @@ fn set_switch_blocking(
     reporter: &JobReporter,
     name: &str,
 ) -> Result<PackSwitchSetOutcome, String> {
+    let name = validate_switch_name(name)?;
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let switch_root = addon_switch_root(&vampath);
-    let target = switch_root.join(name);
+    let target = switch_root.join(&name);
     fs::create_dir_all(&target).map_err(|err| err.to_string())?;
 
     let addon_path = addon_packages_dir(&vampath);
@@ -242,6 +234,10 @@ fn set_switch_blocking(
     let _ = system_ops::rescan_packages(state);
     reporter.log(format!("switch to {}", name));
     Ok(PackSwitchSetOutcome::Switched)
+}
+
+fn validate_switch_name(name: &str) -> Result<String, String> {
+    validate_file_name(name, "switch name")
 }
 
 fn collect_managed_dirs() -> BTreeSet<String> {
@@ -341,7 +337,10 @@ fn move_controlled_dir(
     reporter: &JobReporter,
 ) -> Result<(), String> {
     if !src.is_dir() {
-        return Err(format!("controlled path is not a directory: {}", src.display()));
+        return Err(format!(
+            "controlled path is not a directory: {}",
+            src.display()
+        ));
     }
     if !default_pack.exists() {
         fs::create_dir_all(default_pack).map_err(|err| err.to_string())?;
@@ -353,10 +352,7 @@ fn move_controlled_dir(
         dest
     };
     fs::rename(src, &dest).map_err(|err| err.to_string())?;
-    reporter.log(format!(
-        "moved existing link folder to {}",
-        dest.display()
-    ));
+    reporter.log(format!("moved existing link folder to {}", dest.display()));
     Ok(())
 }
 
@@ -414,9 +410,9 @@ async fn refresh_install_status(pool: &SqlitePool, vampath: &Path) -> Result<usi
 
 #[cfg(test)]
 mod tests {
+    use super::winfs;
     use super::*;
     use crate::jobs::job_channel::{create_job_channel, JobReporter};
-    use super::winfs;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -438,6 +434,16 @@ mod tests {
             fs::create_dir_all(parent).unwrap();
         }
         fs::write(path, b"test").unwrap();
+    }
+
+    #[test]
+    fn validate_switch_name_rejects_path_like_names() {
+        assert_eq!(validate_switch_name(" alt ").unwrap(), "alt");
+        assert!(validate_switch_name("../alt").is_err());
+        assert!(validate_switch_name("foo/bar").is_err());
+        assert!(validate_switch_name("foo:bar").is_err());
+        assert!(validate_switch_name(".").is_err());
+        assert!(validate_switch_name("name.").is_err());
     }
 
     fn symlink_supported() -> bool {
@@ -595,7 +601,10 @@ mod tests {
         for dir_name in collect_managed_dirs() {
             let addon_dir = addon_path.join(&dir_name);
             let target = winfs::read_link_target(&addon_dir).unwrap();
-            assert!(target.to_string_lossy().to_ascii_lowercase().contains("alt"));
+            assert!(target
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .contains("alt"));
         }
 
         let _ = fs::remove_dir_all(&root);

@@ -4,15 +4,12 @@ use axum::{
 };
 use std::{
     net::SocketAddr,
-    sync::{
-        atomic::AtomicU64,
-        Arc, RwLock,
-    },
+    sync::{atomic::AtomicU64, Arc, RwLock},
 };
 use tokio::sync::{oneshot, Semaphore};
 
-mod app;
 mod api;
+mod app;
 mod domain;
 mod infra;
 mod jobs;
@@ -46,7 +43,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     image_cache.clone().start_maintenance();
     let config_state = Arc::new(RwLock::new(config.clone()));
-    let download_manager = Arc::new(DownloadManager::new(db_pool.clone(), Arc::clone(&config_state)));
+    let download_manager = Arc::new(DownloadManager::new(
+        db_pool.clone(),
+        Arc::clone(&config_state),
+    ));
     download_manager
         .pause_incomplete()
         .await
@@ -95,7 +95,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/preview", get(api::get_preview))
         .route("/cache/stats", get(api::get_cache_stats))
         .route("/cache/clear", post(api::clear_cache))
-        .route("/cache/entry", axum::routing::delete(api::delete_cache_entry))
+        .route(
+            "/cache/entry",
+            axum::routing::delete(api::delete_cache_entry),
+        )
         .route("/packswitch", get(api::list_packswitch))
         .route("/hub/options", get(api::list_hub_options))
         .route("/dependents", get(api::list_dependents))
@@ -116,8 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/shutdown", post(api::shutdown))
         .with_state(state);
 
-    let addr: SocketAddr =
-        format!("{}:{}", config.listen_host, config.listen_port).parse()?;
+    let addr: SocketAddr = format!("{}:{}", config.listen_host, config.listen_port).parse()?;
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(%addr, version = APP_VERSION, "backend listening");
 

@@ -389,10 +389,16 @@ mod tests {
 
     #[test]
     fn infer_log_level_detects_prefixes() {
-        assert!(matches!(infer_log_level("[warn] something"), JobLogLevel::Warn));
+        assert!(matches!(
+            infer_log_level("[warn] something"),
+            JobLogLevel::Warn
+        ));
         assert!(matches!(infer_log_level("error: bad"), JobLogLevel::Error));
         assert!(matches!(infer_log_level("info: ok"), JobLogLevel::Info));
-        assert!(matches!(infer_log_level("plain message"), JobLogLevel::Info));
+        assert!(matches!(
+            infer_log_level("plain message"),
+            JobLogLevel::Info
+        ));
     }
 
     #[test]

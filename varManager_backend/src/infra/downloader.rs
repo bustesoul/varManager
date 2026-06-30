@@ -3,11 +3,10 @@
 use crate::app::{app_root, AppState};
 use crate::infra::paths::addon_packages_dir;
 use crate::jobs::job_channel::JobReporter;
+use crate::util;
 use http_downloader::{
-    speed_limiter::DownloadSpeedLimiterExtension,
-    speed_tracker::DownloadSpeedTrackerExtension,
-    status_tracker::DownloadStatusTrackerExtension,
-    DownloadingEndCause, HttpDownloaderBuilder,
+    speed_limiter::DownloadSpeedLimiterExtension, speed_tracker::DownloadSpeedTrackerExtension,
+    status_tracker::DownloadStatusTrackerExtension, DownloadingEndCause, HttpDownloaderBuilder,
 };
 use percent_encoding::percent_decode;
 use regex::Regex;
@@ -150,7 +149,10 @@ pub async fn download_urls(
     ));
     if summary.failed > 0 && !failures.is_empty() {
         for failure in failures {
-            reporter.log(format!("Failure sample: {} -> {}", failure.url, failure.error));
+            reporter.log(format!(
+                "Failure sample: {} -> {}",
+                failure.url, failure.error
+            ));
         }
     }
 
@@ -180,7 +182,10 @@ pub(crate) fn ensure_dir(path: &Path) -> Result<(), String> {
         if path.is_dir() {
             return Ok(());
         }
-        return Err(format!("save path exists but is not a directory: {}", path.display()));
+        return Err(format!(
+            "save path exists but is not a directory: {}",
+            path.display()
+        ));
     }
     fs::create_dir_all(path).map_err(|err| err.to_string())
 }
@@ -231,26 +236,23 @@ async fn download_one(
     let mut attempt: u8 = 0;
     loop {
         attempt += 1;
-        let result = timeout(
-            Duration::from_secs(PER_FILE_TIMEOUT_SECS),
-            async {
-                let (mut downloader, (_status_state, _speed_state, _speed_limiter, ..)) =
-                    HttpDownloaderBuilder::new(download_url_obj.clone(), save_dir.clone())
-                        .chunk_size(NonZeroUsize::new(1024 * 1024 * 10).unwrap())
-                        .download_connection_count(NonZeroU8::new(4).unwrap())
-                        .build((
-                            DownloadStatusTrackerExtension { log: false },
-                            DownloadSpeedTrackerExtension { log: false },
-                            DownloadSpeedLimiterExtension::new(None),
-                        ));
+        let result = timeout(Duration::from_secs(PER_FILE_TIMEOUT_SECS), async {
+            let (mut downloader, (_status_state, _speed_state, _speed_limiter, ..)) =
+                HttpDownloaderBuilder::new(download_url_obj.clone(), save_dir.clone())
+                    .chunk_size(NonZeroUsize::new(1024 * 1024 * 10).unwrap())
+                    .download_connection_count(NonZeroU8::new(4).unwrap())
+                    .build((
+                        DownloadStatusTrackerExtension { log: false },
+                        DownloadSpeedTrackerExtension { log: false },
+                        DownloadSpeedLimiterExtension::new(None),
+                    ));
 
-                let download_future = downloader
-                    .prepare_download()
-                    .map_err(|err| err.to_string())?;
-                let dec = download_future.await.map_err(|err| err.to_string())?;
-                Ok::<DownloadingEndCause, String>(dec)
-            },
-        )
+            let download_future = downloader
+                .prepare_download()
+                .map_err(|err| err.to_string())?;
+            let dec = download_future.await.map_err(|err| err.to_string())?;
+            Ok::<DownloadingEndCause, String>(dec)
+        })
         .await;
 
         match result {
@@ -267,10 +269,7 @@ async fn download_one(
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     continue;
                 }
-                return Err(format!(
-                    "download timed out after {} attempts",
-                    attempt
-                ));
+                return Err(format!("download timed out after {} attempts", attempt));
             }
         }
     }
@@ -311,7 +310,10 @@ pub(crate) async fn resolve_final_url_with_retry(
             if !response.status().is_success() {
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
-                return Err(format!("GET {} failed with status {}: {}", url, status, body));
+                return Err(format!(
+                    "GET {} failed with status {}: {}",
+                    url, status, body
+                ));
             }
             Ok(url.to_string())
         }
@@ -354,7 +356,7 @@ pub(crate) async fn resolve_file_info(
         .filter(|size| *size > 0);
 
     let content_disposition = response.headers().get(header::CONTENT_DISPOSITION);
-    let mut extracted = if let Some(cd_val) = content_disposition {
+    let extracted = if let Some(cd_val) = content_disposition {
         let cd_str = percent_decode(cd_val.as_bytes())
             .decode_utf8()
             .unwrap_or_else(|_| "".into());
@@ -379,24 +381,16 @@ pub(crate) async fn resolve_file_info(
             .unwrap_or_else(|| "default_filename".to_string())
     };
 
-    extracted = extracted.trim_end_matches(';').to_string();
-    let invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-    for c in invalid_chars.iter() {
-        extracted = extracted.replace(*c, "_");
-    }
-    if extracted.is_empty() {
-        extracted = "default_filename".to_string();
-    }
-    Ok((extracted, content_length))
+    Ok((sanitize_download_filename(&extracted), content_length))
 }
 
 pub(crate) fn finalize_download(url: &Url, save_dir: &Path, filename: &str) -> Result<(), String> {
-    let downloaded_file_path = save_dir.join(
+    let downloaded_file_path = save_dir.join(sanitize_download_filename(
         url.path_segments()
             .and_then(|mut s| s.next_back())
             .unwrap_or("unknown_temp_file"),
-    );
-    let new_file_path = save_dir.join(filename);
+    ));
+    let new_file_path = save_dir.join(sanitize_download_filename(filename));
 
     if downloaded_file_path == new_file_path {
         verify_file_size(&new_file_path)?;
@@ -418,6 +412,23 @@ pub(crate) fn finalize_download(url: &Url, save_dir: &Path, filename: &str) -> R
         "final file not found after download: {}",
         new_file_path.display()
     ))
+}
+
+pub(crate) fn sanitize_download_filename(raw: &str) -> String {
+    let trimmed = raw.trim().trim_end_matches(';');
+    let leaf = trimmed
+        .rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or(trimmed);
+    let cleaned = util::valid_file_name(leaf)
+        .trim()
+        .trim_matches('.')
+        .to_string();
+    if cleaned.is_empty() {
+        "default_filename".to_string()
+    } else {
+        cleaned
+    }
 }
 
 fn verify_file_size(path: &Path) -> Result<(), String> {
@@ -448,10 +459,7 @@ pub(crate) fn hub_headers() -> header::HeaderMap {
         header::ACCEPT_ENCODING,
         "gzip, deflate, br, zstd".parse().unwrap(),
     );
-    headers.insert(
-        header::ACCEPT_LANGUAGE,
-        "en-US,en;q=0.9".parse().unwrap(),
-    );
+    headers.insert(header::ACCEPT_LANGUAGE, "en-US,en;q=0.9".parse().unwrap());
     headers.insert(header::COOKIE, "vamhubconsent=yes".parse().unwrap());
     headers.insert(header::DNT, "1".parse().unwrap());
     headers.insert(
@@ -502,7 +510,9 @@ pub(crate) fn resolve_download_save_path(state: &AppState) -> Result<PathBuf, St
     resolve_download_save_path_config(&cfg)
 }
 
-pub(crate) fn resolve_download_save_path_config(cfg: &crate::app::Config) -> Result<PathBuf, String> {
+pub(crate) fn resolve_download_save_path_config(
+    cfg: &crate::app::Config,
+) -> Result<PathBuf, String> {
     if let Some(path) = cfg
         .downloader_save_path
         .as_ref()

@@ -1,13 +1,13 @@
-use crate::jobs::job_channel::JobReporter;
-use crate::infra::paths::{config_paths, resolve_var_file_path, PREVIEW_DIR};
 use crate::app::AppState;
+use crate::infra::paths::{config_paths, is_safe_file_name, resolve_var_file_path, PREVIEW_DIR};
+use crate::jobs::job_channel::JobReporter;
 use serde::Serialize;
 use serde_json::Value;
+use sqlx::{Row, SqlitePool};
 use std::fs::{self, File};
 use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 use zip::ZipArchive;
-use sqlx::{Row, SqlitePool};
 
 #[derive(Serialize)]
 struct FixPreviewResult {
@@ -41,7 +41,14 @@ fn fix_previews_blocking(state: &AppState, reporter: &JobReporter) -> Result<(),
     let mut failed = 0;
 
     for (idx, scene) in scenes.iter().enumerate() {
-        let preview_path = preview_file_path(&varspath, scene);
+        let preview_path = match preview_file_path(&varspath, scene) {
+            Ok(path) => path,
+            Err(err) => {
+                failed += 1;
+                reporter.log(format!("skip preview path {} ({})", scene.scene_path, err));
+                continue;
+            }
+        };
         if preview_path.exists() {
             skipped += 1;
         } else {
@@ -108,12 +115,21 @@ async fn list_scenes_with_preview(pool: &SqlitePool) -> Result<Vec<ScenePreview>
     Ok(scenes)
 }
 
-fn preview_file_path(varspath: &Path, scene: &ScenePreview) -> PathBuf {
-    varspath
+fn preview_file_path(varspath: &Path, scene: &ScenePreview) -> Result<PathBuf, String> {
+    if !is_safe_file_name(&scene.atom_type) {
+        return Err("invalid atom type".to_string());
+    }
+    if !is_safe_file_name(&scene.var_name) {
+        return Err("invalid var name".to_string());
+    }
+    if !is_safe_file_name(&scene.preview_pic) {
+        return Err("invalid preview file".to_string());
+    }
+    Ok(varspath
         .join(PREVIEW_DIR)
         .join(&scene.atom_type)
         .join(&scene.var_name)
-        .join(&scene.preview_pic)
+        .join(&scene.preview_pic))
 }
 
 fn reextract_preview(
@@ -159,12 +175,25 @@ mod tests {
             preview_pic: "preview.jpg".to_string(),
             scene_path: "Saves/scene/test.json".to_string(),
         };
-        let path = preview_file_path(&varspath, &scene);
+        let path = preview_file_path(&varspath, &scene).unwrap();
         assert!(path.ends_with(
             PathBuf::from(PREVIEW_DIR)
                 .join("scenes")
                 .join("creator.pack.1")
                 .join("preview.jpg")
         ));
+    }
+
+    #[test]
+    fn preview_file_path_rejects_path_like_preview_name() {
+        let varspath = PathBuf::from("C:\\vars");
+        let scene = ScenePreview {
+            var_name: "creator.pack.1".to_string(),
+            atom_type: "scenes".to_string(),
+            preview_pic: "../preview.jpg".to_string(),
+            scene_path: "Saves/scene/test.json".to_string(),
+        };
+
+        assert!(preview_file_path(&varspath, &scene).is_err());
     }
 }
