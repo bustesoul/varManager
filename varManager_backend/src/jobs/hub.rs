@@ -1,23 +1,26 @@
-use crate::jobs::job_channel::JobReporter;
-use crate::domain::var_logic::resolve_var_exist_name;
 use crate::app::AppState;
+use crate::domain::var_logic::resolve_var_exist_name;
+use crate::jobs::job_channel::JobReporter;
 use reqwest::blocking::Client;
 use reqwest::header;
+use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sqlx::{QueryBuilder, Row, SqlitePool};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
-use scraper::{Html, Selector};
-use sqlx::{QueryBuilder, Row, SqlitePool};
 
 const HUB_API: &str = "https://hub.virtamate.com/citizenx/api.php";
 const HUB_PACKAGES: &str = "https://s3cdn.virtamate.com/data/packages.json";
 
 type DownloadUrlMaps = (HashMap<String, String>, HashMap<String, String>);
-type DownloadUrlMapsWithSizes =
-    (HashMap<String, String>, HashMap<String, String>, HashMap<String, i64>);
+type DownloadUrlMapsWithSizes = (
+    HashMap<String, String>,
+    HashMap<String, String>,
+    HashMap<String, i64>,
+);
 
 #[derive(Deserialize, Default)]
 pub struct HubFindPackagesArgs {
@@ -113,11 +116,9 @@ pub async fn run_hub_updates_scan_job(
     reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        updates_scan_blocking(&state, &reporter)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || updates_scan_blocking(&state, &reporter))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 pub async fn run_hub_download_all_job(
@@ -155,7 +156,8 @@ pub async fn run_hub_resources_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "hub_resources args required".to_string())?;
-        let query: HubResourcesQuery = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let query: HubResourcesQuery =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         let resources = get_resources(query)?;
         reporter.set_result(resources);
         Ok(())
@@ -206,10 +208,7 @@ pub async fn run_hub_overview_panel_job(
         let args: HubResourceDetailArgs =
             serde_json::from_value(args).map_err(|err| err.to_string())?;
         let overview_data = get_overview_panel(&args.resource_id)?;
-        reporter.set_result(
-            serde_json::to_value(&overview_data)
-                .map_err(|err| err.to_string())?,
-        );
+        reporter.set_result(serde_json::to_value(&overview_data).map_err(|err| err.to_string())?);
         Ok(())
     })
     .await
@@ -333,13 +332,23 @@ async fn download_all_async(
             if url.is_empty() {
                 continue;
             }
-            let entry = merged.entry(url.clone()).or_insert(crate::infra::download_manager::DownloadEnqueueItem {
-                url: url.clone(),
-                name: item.name.clone(),
-                size: item.size,
-            });
-            if entry.name.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
-                && item.name.as_ref().map(|v| !v.trim().is_empty()).unwrap_or(false)
+            let entry = merged.entry(url.clone()).or_insert(
+                crate::infra::download_manager::DownloadEnqueueItem {
+                    url: url.clone(),
+                    name: item.name.clone(),
+                    size: item.size,
+                },
+            );
+            if entry
+                .name
+                .as_ref()
+                .map(|v| v.trim().is_empty())
+                .unwrap_or(true)
+                && item
+                    .name
+                    .as_ref()
+                    .map(|v| !v.trim().is_empty())
+                    .unwrap_or(false)
             {
                 entry.name = item.name.clone();
             }
@@ -354,11 +363,13 @@ async fn download_all_async(
             if trimmed.is_empty() {
                 continue;
             }
-            merged.entry(trimmed.clone()).or_insert(crate::infra::download_manager::DownloadEnqueueItem {
-                url: trimmed,
-                name: None,
-                size: None,
-            });
+            merged.entry(trimmed.clone()).or_insert(
+                crate::infra::download_manager::DownloadEnqueueItem {
+                    url: trimmed,
+                    name: None,
+                    size: None,
+                },
+            );
         }
     }
     if merged.is_empty() {
@@ -470,7 +481,9 @@ pub fn search_hub_options(
     if refresh || guard.is_none() {
         *guard = Some(load_hub_options(refresh)?);
     }
-    let options = guard.clone().ok_or_else(|| "hub options empty".to_string())?;
+    let options = guard
+        .clone()
+        .ok_or_else(|| "hub options empty".to_string())?;
     let mut items = match kind {
         "location" => options.locations,
         "paytype" => options.pay_types,
@@ -586,9 +599,7 @@ pub fn get_resource_detail(resource_id: &str) -> Result<Value, String> {
     resp.json::<Value>().map_err(|err| err.to_string())
 }
 
-pub fn find_packages_maps(
-    packages: &[String],
-) -> Result<DownloadUrlMaps, String> {
+pub fn find_packages_maps(packages: &[String]) -> Result<DownloadUrlMaps, String> {
     if packages.is_empty() {
         return Ok((HashMap::new(), HashMap::new()));
     }
@@ -697,16 +708,10 @@ fn parse_file_size(value: Option<&Value>) -> Option<i64> {
     if let Some(size) = value.as_i64() {
         return Some(size);
     }
-    value
-        .as_str()
-        .and_then(|size| size.parse::<i64>().ok())
+    value.as_str().and_then(|size| size.parse::<i64>().ok())
 }
 
-fn record_download_size(
-    download_sizes: &mut HashMap<String, i64>,
-    url: &str,
-    size: Option<i64>,
-) {
+fn record_download_size(download_sizes: &mut HashMap<String, i64>, url: &str, size: Option<i64>) {
     let Some(size) = size else { return };
     if size <= 0 {
         return;
@@ -836,10 +841,7 @@ fn hub_headers() -> header::HeaderMap {
             .parse()
             .unwrap(),
     );
-    headers.insert(
-        header::ACCEPT_LANGUAGE,
-        "en-US,en;q=0.9".parse().unwrap(),
-    );
+    headers.insert(header::ACCEPT_LANGUAGE, "en-US,en;q=0.9".parse().unwrap());
     headers.insert(header::COOKIE, "vamhubconsent=yes".parse().unwrap());
     headers.insert(
         header::USER_AGENT,
@@ -851,7 +853,10 @@ fn hub_headers() -> header::HeaderMap {
 }
 
 pub fn get_overview_panel(resource_id: &str) -> Result<HubOverviewPanelData, String> {
-    let url = format!("https://hub.virtamate.com/resources/{}/overview-panel", resource_id);
+    let url = format!(
+        "https://hub.virtamate.com/resources/{}/overview-panel",
+        resource_id
+    );
     let client = Client::new();
 
     let response = client
@@ -861,7 +866,10 @@ pub fn get_overview_panel(resource_id: &str) -> Result<HubOverviewPanelData, Str
         .map_err(|err| err.to_string())?;
 
     if !response.status().is_success() {
-        return Err(format!("Failed to fetch overview panel: {}", response.status()));
+        return Err(format!(
+            "Failed to fetch overview panel: {}",
+            response.status()
+        ));
     }
 
     let html_content = response.text().map_err(|err| err.to_string())?;
@@ -883,7 +891,10 @@ pub fn get_overview_panel(resource_id: &str) -> Result<HubOverviewPanelData, Str
             return None;
         }
         let lower = trimmed.to_ascii_lowercase();
-        if lower.starts_with("data:") || lower.starts_with("javascript:") || lower.starts_with("blob:") {
+        if lower.starts_with("data:")
+            || lower.starts_with("javascript:")
+            || lower.starts_with("blob:")
+        {
             return None;
         }
         if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
@@ -928,7 +939,12 @@ pub fn get_overview_panel(resource_id: &str) -> Result<HubOverviewPanelData, Str
     let mut ld_thumbnail: Option<String> = None;
     let ld_selector = Selector::parse("script[type=\"application/ld+json\"]").unwrap();
     for element in document.select(&ld_selector) {
-        let json_text = element.text().collect::<Vec<_>>().join("").trim().to_string();
+        let json_text = element
+            .text()
+            .collect::<Vec<_>>()
+            .join("")
+            .trim()
+            .to_string();
         if json_text.is_empty() {
             continue;
         }

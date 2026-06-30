@@ -1,16 +1,16 @@
+use crate::app::AppState;
+use crate::domain::var_logic::{implicated_vars, vars_dependencies};
 use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{config_paths, resolve_var_file_path, INSTALL_LINK_DIR};
-use crate::domain::var_logic::{implicated_vars, vars_dependencies};
-use crate::app::AppState;
 use crate::infra::winfs;
+use crate::jobs::job_channel::JobReporter;
 use crate::util;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::{Row, SqlitePool};
 use std::fs;
 use std::path::{Path, PathBuf};
-use sqlx::{Row, SqlitePool};
 
 #[derive(Deserialize)]
 struct ExportInstalledArgs {
@@ -74,7 +74,8 @@ pub async fn run_export_installed_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "vars_export_installed args required".to_string())?;
-        let args: ExportInstalledArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: ExportInstalledArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         export_installed_blocking(&state, &reporter, args)
     })
     .await
@@ -102,7 +103,8 @@ pub async fn run_toggle_install_job(
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let args = args.ok_or_else(|| "vars_toggle_install args required".to_string())?;
-        let args: ToggleInstallArgs = serde_json::from_value(args).map_err(|err| err.to_string())?;
+        let args: ToggleInstallArgs =
+            serde_json::from_value(args).map_err(|err| err.to_string())?;
         toggle_install_blocking(&state, &reporter, args)
     })
     .await
@@ -128,11 +130,9 @@ pub async fn run_refresh_install_status_job(
     reporter: JobReporter,
     _args: Option<Value>,
 ) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        refresh_install_status_blocking(&state, &reporter)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || refresh_install_status_blocking(&state, &reporter))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 fn export_installed_blocking(
@@ -144,8 +144,7 @@ fn export_installed_blocking(
     let handle = tokio::runtime::Handle::current();
     let rows = handle
         .block_on(
-            sqlx::query("SELECT varName FROM installStatus WHERE installed = 1")
-                .fetch_all(pool),
+            sqlx::query("SELECT varName FROM installStatus WHERE installed = 1").fetch_all(pool),
         )
         .map_err(|err| err.to_string())?;
     let mut vars = Vec::new();
@@ -200,12 +199,7 @@ fn install_batch_blocking(
             continue;
         }
         match handle.block_on(install_var(
-            pool,
-            &varspath,
-            &vampath,
-            var_name,
-            false,
-            false,
+            pool, &varspath, &vampath, var_name, false, false,
         )) {
             Ok(InstallOutcome::Installed) => installed.push(var_name.clone()),
             Ok(InstallOutcome::AlreadyInstalled) => already_installed.push(var_name.clone()),
@@ -293,12 +287,7 @@ fn toggle_install_blocking(
     let mut failed = Vec::new();
     for (idx, var_name) in var_list.iter().enumerate() {
         match handle.block_on(install_var(
-            pool,
-            &varspath,
-            &vampath,
-            var_name,
-            false,
-            false,
+            pool, &varspath, &vampath, var_name, false, false,
         )) {
             Ok(InstallOutcome::Installed) => installed.push(var_name.clone()),
             Ok(InstallOutcome::AlreadyInstalled) => {}
@@ -325,22 +314,37 @@ fn toggle_install_blocking(
     Ok(())
 }
 
-fn locate_blocking(state: &AppState, reporter: &JobReporter, args: LocateArgs) -> Result<(), String> {
+fn locate_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: LocateArgs,
+) -> Result<(), String> {
     let (varspath, vampath) = config_paths(state)?;
 
-    if let Some(var_name) = args.var_name.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(var_name) = args
+        .var_name
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         let path = resolve_var_file_path(&varspath, var_name)?;
         util::open_explorer_select(&path)?;
         reporter.log(format!("locate {}", var_name));
         return Ok(());
     }
 
-    if let Some(path) = args.path.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(path) = args
+        .path
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         let p = PathBuf::from(path);
         let final_path = if p.is_absolute() {
             p
         } else {
-            let vampath = vampath.ok_or_else(|| "vampath is required to resolve path".to_string())?;
+            let vampath =
+                vampath.ok_or_else(|| "vampath is required to resolve path".to_string())?;
             vampath.join(p)
         };
         util::open_explorer_select(&final_path)?;

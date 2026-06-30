@@ -38,4 +38,3 @@ pub fn open_url(url: &str) -> Result<(), String> {
         .map_err(|err| err.to_string())?;
     Ok(())
 }
-

@@ -1,17 +1,18 @@
+use crate::app::AppState;
+use crate::domain::var_logic::vars_dependencies;
 use crate::infra::db::{
     delete_var_related, list_scenes_for_var, list_var_scan_info, list_vars, replace_dependencies,
     replace_hide_fav, replace_scenes, upsert_install_status, upsert_var, var_exists_conn,
     HideFavRecord, SceneRecord, VarRecord,
 };
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::resolve_var_file_path;
-use crate::domain::var_logic::vars_dependencies;
-use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
+use crate::jobs::job_channel::JobReporter;
 use chrono::{DateTime, Local};
 use regex::Regex;
 use serde::Serialize;
+use sqlx::{Sqlite, SqlitePool, Transaction};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
@@ -20,7 +21,6 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use walkdir::WalkDir;
 use zip::ZipArchive;
-use sqlx::{Sqlite, SqlitePool, Transaction};
 
 const TIDIED_DIR: &str = "___VarTidied___";
 const REDUNDANT_DIR: &str = "___VarRedundant___";
@@ -96,11 +96,9 @@ struct UpdateDbSummary {
 }
 
 pub async fn run_update_db_job(state: AppState, reporter: JobReporter) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        update_db_blocking(&state, &reporter)
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    tokio::task::spawn_blocking(move || update_db_blocking(&state, &reporter))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), String> {
@@ -115,7 +113,9 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         Some(vampath) => collect_addonpackages_vars(vampath),
         None => Vec::new(),
     };
-    let addon_root = vampath.as_ref().map(|vampath| vampath.join("AddonPackages"));
+    let addon_root = vampath
+        .as_ref()
+        .map(|vampath| vampath.join("AddonPackages"));
 
     let mut vars_for_install = load_vars_for_install();
     for varfile in &addon_vars {
@@ -134,7 +134,11 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
     reporter.log("Phase 1/5: Tidying VAR files...".to_string());
     let mut tidy_stats = tidy_vars(
         &varspath,
-        if vampath.is_some() { Some(&addon_vars) } else { None },
+        if vampath.is_some() {
+            Some(&addon_vars)
+        } else {
+            None
+        },
         addon_root.as_deref(),
         reporter,
     )?;
@@ -157,7 +161,7 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         false,
     );
     if var_files.is_empty() {
-            reporter.log("No VAR files found under tidied directory".to_string());
+        reporter.log("No VAR files found under tidied directory".to_string());
         let summary = UpdateDbSummary {
             scanned: tidy_stats.scanned,
             moves: tidy_stats.moves.to_summary(),
@@ -168,7 +172,10 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
         return Ok(());
     }
 
-    reporter.log(format!("Phase 2/5: Processing {} VAR files into database...", var_files.len()));
+    reporter.log(format!(
+        "Phase 2/5: Processing {} VAR files into database...",
+        var_files.len()
+    ));
 
     let dependency_regex = Regex::new(
         r#"\x22(([^\r\n\x22\x3A\x2E]{1,60})\x2E([^\r\n\x22\x3A\x2E]{1,80})\x2E(\d+|latest))(\x22?\s*)\x3A"#,
@@ -331,13 +338,22 @@ fn update_db_blocking(state: &AppState, reporter: &JobReporter) -> Result<(), St
                 if total > 0 && (idx % 20 == 0 || idx + 1 == total) {
                     let progress = 90 + ((idx + 1) * 5 / total) as u8;
                     let elapsed = start_time.elapsed().as_secs_f64();
-                    let speed = if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
-                    let remaining = if speed > 0.0 { (total - idx - 1) as f64 / speed } else { 0.0 };
+                    let speed = if elapsed > 0.0 {
+                        (idx + 1) as f64 / elapsed
+                    } else {
+                        0.0
+                    };
+                    let remaining = if speed > 0.0 {
+                        (total - idx - 1) as f64 / speed
+                    } else {
+                        0.0
+                    };
 
                     reporter.progress(progress.min(95));
                     reporter.log(format!(
                         "Installing VARs: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s",
-                        idx + 1, total,
+                        idx + 1,
+                        total,
                         (idx + 1) as f64 / total as f64 * 100.0,
                         speed,
                         remaining
@@ -462,8 +478,7 @@ fn collect_hide_fav_records(
     scenes
         .iter()
         .filter_map(|scene| {
-            let (hide, fav) =
-                read_hide_fav_for_scene(vampath, var_name, &scene.scene_path);
+            let (hide, fav) = read_hide_fav_for_scene(vampath, var_name, &scene.scene_path);
             if hide || fav {
                 Some(HideFavRecord {
                     scene_path: scene.scene_path.clone(),
@@ -571,11 +586,20 @@ fn tidy_vars(
 
         if idx % 200 == 0 && total > 0 {
             let elapsed = start_time.elapsed().as_secs_f64();
-            let speed = if elapsed > 0.0 { (idx + 1) as f64 / elapsed } else { 0.0 };
-            let remaining = if speed > 0.0 { (total - idx - 1) as f64 / speed } else { 0.0 };
+            let speed = if elapsed > 0.0 {
+                (idx + 1) as f64 / elapsed
+            } else {
+                0.0
+            };
+            let remaining = if speed > 0.0 {
+                (total - idx - 1) as f64 / speed
+            } else {
+                0.0
+            };
             reporter.log(format!(
                 "TidyVars: {}/{} ({:.1}%) | Speed: {:.1} VAR/s | ETA: {:.0}s",
-                idx + 1, total,
+                idx + 1,
+                total,
                 (idx + 1) as f64 / total as f64 * 100.0,
                 speed,
                 remaining
@@ -629,10 +653,7 @@ fn move_to_not_comply(varspath: &Path, src: &Path, reporter: &JobReporter) -> Re
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown.var".to_string());
     let dest = unique_path(&not_comply_path, &filename);
-    reporter.log(format!(
-        "Move non-compliant var to {}",
-        dest.display()
-    ));
+    reporter.log(format!("Move non-compliant var to {}", dest.display()));
     move_file(src, &dest)
 }
 
@@ -869,19 +890,15 @@ fn process_var_file(
     let version = parts[2].to_string();
 
     let meta = fs::metadata(var_file).map_err(|err| ProcessError::Io(err.to_string()))?;
-    let var_date = meta
-        .modified()
-        .ok()
-        .map(format_system_time);
+    let var_date = meta.modified().ok().map(format_system_time);
 
     // Calculate file size in MB
     let fsize_mb = meta.len() as f64 / (1024.0 * 1024.0);
 
     let file = File::open(var_file).map_err(|err| ProcessError::Io(err.to_string()))?;
     let reader = BufReader::new(file);
-    let mut zip = ZipArchive::new(reader).map_err(|err| {
-        ProcessError::InvalidPackage(format!("zip open failed: {}", err))
-    })?;
+    let mut zip = ZipArchive::new(reader)
+        .map_err(|err| ProcessError::InvalidPackage(format!("zip open failed: {}", err)))?;
 
     let meta_json = read_meta_json(&mut zip).map_err(ProcessError::InvalidPackage)?;
     let meta_date = meta_json.meta_date;
@@ -906,15 +923,8 @@ fn process_var_file(
             let (typename, is_preset) = entry_info;
             let count = counts.bump(typename);
 
-            let preview_pic = extract_preview(
-                &mut zip,
-                &entry_name,
-                varspath,
-                basename,
-                typename,
-                count,
-            )
-            .ok();
+            let preview_pic =
+                extract_preview(&mut zip, &entry_name, varspath, basename, typename, count).ok();
 
             if is_scene_record_type(typename) {
                 scenes.push(SceneRecord {
@@ -983,10 +993,7 @@ async fn cleanup_missing_vars(
         if !exist_vars.contains(&var_name) {
             delete_var_related(tx, &var_name).await?;
             if let Err(err) = delete_preview_pics(varspath, &var_name) {
-                reporter.log(format!(
-                    "delete preview pics failed {} ({})",
-                    var_name, err
-                ));
+                reporter.log(format!("delete preview pics failed {} ({})", var_name, err));
             }
             removed += 1;
         }
@@ -999,7 +1006,14 @@ async fn cleanup_missing_vars(
 
 fn delete_preview_pics(varspath: &Path, var_name: &str) -> Result<(), String> {
     let types = [
-        "scenes", "looks", "hairstyle", "clothing", "assets", "morphs", "skin", "pose",
+        "scenes",
+        "looks",
+        "hairstyle",
+        "clothing",
+        "assets",
+        "morphs",
+        "skin",
+        "pose",
     ];
     for typename in types {
         let dir = varspath.join(PREVIEW_DIR).join(typename).join(var_name);
@@ -1024,7 +1038,10 @@ fn read_meta_json(zip: &mut ZipArchive<BufReader<File>>) -> Result<MetaJson, Str
     entry
         .read_to_string(&mut contents)
         .map_err(|err| err.to_string())?;
-    Ok(MetaJson { meta_date, contents })
+    Ok(MetaJson {
+        meta_date,
+        contents,
+    })
 }
 
 struct MetaJson {
@@ -1143,7 +1160,9 @@ fn extract_preview(
     typename: &str,
     count: usize,
 ) -> Result<String, String> {
-    let dot = entry_name.rfind('.').ok_or_else(|| "no extension".to_string())?;
+    let dot = entry_name
+        .rfind('.')
+        .ok_or_else(|| "no extension".to_string())?;
     let jpg_entry = format!("{}{}", &entry_name[..dot], ".jpg");
     let mut jpg = zip
         .by_name(&jpg_entry)
@@ -1277,7 +1296,11 @@ mod tests {
         let base = root.join("sample.var");
         fs::write(&base, b"test").unwrap();
         let candidate = unique_path(&root, "sample.var");
-        assert!(candidate.file_name().unwrap().to_string_lossy().contains("(1)"));
+        assert!(candidate
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .contains("(1)"));
         let _ = fs::remove_dir_all(&root);
     }
 

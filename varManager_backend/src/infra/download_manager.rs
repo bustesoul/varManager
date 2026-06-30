@@ -3,14 +3,12 @@ use crate::infra::downloader::{
     ensure_dir, finalize_download, is_retryable_error, resolve_download_save_path_config,
     resolve_file_info, resolve_final_url_with_retry,
 };
-use http_downloader::{
-    speed_limiter::DownloadSpeedLimiterExtension,
-    speed_tracker::DownloadSpeedTrackerExtension,
-    status_tracker::DownloadStatusTrackerExtension,
-    DownloadingEndCause, HttpDownloaderBuilder,
-};
 use dashmap::DashMap;
 use headers::{HeaderMap, HeaderName, HeaderValue};
+use http_downloader::{
+    speed_limiter::DownloadSpeedLimiterExtension, speed_tracker::DownloadSpeedTrackerExtension,
+    status_tracker::DownloadStatusTrackerExtension, DownloadingEndCause, HttpDownloaderBuilder,
+};
 use reqwest::Client;
 use serde::Serialize;
 use sqlx::{Row, SqlitePool};
@@ -211,7 +209,9 @@ impl DownloadManager {
         };
 
         for row in rows {
-            let status: String = row.try_get("status").unwrap_or_else(|_| "queued".to_string());
+            let status: String = row
+                .try_get("status")
+                .unwrap_or_else(|_| "queued".to_string());
             let downloaded_bytes: i64 = row.try_get("downloaded_bytes").unwrap_or(0);
             let total_bytes: Option<i64> = row.try_get("total_bytes").ok();
             let speed_bytes: i64 = row.try_get("speed_bytes").unwrap_or(0);
@@ -312,13 +312,11 @@ impl DownloadManager {
     async fn delete_ids(&self, ids: Vec<i64>) -> Result<(), String> {
         for id in ids {
             self.cancel_active(id).await;
-            let row = sqlx::query(
-                "SELECT save_path, temp_path FROM downloads WHERE id = ?1",
-            )
-            .bind(id)
-            .fetch_optional(&self.db_pool)
-            .await
-            .map_err(|err| err.to_string())?;
+            let row = sqlx::query("SELECT save_path, temp_path FROM downloads WHERE id = ?1")
+                .bind(id)
+                .fetch_optional(&self.db_pool)
+                .await
+                .map_err(|err| err.to_string())?;
             if let Some(row) = row {
                 let save_path: Option<String> = row.try_get("save_path").ok();
                 let temp_path: Option<String> = row.try_get("temp_path").ok();
@@ -360,13 +358,11 @@ impl DownloadManager {
         if self.active.contains_key(&id) {
             return Ok(());
         }
-        let row = sqlx::query(
-            "SELECT url, name FROM downloads WHERE id = ?1",
-        )
-        .bind(id)
-        .fetch_optional(&self.db_pool)
-        .await
-        .map_err(|err| err.to_string())?;
+        let row = sqlx::query("SELECT url, name FROM downloads WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(&self.db_pool)
+            .await
+            .map_err(|err| err.to_string())?;
         let Some(row) = row else {
             return Ok(());
         };
@@ -376,12 +372,7 @@ impl DownloadManager {
             return Ok(());
         }
         let (cancel_tx, cancel_rx) = watch::channel(false);
-        self.active.insert(
-            id,
-            DownloadHandle {
-                cancel: cancel_tx,
-            },
-        );
+        self.active.insert(id, DownloadHandle { cancel: cancel_tx });
         let db_pool = self.db_pool.clone();
         let client = Arc::clone(&self.client);
         let config = Arc::clone(&self.config);
@@ -392,7 +383,13 @@ impl DownloadManager {
             let _permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
-                    let _ = update_status(&db_pool, id, "failed", Some("failed to acquire download slot".to_string())).await;
+                    let _ = update_status(
+                        &db_pool,
+                        id,
+                        "failed",
+                        Some("failed to acquire download slot".to_string()),
+                    )
+                    .await;
                     active.remove(&id);
                     return;
                 }
@@ -441,7 +438,8 @@ async fn download_with_progress(
 
     // Priority: Content-Disposition filename > name_hint > URL filename
     // Content-Disposition from server is the most accurate source
-    let final_name = if filename != "default_filename" && filename.to_lowercase().ends_with(".var") {
+    let final_name = if filename != "default_filename" && filename.to_lowercase().ends_with(".var")
+    {
         // Server returned a valid .var filename, use it
         filename
     } else if let Some(hint) = name_hint {
@@ -580,20 +578,29 @@ fn download_temp_path(url: &Url, save_dir: &Path) -> PathBuf {
 
 fn read_runtime_config(config: &Arc<RwLock<Config>>) -> DownloadRuntimeConfig {
     let defaults = crate::app::DownloadConfig::default();
-    let cfg = config.read().map(|guard| guard.download.clone()).unwrap_or(defaults.clone());
-    let concurrency = if cfg.concurrency >= 1 { cfg.concurrency } else { defaults.concurrency };
-    let connection_count = NonZeroU8::new(cfg.connection_count.max(1)).unwrap_or_else(|| {
-        NonZeroU8::new(defaults.connection_count.max(1)).unwrap()
-    });
-    let chunk_mb = if cfg.chunk_size_mb >= 1 { cfg.chunk_size_mb } else { defaults.chunk_size_mb };
+    let cfg = config
+        .read()
+        .map(|guard| guard.download.clone())
+        .unwrap_or(defaults.clone());
+    let concurrency = if cfg.concurrency >= 1 {
+        cfg.concurrency
+    } else {
+        defaults.concurrency
+    };
+    let connection_count = NonZeroU8::new(cfg.connection_count.max(1))
+        .unwrap_or_else(|| NonZeroU8::new(defaults.connection_count.max(1)).unwrap());
+    let chunk_mb = if cfg.chunk_size_mb >= 1 {
+        cfg.chunk_size_mb
+    } else {
+        defaults.chunk_size_mb
+    };
     let mut chunk_bytes = chunk_mb.saturating_mul(1024 * 1024);
     if chunk_bytes == 0 {
         chunk_bytes = 1024 * 1024;
     }
     let chunk_bytes = chunk_bytes.min(usize::MAX as u64) as usize;
-    let chunk_size = NonZeroUsize::new(chunk_bytes).unwrap_or_else(|| {
-        NonZeroUsize::new(1024 * 1024).unwrap()
-    });
+    let chunk_size =
+        NonZeroUsize::new(chunk_bytes).unwrap_or_else(|| NonZeroUsize::new(1024 * 1024).unwrap());
     let http_timeout_secs = if cfg.http_timeout_secs > 0 {
         cfg.http_timeout_secs
     } else {
@@ -647,7 +654,10 @@ fn hub_headers_compat() -> HeaderMap {
         HeaderName::from_static("cookie"),
         HeaderValue::from_static("vamhubconsent=yes"),
     );
-    headers.insert(HeaderName::from_static("dnt"), HeaderValue::from_static("1"));
+    headers.insert(
+        HeaderName::from_static("dnt"),
+        HeaderValue::from_static("1"),
+    );
     headers.insert(
         HeaderName::from_static("sec-ch-ua"),
         HeaderValue::from_static(
@@ -698,16 +708,14 @@ async fn update_status(
     error: Option<String>,
 ) -> Result<(), String> {
     let now = now_ts();
-    sqlx::query(
-        "UPDATE downloads SET status = ?1, error = ?2, updated_at = ?3 WHERE id = ?4",
-    )
-    .bind(status)
-    .bind(error)
-    .bind(now)
-    .bind(id)
-    .execute(db_pool)
-    .await
-    .map_err(|err| err.to_string())?;
+    sqlx::query("UPDATE downloads SET status = ?1, error = ?2, updated_at = ?3 WHERE id = ?4")
+        .bind(status)
+        .bind(error)
+        .bind(now)
+        .bind(id)
+        .execute(db_pool)
+        .await
+        .map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -733,21 +741,15 @@ async fn update_progress(
     Ok(())
 }
 
-async fn update_total_bytes(
-    db_pool: &SqlitePool,
-    id: i64,
-    total: u64,
-) -> Result<(), String> {
+async fn update_total_bytes(db_pool: &SqlitePool, id: i64, total: u64) -> Result<(), String> {
     let now = now_ts();
-    sqlx::query(
-        "UPDATE downloads SET total_bytes = ?1, updated_at = ?2 WHERE id = ?3",
-    )
-    .bind(total as i64)
-    .bind(now)
-    .bind(id)
-    .execute(db_pool)
-    .await
-    .map_err(|err| err.to_string())?;
+    sqlx::query("UPDATE downloads SET total_bytes = ?1, updated_at = ?2 WHERE id = ?3")
+        .bind(total as i64)
+        .bind(now)
+        .bind(id)
+        .execute(db_pool)
+        .await
+        .map_err(|err| err.to_string())?;
     Ok(())
 }
 

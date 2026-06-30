@@ -1,18 +1,18 @@
+use crate::app::AppState;
 use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
-use crate::jobs::job_channel::JobReporter;
 use crate::infra::paths::{
     addon_packages_dir, addon_switch_root, config_paths, INSTALL_LINK_DIR, MISSING_LINK_DIR,
     TEMP_LINK_DIR,
 };
-use crate::app::AppState;
 use crate::infra::{system_ops, winfs};
+use crate::jobs::job_channel::JobReporter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::SqlitePool;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use sqlx::SqlitePool;
 use walkdir::WalkDir;
 
 #[derive(Deserialize)]
@@ -118,7 +118,11 @@ pub async fn run_packswitch_set_job(
     .map_err(|err| err.to_string())?
 }
 
-fn add_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+fn add_switch_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: PackSwitchArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let name = args.name.trim();
@@ -141,7 +145,11 @@ fn add_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitc
     Ok(())
 }
 
-fn delete_switch_blocking(state: &AppState, reporter: &JobReporter, args: PackSwitchArgs) -> Result<(), String> {
+fn delete_switch_blocking(
+    state: &AppState,
+    reporter: &JobReporter,
+    args: PackSwitchArgs,
+) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
     let name = args.name.trim();
@@ -341,7 +349,10 @@ fn move_controlled_dir(
     reporter: &JobReporter,
 ) -> Result<(), String> {
     if !src.is_dir() {
-        return Err(format!("controlled path is not a directory: {}", src.display()));
+        return Err(format!(
+            "controlled path is not a directory: {}",
+            src.display()
+        ));
     }
     if !default_pack.exists() {
         fs::create_dir_all(default_pack).map_err(|err| err.to_string())?;
@@ -353,10 +364,7 @@ fn move_controlled_dir(
         dest
     };
     fs::rename(src, &dest).map_err(|err| err.to_string())?;
-    reporter.log(format!(
-        "moved existing link folder to {}",
-        dest.display()
-    ));
+    reporter.log(format!("moved existing link folder to {}", dest.display()));
     Ok(())
 }
 
@@ -414,9 +422,9 @@ async fn refresh_install_status(pool: &SqlitePool, vampath: &Path) -> Result<usi
 
 #[cfg(test)]
 mod tests {
+    use super::winfs;
     use super::*;
     use crate::jobs::job_channel::{create_job_channel, JobReporter};
-    use super::winfs;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -595,7 +603,10 @@ mod tests {
         for dir_name in collect_managed_dirs() {
             let addon_dir = addon_path.join(&dir_name);
             let target = winfs::read_link_target(&addon_dir).unwrap();
-            assert!(target.to_string_lossy().to_ascii_lowercase().contains("alt"));
+            assert!(target
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .contains("alt"));
         }
 
         let _ = fs::remove_dir_all(&root);
