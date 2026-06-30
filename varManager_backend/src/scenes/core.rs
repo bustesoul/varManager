@@ -562,7 +562,7 @@ fn read_save_name(
         let mut entry = zip.by_name(&entry_name).map_err(|err| err.to_string())?;
         entry.read_to_string(&mut jsonscene).map_err(|err| err.to_string())?;
     } else {
-        let jsonfile = vampath.join(save_name.replace('/', "\\"));
+        let jsonfile = local_save_path(&vampath, &entry_name)?;
         jsonscene = fs::read_to_string(&jsonfile).map_err(|err| err.to_string())?;
     }
 
@@ -1784,11 +1784,54 @@ fn normalize_cache_key(var_name: &str, entry_name: &str) -> (String, String) {
     (key.to_string(), entry_name.to_string())
 }
 
+fn local_save_path(vampath: &Path, entry_name: &str) -> Result<PathBuf, String> {
+    let relative = PathBuf::from(entry_name.replace('/', "\\"));
+    if relative.as_os_str().is_empty() {
+        return Err("local save path is empty".to_string());
+    }
+    for component in relative.components() {
+        match component {
+            std::path::Component::ParentDir
+            | std::path::Component::Prefix(_)
+            | std::path::Component::RootDir => return Err("invalid local save path".to_string()),
+            std::path::Component::CurDir | std::path::Component::Normal(_) => {}
+        }
+    }
+    Ok(vampath.join(relative))
+}
+
 fn save_name_split(save_name: &str) -> (String, String) {
     if let Some((var_name, entry)) = save_name.split_once(":/") {
         return (var_name.to_string(), entry.to_string());
     }
     ("save".to_string(), save_name.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn save_name_split_accepts_local_save_scheme() {
+        let (var_name, entry_name) = save_name_split("save:/Saves/scene/Foo.json");
+
+        assert_eq!(var_name, "save");
+        assert_eq!(entry_name, "Saves/scene/Foo.json");
+    }
+
+    #[test]
+    fn local_save_path_uses_entry_name_without_scheme() {
+        let path = local_save_path(Path::new("C:\\VaM"), "Saves/scene/Foo.json").unwrap();
+
+        assert_eq!(path, PathBuf::from("C:\\VaM\\Saves\\scene\\Foo.json"));
+    }
+
+    #[test]
+    fn local_save_path_rejects_unsafe_paths() {
+        assert!(local_save_path(Path::new("C:\\VaM"), "../Foo.json").is_err());
+        assert!(local_save_path(Path::new("C:\\VaM"), "C:/Foo.json").is_err());
+        assert!(local_save_path(Path::new("C:\\VaM"), "/Saves/scene/Foo.json").is_err());
+    }
 }
 
 fn find_atom_file(root: &Path, atom_name: &str) -> Option<PathBuf> {
