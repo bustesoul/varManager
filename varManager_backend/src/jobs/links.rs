@@ -2,7 +2,7 @@ use crate::app::AppState;
 use crate::infra::db::{upsert_install_status, var_exists_conn};
 use crate::infra::fs_util;
 use crate::infra::paths::{
-    config_paths, resolve_var_file_path, INSTALL_LINK_DIR, MISSING_LINK_DIR,
+    config_paths, resolve_var_file_path, validate_file_name, INSTALL_LINK_DIR, MISSING_LINK_DIR,
 };
 use crate::infra::winfs;
 use crate::jobs::job_channel::JobReporter;
@@ -238,18 +238,27 @@ fn move_links_blocking(
     if target_dir.is_empty() {
         return Err("target_dir is required".to_string());
     }
+    let target_dir = validate_file_name(target_dir, "target_dir")?;
 
     let link_root = vampath.join("AddonPackages").join(INSTALL_LINK_DIR);
     fs::create_dir_all(&link_root).map_err(|err| err.to_string())?;
-    let dest_dir = link_root.join(target_dir);
+    let dest_dir = link_root.join(&target_dir);
     fs::create_dir_all(&dest_dir).map_err(|err| err.to_string())?;
 
     let total = args.var_names.len();
     let mut moved = 0;
     let mut skipped = 0;
 
-    for var_name in &args.var_names {
-        let match_path = find_link_path(&link_root, var_name);
+    for raw_var_name in &args.var_names {
+        let var_name = match validate_file_name(raw_var_name, "var name") {
+            Ok(name) => name,
+            Err(err) => {
+                reporter.log(format!("skip {} ({})", raw_var_name, err));
+                skipped += 1;
+                continue;
+            }
+        };
+        let match_path = find_link_path(&link_root, &var_name);
         let Some(src) = match_path else {
             skipped += 1;
             continue;
@@ -301,6 +310,14 @@ fn missing_links_create_blocking(
             skipped += 1;
             continue;
         }
+        missing_var = match validate_file_name(&missing_var, "missing var name") {
+            Ok(name) => name,
+            Err(err) => {
+                reporter.log(format!("missing link skip {} ({})", missing_var, err));
+                failed += 1;
+                continue;
+            }
+        };
 
         let matches = find_missing_matches(&missing_dir, &missing_var);
         for old in matches {
@@ -321,6 +338,14 @@ fn missing_links_create_blocking(
                 }
             }
         }
+        missing_var = match validate_file_name(&missing_var, "missing var name") {
+            Ok(name) => name,
+            Err(err) => {
+                reporter.log(format!("missing link skip {} ({})", missing_var, err));
+                failed += 1;
+                continue;
+            }
+        };
 
         let dest = match resolve_var_file_path(&varspath, dest_var) {
             Ok(path) => path,

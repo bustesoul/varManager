@@ -6,7 +6,7 @@ use crate::infra::db::{
     HideFavRecord, SceneRecord, VarRecord,
 };
 use crate::infra::fs_util;
-use crate::infra::paths::resolve_var_file_path;
+use crate::infra::paths::{is_safe_file_name, resolve_var_file_path, safe_relative_path};
 use crate::infra::{system_ops, winfs};
 use crate::jobs::job_channel::JobReporter;
 use chrono::{DateTime, Local};
@@ -453,11 +453,17 @@ fn normalize_path(value: &str) -> Option<PathBuf> {
 }
 
 fn read_hide_fav_for_scene(vampath: &Path, var_name: &str, scene_path: &str) -> (bool, bool) {
-    let scenepath = Path::new(scene_path)
+    if !is_safe_file_name(var_name) {
+        return (false, false);
+    }
+    let Ok(scene_rel) = safe_relative_path(scene_path, "scene path") else {
+        return (false, false);
+    };
+    let scenepath = scene_rel
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-    let scenename = Path::new(scene_path)
+    let scenename = scene_rel
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("")
@@ -1173,7 +1179,16 @@ fn extract_preview(
         .unwrap_or("preview")
         .to_lowercase();
 
-    let jpgname = format!("{}{:03}_{}.jpg", typename, count, namejpg);
+    let safe_namejpg = {
+        let cleaned = crate::util::valid_file_name(&namejpg);
+        if cleaned.is_empty() {
+            "preview".to_string()
+        } else {
+            cleaned
+        }
+    };
+
+    let jpgname = format!("{}{:03}_{}.jpg", typename, count, safe_namejpg);
     let type_dir = varspath.join(PREVIEW_DIR).join(typename).join(var_name);
     fs::create_dir_all(&type_dir).map_err(|err| err.to_string())?;
     let jpg_path = type_dir.join(&jpgname);

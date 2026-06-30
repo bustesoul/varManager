@@ -3,7 +3,8 @@ use crate::domain::var_logic::{resolve_var_exist_name, vars_dependencies};
 use crate::infra::db::var_exists_conn;
 use crate::infra::fs_util;
 use crate::infra::paths::{
-    config_paths, loadscene_path, resolve_var_file_path, temp_links_dir, CACHE_DIR,
+    config_paths, is_safe_file_name, loadscene_path, marker_path_for_file, resolve_var_file_path,
+    safe_relative_path, temp_links_dir, CACHE_DIR,
 };
 use crate::infra::winfs;
 use crate::jobs::job_channel::JobReporter;
@@ -1482,7 +1483,7 @@ fn add_atom_resources(
 
     let mut resources = Vec::new();
     for atom_path in atom_paths {
-        let src = resolve_atom_source(cache_root, atom_path);
+        let src = resolve_atom_source(cache_root, atom_path)?;
         if !src.exists() {
             continue;
         }
@@ -1513,11 +1514,12 @@ pub(crate) fn set_hide_fav(
 ) -> Result<HideFavState, String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let scenepath = Path::new(scene_path)
+    let scene_rel = safe_relative_path(scene_path, "scene path")?;
+    let scenepath = scene_rel
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-    let scenename = Path::new(scene_path)
+    let scenename = scene_rel
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("")
@@ -1526,12 +1528,16 @@ pub(crate) fn set_hide_fav(
     if use_root == "(save)." || use_root == "save" {
         use_root.clear();
     }
+    if !use_root.is_empty() && !is_safe_file_name(&use_root) {
+        return Err("invalid var name".to_string());
+    }
 
     let pathhide;
     let pathfav;
     if use_root.is_empty() {
-        pathhide = vampath.join(format!("{}.hide", scene_path.replace('/', "\\")));
-        pathfav = vampath.join(format!("{}.fav", scene_path.replace('/', "\\")));
+        let scene_file = vampath.join(&scene_rel);
+        pathhide = marker_path_for_file(&scene_file, "hide");
+        pathfav = marker_path_for_file(&scene_file, "fav");
     } else {
         pathhide = vampath
             .join("AddonPackagesFilePrefs")
@@ -1800,12 +1806,8 @@ fn spawn_delete_temp_thread(vampath: PathBuf, files: Vec<String>) {
     });
 }
 
-fn resolve_atom_source(cache_root: &Path, atom_path: &str) -> PathBuf {
-    let candidate = PathBuf::from(atom_path);
-    if candidate.is_absolute() {
-        return candidate;
-    }
-    cache_root.join(atom_path)
+fn resolve_atom_source(cache_root: &Path, atom_path: &str) -> Result<PathBuf, String> {
+    Ok(cache_root.join(safe_relative_path(atom_path, "atom path")?))
 }
 
 fn write_json_file(path: &Path, value: &Value) -> Result<(), String> {
@@ -1824,7 +1826,7 @@ fn save_json_preset(
 ) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let path = vampath.join(rel);
+    let path = vampath.join(safe_relative_path(rel, "preset path")?);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
@@ -1837,7 +1839,7 @@ fn save_json_preset(
 fn save_raw_json(state: &AppState, rel: &str, value: &Value) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let path = vampath.join(rel);
+    let path = vampath.join(safe_relative_path(rel, "preset path")?);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
@@ -1852,7 +1854,7 @@ fn save_raw_json(state: &AppState, rel: &str, value: &Value) -> Result<(), Strin
 fn save_static_preset(state: &AppState, rel: &str, content: &str) -> Result<(), String> {
     let (_, vampath) = config_paths(state)?;
     let vampath = vampath.ok_or_else(|| "vampath is required in config.json".to_string())?;
-    let path = vampath.join(rel);
+    let path = vampath.join(safe_relative_path(rel, "preset path")?);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
@@ -1959,24 +1961,17 @@ fn normalize_cache_key(var_name: &str, entry_name: &str) -> (String, String) {
 }
 
 fn local_save_path(vampath: &Path, entry_name: &str) -> Result<PathBuf, String> {
-    let relative = PathBuf::from(entry_name.replace('/', "\\"));
-    if relative.as_os_str().is_empty() {
-        return Err("local save path is empty".to_string());
-    }
-    for component in relative.components() {
-        match component {
-            std::path::Component::ParentDir
-            | std::path::Component::Prefix(_)
-            | std::path::Component::RootDir => return Err("invalid local save path".to_string()),
-            std::path::Component::CurDir | std::path::Component::Normal(_) => {}
-        }
-    }
-    Ok(vampath.join(relative))
+    Ok(vampath.join(safe_relative_path(entry_name, "local save path")?))
 }
 
 fn save_name_split(save_name: &str) -> (String, String) {
     if let Some((var_name, entry)) = save_name.split_once(":/") {
-        return (var_name.to_string(), entry.to_string());
+        let key = if var_name == "(save)." || var_name.is_empty() {
+            "save"
+        } else {
+            var_name
+        };
+        return (key.to_string(), entry.to_string());
     }
     ("save".to_string(), save_name.to_string())
 }
@@ -1994,6 +1989,14 @@ mod tests {
     }
 
     #[test]
+    fn save_name_split_accepts_legacy_local_save_marker() {
+        let (var_name, entry_name) = save_name_split("(save).:/Saves/scene/Foo.json");
+
+        assert_eq!(var_name, "save");
+        assert_eq!(entry_name, "Saves/scene/Foo.json");
+    }
+
+    #[test]
     fn local_save_path_uses_entry_name_without_scheme() {
         let path = local_save_path(Path::new("C:\\VaM"), "Saves/scene/Foo.json").unwrap();
 
@@ -2005,6 +2008,26 @@ mod tests {
         assert!(local_save_path(Path::new("C:\\VaM"), "../Foo.json").is_err());
         assert!(local_save_path(Path::new("C:\\VaM"), "C:/Foo.json").is_err());
         assert!(local_save_path(Path::new("C:\\VaM"), "/Saves/scene/Foo.json").is_err());
+        assert!(local_save_path(Path::new("C:\\VaM"), "Saves/scene/Foo:bar.json").is_err());
+    }
+
+    #[test]
+    fn marker_path_for_file_preserves_scene_extension() {
+        let path = marker_path_for_file(Path::new("C:\\VaM\\Saves\\scene\\Foo.json"), "hide");
+
+        assert_eq!(path, PathBuf::from("C:\\VaM\\Saves\\scene\\Foo.json.hide"));
+    }
+
+    #[test]
+    fn resolve_atom_source_rejects_paths_outside_cache() {
+        let root = Path::new("C:\\cache");
+
+        assert_eq!(
+            resolve_atom_source(root, "atoms/Person/Foo.bin").unwrap(),
+            PathBuf::from("C:\\cache\\atoms\\Person\\Foo.bin")
+        );
+        assert!(resolve_atom_source(root, "../Foo.bin").is_err());
+        assert!(resolve_atom_source(root, "C:/Foo.bin").is_err());
     }
 }
 

@@ -3,6 +3,7 @@
 use crate::app::{app_root, AppState};
 use crate::infra::paths::addon_packages_dir;
 use crate::jobs::job_channel::JobReporter;
+use crate::util;
 use http_downloader::{
     speed_limiter::DownloadSpeedLimiterExtension, speed_tracker::DownloadSpeedTrackerExtension,
     status_tracker::DownloadStatusTrackerExtension, DownloadingEndCause, HttpDownloaderBuilder,
@@ -355,7 +356,7 @@ pub(crate) async fn resolve_file_info(
         .filter(|size| *size > 0);
 
     let content_disposition = response.headers().get(header::CONTENT_DISPOSITION);
-    let mut extracted = if let Some(cd_val) = content_disposition {
+    let extracted = if let Some(cd_val) = content_disposition {
         let cd_str = percent_decode(cd_val.as_bytes())
             .decode_utf8()
             .unwrap_or_else(|_| "".into());
@@ -380,24 +381,16 @@ pub(crate) async fn resolve_file_info(
             .unwrap_or_else(|| "default_filename".to_string())
     };
 
-    extracted = extracted.trim_end_matches(';').to_string();
-    let invalid_chars = ['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-    for c in invalid_chars.iter() {
-        extracted = extracted.replace(*c, "_");
-    }
-    if extracted.is_empty() {
-        extracted = "default_filename".to_string();
-    }
-    Ok((extracted, content_length))
+    Ok((sanitize_download_filename(&extracted), content_length))
 }
 
 pub(crate) fn finalize_download(url: &Url, save_dir: &Path, filename: &str) -> Result<(), String> {
-    let downloaded_file_path = save_dir.join(
+    let downloaded_file_path = save_dir.join(sanitize_download_filename(
         url.path_segments()
             .and_then(|mut s| s.next_back())
             .unwrap_or("unknown_temp_file"),
-    );
-    let new_file_path = save_dir.join(filename);
+    ));
+    let new_file_path = save_dir.join(sanitize_download_filename(filename));
 
     if downloaded_file_path == new_file_path {
         verify_file_size(&new_file_path)?;
@@ -419,6 +412,23 @@ pub(crate) fn finalize_download(url: &Url, save_dir: &Path, filename: &str) -> R
         "final file not found after download: {}",
         new_file_path.display()
     ))
+}
+
+pub(crate) fn sanitize_download_filename(raw: &str) -> String {
+    let trimmed = raw.trim().trim_end_matches(';');
+    let leaf = trimmed
+        .rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or(trimmed);
+    let cleaned = util::valid_file_name(leaf)
+        .trim()
+        .trim_matches('.')
+        .to_string();
+    if cleaned.is_empty() {
+        "default_filename".to_string()
+    } else {
+        cleaned
+    }
 }
 
 fn verify_file_size(path: &Path) -> Result<(), String> {

@@ -559,6 +559,7 @@ impl DiskCache {
 
         let extension = extension_from_content_type(&content_type)
             .or_else(|| extension_from_source(&source))
+            .and_then(safe_cache_extension)
             .unwrap_or_else(|| "bin".to_string());
         let file_name = format!("{}.{}", sha256_hex(&key), extension);
         let file_path = self.images_dir.join(&file_name);
@@ -965,6 +966,19 @@ fn extension_from_url(url: &str) -> Option<String> {
     })
 }
 
+fn safe_cache_extension(extension: String) -> Option<String> {
+    let cleaned: String = extension
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(16)
+        .collect();
+    if cleaned.is_empty() {
+        None
+    } else {
+        Some(cleaned)
+    }
+}
+
 fn source_fields(source: &ImageSource) -> (String, Option<String>, Option<String>, Option<String>) {
     match source {
         ImageSource::Hub { url } => ("hub".to_string(), Some(url.to_string()), None, None),
@@ -974,6 +988,20 @@ fn source_fields(source: &ImageSource) -> (String, Option<String>, Option<String
             Some(root.to_string()),
             Some(path.to_string()),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_cache_extension_removes_path_invalid_chars() {
+        assert_eq!(
+            safe_cache_extension("jpg:bad?".to_string()),
+            Some("jpgbad".to_string())
+        );
+        assert_eq!(safe_cache_extension(":?".to_string()), None);
     }
 }
 

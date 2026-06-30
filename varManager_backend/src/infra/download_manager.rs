@@ -1,7 +1,7 @@
 use crate::app::Config;
 use crate::infra::downloader::{
     ensure_dir, finalize_download, is_retryable_error, resolve_download_save_path_config,
-    resolve_file_info, resolve_final_url_with_retry,
+    resolve_file_info, resolve_final_url_with_retry, sanitize_download_filename,
 };
 use dashmap::DashMap;
 use headers::{HeaderMap, HeaderName, HeaderValue};
@@ -441,19 +441,19 @@ async fn download_with_progress(
     let final_name = if filename != "default_filename" && filename.to_lowercase().ends_with(".var")
     {
         // Server returned a valid .var filename, use it
-        filename
+        sanitize_download_filename(&filename)
     } else if let Some(hint) = name_hint {
         // Fallback to name_hint if provided
         let trimmed = hint.trim();
         if trimmed.is_empty() {
-            filename
+            sanitize_download_filename(&filename)
         } else if trimmed.to_lowercase().ends_with(".var") {
-            trimmed.to_string()
+            sanitize_download_filename(trimmed)
         } else {
-            format!("{}.var", trimmed)
+            sanitize_download_filename(&format!("{}.var", trimmed))
         }
     } else {
-        filename
+        sanitize_download_filename(&filename)
     };
     let url_obj = Url::parse(&final_url).map_err(|err| err.to_string())?;
     let temp_path = download_temp_path(&url_obj, &save_dir);
@@ -573,7 +573,7 @@ fn download_temp_path(url: &Url, save_dir: &Path) -> PathBuf {
         .path_segments()
         .and_then(|mut s| s.next_back())
         .unwrap_or("unknown_temp_file");
-    save_dir.join(filename)
+    save_dir.join(sanitize_download_filename(filename))
 }
 
 fn read_runtime_config(config: &Arc<RwLock<Config>>) -> DownloadRuntimeConfig {
@@ -783,4 +783,33 @@ fn delete_file(path: &str) -> Result<(), String> {
 
 fn now_ts() -> i64 {
     chrono::Local::now().timestamp()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_download_filename_strips_path_segments() {
+        assert_eq!(sanitize_download_filename("../evil.var"), "evil.var");
+        assert_eq!(sanitize_download_filename("C:\\Temp\\evil.var"), "evil.var");
+    }
+
+    #[test]
+    fn sanitize_download_filename_removes_windows_invalid_chars() {
+        assert_eq!(sanitize_download_filename("bad:name?.var"), "badname.var");
+    }
+
+    #[test]
+    fn sanitize_download_filename_falls_back_when_empty() {
+        assert_eq!(sanitize_download_filename(":/\\*?"), "default_filename");
+    }
+
+    #[test]
+    fn download_temp_path_sanitizes_url_leaf() {
+        let url = Url::parse("https://example.invalid/files/bad:name.var").unwrap();
+        let path = download_temp_path(&url, Path::new("C:\\Downloads"));
+
+        assert_eq!(path, PathBuf::from("C:\\Downloads\\badname.var"));
+    }
 }

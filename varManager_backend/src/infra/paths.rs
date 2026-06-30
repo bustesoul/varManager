@@ -1,5 +1,6 @@
 use crate::app::AppState;
-use std::path::{Path, PathBuf};
+use crate::util;
+use std::path::{Component, Path, PathBuf};
 
 pub const TIDIED_DIR: &str = "___VarTidied___";
 pub const INSTALL_LINK_DIR: &str = "___VarsLink___";
@@ -39,9 +40,57 @@ pub fn normalize_path(value: &str) -> Option<PathBuf> {
     }
 }
 
+pub fn safe_relative_path(relative: &str, label: &str) -> Result<PathBuf, String> {
+    let relative = PathBuf::from(relative.replace('/', "\\"));
+    if relative.as_os_str().is_empty() {
+        return Err(format!("{} is empty", label));
+    }
+    for component in relative.components() {
+        match component {
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
+                return Err(format!("invalid {}", label));
+            }
+            Component::CurDir => {}
+            Component::Normal(name) => {
+                if name.to_string_lossy().contains(':') {
+                    return Err(format!("invalid {}", label));
+                }
+            }
+        }
+    }
+    Ok(relative)
+}
+
+pub fn is_safe_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.ends_with(['.', ' '])
+        && util::valid_file_name(name) == name
+}
+
+pub fn validate_file_name(name: &str, label: &str) -> Result<String, String> {
+    let name = name.trim();
+    if is_safe_file_name(name) {
+        Ok(name.to_string())
+    } else {
+        Err(format!("invalid {}", label))
+    }
+}
+
+pub fn marker_path_for_file(path: &Path, marker: &str) -> PathBuf {
+    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    if extension.is_empty() {
+        path.with_extension(marker)
+    } else {
+        path.with_extension(format!("{}.{}", extension, marker))
+    }
+}
+
 pub fn resolve_var_file_path(varspath: &Path, var_name: &str) -> Result<PathBuf, String> {
     let parts: Vec<&str> = var_name.split('.').collect();
-    if parts.len() != 3 {
+    if parts.len() != 3 || parts.iter().any(|part| part.is_empty()) || !is_safe_file_name(var_name)
+    {
         return Err(format!("invalid var name: {}", var_name));
     }
     let creator = parts[0];
@@ -88,4 +137,39 @@ pub fn feelfar_dir(vampath: &Path) -> PathBuf {
 
 pub fn loadscene_path(vampath: &Path) -> PathBuf {
     feelfar_dir(vampath).join(LOADSCENE_FILE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_relative_path_rejects_paths_outside_root() {
+        assert!(safe_relative_path("../Foo.json", "scene path").is_err());
+        assert!(safe_relative_path("C:/Foo.json", "scene path").is_err());
+        assert!(safe_relative_path("/Saves/scene/Foo.json", "scene path").is_err());
+        assert!(safe_relative_path("Saves/scene/Foo:bar.json", "scene path").is_err());
+    }
+
+    #[test]
+    fn validate_file_name_rejects_path_like_names() {
+        assert_eq!(
+            validate_file_name(" creator.package.1 ", "var name").unwrap(),
+            "creator.package.1"
+        );
+        assert!(validate_file_name("creator/package.1", "var name").is_err());
+        assert!(validate_file_name("creator:package.1", "var name").is_err());
+        assert!(validate_file_name(".", "var name").is_err());
+        assert!(validate_file_name("name.", "var name").is_err());
+    }
+
+    #[test]
+    fn resolve_var_file_path_rejects_path_like_var_names() {
+        let root = Path::new("C:\\Vars");
+
+        assert!(resolve_var_file_path(root, "creator/package.name.1").is_err());
+        assert!(resolve_var_file_path(root, "creator\\package.name.1").is_err());
+        assert!(resolve_var_file_path(root, "creator:package.name.1").is_err());
+        assert!(resolve_var_file_path(root, "creator.package").is_err());
+    }
 }

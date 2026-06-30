@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use std::{
     collections::{HashMap, HashSet},
-    path::{Component, Path as StdPath, PathBuf},
+    path::{Path as StdPath, PathBuf},
     sync::atomic::Ordering,
     sync::Arc,
 };
@@ -21,6 +21,7 @@ use walkdir::WalkDir;
 use crate::app::{app_root, data_dir, AppState, Config, APP_VERSION};
 use crate::infra::db;
 use crate::infra::download_manager::{DownloadAction, DownloadEnqueueItem, DownloadListResponse};
+use crate::infra::paths::{is_safe_file_name, marker_path_for_file, safe_relative_path};
 use crate::jobs::job_channel::{
     min_job_log_level, JobLogsResponse, JobResultResponse, JobState, JobStatus, JobView,
 };
@@ -2069,11 +2070,17 @@ async fn load_missing_link_scenes(pool: &SqlitePool, vampath: &StdPath) -> Vec<S
 }
 
 fn read_hide_fav_for_var(vampath: &StdPath, var_name: &str, scene_path: &str) -> (bool, bool, i32) {
-    let scenepath = StdPath::new(scene_path)
+    if !is_safe_file_name(var_name) {
+        return (false, false, 0);
+    }
+    let Ok(scene_rel) = safe_relative_path(scene_path, "scene path") else {
+        return (false, false, 0);
+    };
+    let scenepath = scene_rel
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-    let scenename = StdPath::new(scene_path)
+    let scenename = scene_rel
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("")
@@ -2096,14 +2103,8 @@ fn read_hide_fav_for_var(vampath: &StdPath, var_name: &str, scene_path: &str) ->
 }
 
 fn read_hide_fav_for_save(path: &StdPath) -> (bool, bool, i32) {
-    let hide = path.with_extension(format!(
-        "{}.hide",
-        path.extension().and_then(|s| s.to_str()).unwrap_or("")
-    ));
-    let fav = path.with_extension(format!(
-        "{}.fav",
-        path.extension().and_then(|s| s.to_str()).unwrap_or("")
-    ));
+    let hide = marker_path_for_file(path, "hide");
+    let fav = marker_path_for_file(path, "fav");
     let hide_exists = hide.exists();
     let fav_exists = fav.exists();
     let hide_fav = if hide_exists {
@@ -2579,16 +2580,7 @@ pub async fn get_preview(
 }
 
 fn safe_join(base: &StdPath, relative: &str) -> Result<PathBuf, String> {
-    let rel = PathBuf::from(relative);
-    for comp in rel.components() {
-        match comp {
-            Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
-                return Err("invalid preview path".to_string())
-            }
-            Component::CurDir | Component::Normal(_) => {}
-        }
-    }
-    Ok(base.join(rel))
+    Ok(base.join(safe_relative_path(relative, "preview path")?))
 }
 
 fn parse_image_source(
@@ -2863,4 +2855,21 @@ async fn is_var_latest(
         }
     }
     Ok(max_ver.map(|max| current >= max).unwrap_or(true))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_join_rejects_scheme_like_relative_paths() {
+        assert!(safe_join(StdPath::new("C:\\VaM"), "save:/Saves/scene/Foo.jpg").is_err());
+    }
+
+    #[test]
+    fn safe_join_accepts_normal_relative_paths() {
+        let path = safe_join(StdPath::new("C:\\VaM"), "Saves/scene/Foo.jpg").unwrap();
+
+        assert_eq!(path, PathBuf::from("C:\\VaM\\Saves\\scene\\Foo.jpg"));
+    }
 }
