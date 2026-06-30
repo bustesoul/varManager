@@ -19,9 +19,17 @@ type DownloadUrlMaps = (HashMap<String, String>, HashMap<String, String>);
 type DownloadUrlMapsWithSizes =
     (HashMap<String, String>, HashMap<String, String>, HashMap<String, i64>);
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct HubFindPackagesArgs {
+    #[serde(default)]
     pub packages: Vec<String>,
+}
+
+fn parse_hub_find_packages_args(args: Option<Value>) -> Result<HubFindPackagesArgs, String> {
+    match args {
+        None | Some(Value::Null) => Ok(HubFindPackagesArgs::default()),
+        Some(value) => serde_json::from_value(value).map_err(|err| err.to_string()),
+    }
 }
 
 #[derive(Deserialize)]
@@ -93,9 +101,7 @@ pub async fn run_hub_missing_scan_job(
     args: Option<Value>,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
-        let args: HubFindPackagesArgs =
-            args.map_or_else(|| Ok(HubFindPackagesArgs { packages: Vec::new() }), serde_json::from_value)
-                .map_err(|err| err.to_string())?;
+        let args = parse_hub_find_packages_args(args)?;
         missing_scan_blocking(&state, &reporter, args)
     })
     .await
@@ -272,22 +278,22 @@ fn updates_scan_blocking(state: &AppState, reporter: &JobReporter) -> Result<(),
     let pool = &state.db_pool;
     let handle = tokio::runtime::Handle::current();
 
-    let hub_packages = fetch_hub_packages()?;
-    let mut newest_by_package: HashMap<String, (i64, String)> = HashMap::new();
-    for (filename, download_id) in hub_packages {
+    let hub_packages = fetch_hub_package_filenames()?;
+    let mut newest_by_package: HashMap<String, i64> = HashMap::new();
+    for filename in hub_packages {
         let name = filename.trim_end_matches(".var");
         if let Some((base, version)) = split_var_version(name) {
             if let Ok(ver) = version.parse::<i64>() {
-                let entry = newest_by_package.entry(base.to_string()).or_insert((ver, download_id.clone()));
-                if ver > entry.0 {
-                    *entry = (ver, download_id.clone());
+                let entry = newest_by_package.entry(base.to_string()).or_insert(ver);
+                if ver > *entry {
+                    *entry = ver;
                 }
             }
         }
     }
 
     let mut to_update = Vec::new();
-    for (base, (hub_ver, _)) in newest_by_package.iter() {
+    for (base, hub_ver) in newest_by_package.iter() {
         let latest_name = format!("{}.latest", base);
         let exist = handle.block_on(resolve_var_exist_name(pool, &latest_name))?;
         if exist != "missing" {
@@ -655,14 +661,31 @@ async fn collect_missing_dependencies(pool: &SqlitePool) -> Result<Vec<String>, 
     Ok(missing)
 }
 
-fn fetch_hub_packages() -> Result<HashMap<String, String>, String> {
+fn fetch_hub_package_filenames() -> Result<Vec<String>, String> {
     let client = Client::new();
     let resp = client
         .get(HUB_PACKAGES)
         .send()
-        .map_err(|err| err.to_string())?;
-    resp.json::<HashMap<String, String>>()
-        .map_err(|err| err.to_string())
+        .map_err(|err| format!("failed to request Hub package index: {err}"))?
+        .error_for_status()
+        .map_err(|err| format!("Hub package index request failed: {err}"))?;
+    let json = resp
+        .json::<Value>()
+        .map_err(|err| format!("failed to decode Hub package index: {err}"))?;
+    parse_hub_package_filenames(json)
+}
+
+fn parse_hub_package_filenames(json: Value) -> Result<Vec<String>, String> {
+    let Value::Object(map) = json else {
+        return Err("Hub package index expected a JSON object".to_string());
+    };
+    let mut filenames: Vec<String> = map
+        .keys()
+        .filter(|filename| filename.ends_with(".var"))
+        .cloned()
+        .collect();
+    filenames.sort();
+    Ok(filenames)
 }
 
 fn split_var_version(name: &str) -> Option<(&str, &str)> {
@@ -1047,6 +1070,58 @@ mod tests {
         let creator_pack = no_version.get("creator.pack").unwrap();
         assert!(creator_pack == "a" || creator_pack == "b");
         assert_eq!(no_version.get("other.item").unwrap(), "c");
+    }
+
+    #[test]
+    fn parse_hub_find_packages_args_defaults_empty_packages() {
+        let none = parse_hub_find_packages_args(None).unwrap();
+        assert!(none.packages.is_empty());
+
+        let null = parse_hub_find_packages_args(Some(Value::Null)).unwrap();
+        assert!(null.packages.is_empty());
+
+        let empty_object = parse_hub_find_packages_args(Some(json!({}))).unwrap();
+        assert!(empty_object.packages.is_empty());
+    }
+
+    #[test]
+    fn parse_hub_find_packages_args_accepts_packages() {
+        let args = parse_hub_find_packages_args(Some(json!({
+            "packages": ["AcidBubbles.Timeline.latest", "Creator.Package.1"]
+        })))
+        .unwrap();
+
+        assert_eq!(
+            args.packages,
+            vec![
+                "AcidBubbles.Timeline.latest".to_string(),
+                "Creator.Package.1".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_hub_package_filenames_reads_keys_with_mixed_values() {
+        let filenames = parse_hub_package_filenames(json!({
+            "Creator.Asset.1.var": 123,
+            "Creator.Asset.2.var": "456",
+            "ignore.txt": 789
+        }))
+        .unwrap();
+
+        assert_eq!(
+            filenames,
+            vec![
+                "Creator.Asset.1.var".to_string(),
+                "Creator.Asset.2.var".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_hub_package_filenames_rejects_non_object() {
+        let error = parse_hub_package_filenames(json!([])).unwrap_err();
+        assert!(error.contains("JSON object"));
     }
 
     #[test]
